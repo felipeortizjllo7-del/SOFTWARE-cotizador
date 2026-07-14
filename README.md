@@ -31,11 +31,10 @@ descargarla e instalarla automaticamente.
    ```
    Doble clic en  publicar_version.bat
    ```
-   Opciones:
-   - `publicar_version.bat`            sube el ultimo digito (1.1.0 -> 1.1.1)
-   - `publicar_version.bat --minor`    1.1.0 -> 1.2.0
-   - `publicar_version.bat --major`    1.1.0 -> 2.0.0
-   - `publicar_version.bat 1.5.0`      fija exactamente esa version
+   Esquema de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
+   - `publicar_version.bat`            sube al siguiente (1.0 -> 1.1 ; 1.9 -> 2.0)
+   - `publicar_version.bat --major`    salta al siguiente entero (1.3 -> 2.0)
+   - `publicar_version.bat 1.5`        fija exactamente esa version
    - agrega `--notas "que cambio"` para describir la version
 
 El script compila el `.exe`, arma el instalador, sube todo al repositorio y crea el

@@ -58,7 +58,8 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # Version del software y actualizaciones automaticas
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
-VERSION = "1.1.0"
+# Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
+VERSION = "1.0"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Archivo con la ultima version publicada (rama main del repositorio)

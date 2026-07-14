@@ -7,11 +7,12 @@ Publica una nueva version del Cotizador INNOBA:
   4. Sube todo al repositorio de GitHub (commit + tag) y crea el Release
      con el instalador, actualizando version.json para la autoactualizacion.
 
+Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
+
 USO:
-  python publicar_version.py            -> sube el ultimo numero (1.1.0 -> 1.1.1)
-  python publicar_version.py --minor    -> 1.1.0 -> 1.2.0
-  python publicar_version.py --major    -> 1.1.0 -> 2.0.0
-  python publicar_version.py 1.5.0      -> fija exactamente esa version
+  python publicar_version.py            -> sube el siguiente (1.0 -> 1.1 ; 1.9 -> 2.0)
+  python publicar_version.py --major    -> salta al siguiente entero (1.3 -> 2.0)
+  python publicar_version.py 1.5        -> fija exactamente esa version
   (opcional)  --notas "texto de novedades"
 
 Requiere haber corrido antes:  configurar_token.ps1
@@ -49,13 +50,16 @@ def version_actual():
     src = open(os.path.join(PROJ, "cotizador_innoba.py"), encoding="utf-8").read()
     return re.search(r'VERSION\s*=\s*"([^"]+)"', src).group(1)
 
-def bump(v, parte):
-    nums = (re.findall(r"\d+", v) + ["0", "0", "0"])[:3]
-    a, b, c = map(int, nums)
-    if parte == "major": a, b, c = a + 1, 0, 0
-    elif parte == "minor": b, c = b + 1, 0
-    else: c = c + 1
-    return f"{a}.{b}.{c}"
+def bump(v, parte="minor"):
+    """Esquema 2 digitos: sube el segundo digito; al pasar de 9 salta a (entero+1).0"""
+    nums = (re.findall(r"\d+", v) + ["0", "0"])[:2]
+    a, b = int(nums[0]), int(nums[1])
+    if parte == "major":
+        return f"{a + 1}.0"
+    b += 1
+    if b > 9:
+        a, b = a + 1, 0
+    return f"{a}.{b}"
 
 def fijar_version(nv):
     fn = os.path.join(PROJ, "cotizador_innoba.py")
@@ -96,14 +100,12 @@ def main():
         i = args.index("--notas"); notas = args[i + 1]; del args[i:i + 2]
     token = leer_token()
     actual = version_actual()
-    if args and re.match(r"^\d+\.\d+\.\d+$", args[0]):
+    if args and re.match(r"^\d+\.\d+$", args[0]):
         nueva = args[0]
     elif "--major" in args:
         nueva = bump(actual, "major")
-    elif "--minor" in args:
-        nueva = bump(actual, "minor")
     else:
-        nueva = bump(actual, "patch")
+        nueva = bump(actual, "minor")
     if notas is None:
         notas = f"Version {nueva} del Cotizador INNOBA."
 
