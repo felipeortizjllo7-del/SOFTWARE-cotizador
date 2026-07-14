@@ -50,3 +50,22 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Abrir {#MyAppName} ahora"; Flags: nowait postinstall skipifsilent
+
+[Code]
+{ Cierra cualquier instancia en ejecucion antes de instalar (evita el error
+  "DeleteFile fallo; codigo 5 - Acceso denegado" al reemplazar el .exe). }
+function InitializeSetup(): Boolean;
+var ResultCode: Integer;
+begin
+  Exec('taskkill.exe', '/F /IM CotizadorInnoba.exe', '', SW_HIDE,
+       ewWaitUntilTerminated, ResultCode);
+  Result := True;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var ResultCode: Integer;
+begin
+  if CurStep = ssInstall then
+    Exec('taskkill.exe', '/F /IM CotizadorInnoba.exe', '', SW_HIDE,
+         ewWaitUntilTerminated, ResultCode);
+end;

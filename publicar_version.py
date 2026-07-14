@@ -129,8 +129,16 @@ def main():
     print("\n[2b] Regenerando HTML...")
     run([PY, "gen_html.py"])
 
-    # 3. instalador
+    # 3. instalador (limpiando instaladores viejos locales primero)
     print("\n[3/6] Construyendo instalador (Inno Setup)...")
+    outdir = os.path.join(PROJ, "installer_output")
+    if os.path.isdir(outdir):
+        for fn in os.listdir(outdir):
+            if fn.lower().endswith(".exe"):
+                try:
+                    os.remove(os.path.join(outdir, fn))
+                except OSError:
+                    pass
     run([_iscc(), "/DMyAppVersion=" + nueva, "installer.iss"])
     instalador = os.path.join(PROJ, "installer_output", f"CotizadorInnoba-Setup-{nueva}.exe")
     if not os.path.exists(instalador):

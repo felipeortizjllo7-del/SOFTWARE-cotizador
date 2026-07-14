@@ -20,3 +20,4 @@ config_empresa.json
 # Sistema
 Thumbs.db
 desktop.ini
+*.lnk

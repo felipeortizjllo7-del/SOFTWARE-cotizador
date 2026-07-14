@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "1.3"
+VERSION = "1.4"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Archivo con la ultima version publicada (rama main del repositorio)
@@ -1755,14 +1755,18 @@ class App(ctk.CTk):
         threading.Thread(target=worker, daemon=True).start()
 
     def _lanzar_instalador(self, ruta):
+        # avisamos ANTES de abrir el instalador
+        messagebox.showinfo("Actualizacion",
+                            "La aplicacion se cerrara y se abrira el instalador "
+                            "para completar la actualizacion.")
         try:
             os.startfile(ruta)   # abre el instalador
-            messagebox.showinfo("Actualizacion",
-                                "El instalador se abrira ahora.\n"
-                                "La aplicacion se cerrara para completar la actualizacion.")
-            self.after(300, self.destroy)
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            messagebox.showerror("Error al abrir el instalador", str(e))
+            return
+        # cierre INMEDIATO del proceso para liberar el .exe (evita el error de
+        # "acceso denegado" al reemplazarlo). El instalador ademas cierra la app.
+        os._exit(0)
 
     # ------------------------------------------------------------- destinos
     def _temporadas_de(self, destino):
