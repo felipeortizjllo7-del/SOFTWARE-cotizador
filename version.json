@@ -1,5 +1,5 @@
 {
-  "version": "1.4",
+  "version": "1.5",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 1.4 - corrige actualizacion (cierra el proceso antes de instalar) y limpia archivos antiguos."
+  "notas": "Version 1.5 de prueba - verificacion del ciclo de publicacion y limpieza."
 }
