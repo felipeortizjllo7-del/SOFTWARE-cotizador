@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "1.1"
+VERSION = "1.2"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Archivo con la ultima version publicada (rama main del repositorio)
@@ -71,15 +71,24 @@ def _ver_tuple(s):
     return tuple(int(x) for x in nums[:3]) if nums else (0,)
 
 def obtener_version_remota():
-    """Lee version.json del repositorio. Devuelve dict o None si falla."""
-    try:
-        ctx = ssl.create_default_context()
-        req = urllib.request.Request(UPDATE_URL,
-                                     headers={"User-Agent": "CotizadorInnoba"})
-        with urllib.request.urlopen(req, context=ctx, timeout=12) as r:
-            return json.loads(r.read().decode("utf-8"))
-    except Exception:
-        return None
+    """Lee la ultima version publicada. Primero la API de contenidos (sin cache del
+       CDN, deteccion instantanea); si falla, el archivo raw."""
+    ctx = ssl.create_default_context()
+    fuentes = [
+        (f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}"
+         f"/contents/version.json?ref=main", "application/vnd.github.raw"),
+        (UPDATE_URL, "*/*"),
+    ]
+    for url, accept in fuentes:
+        try:
+            req = urllib.request.Request(url, headers={
+                "User-Agent": "CotizadorInnoba", "Accept": accept,
+                "Cache-Control": "no-cache"})
+            with urllib.request.urlopen(req, context=ctx, timeout=12) as r:
+                return json.loads(r.read().decode("utf-8"))
+        except Exception:
+            continue
+    return None
 
 def hay_actualizacion():
     """Devuelve el dict de la version remota si es MAYOR a la instalada, si no None."""

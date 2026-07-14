@@ -1,5 +1,5 @@
 {
-  "version": "1.1",
-  "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/v1.1/CotizadorInnoba-Setup-1.1.exe",
-  "notas": "Version 1.1 de prueba - verificacion del flujo de autoactualizacion."
+  "version": "1.2",
+  "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/v1.2/CotizadorInnoba-Setup-1.2.exe",
+  "notas": "Version 1.2 - deteccion de actualizaciones instantanea (sin retardo de cache)."
 }
