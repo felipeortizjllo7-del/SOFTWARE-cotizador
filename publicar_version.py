@@ -137,19 +137,20 @@ def main():
         sys.exit("No se genero el instalador: " + instalador)
 
     # 4. version.json (para la autoactualizacion)
+    # Un unico Release "latest" que se SOBRESCRIBE en cada subida.
+    TAG = "latest"
+    ASSET = "CotizadorInnoba-Setup.exe"   # nombre fijo -> URL de descarga estable
     print("\n[4/6] Actualizando version.json...")
-    url_inst = (f"https://github.com/{OWNER}/{REPO}/releases/download/"
-                f"v{nueva}/CotizadorInnoba-Setup-{nueva}.exe")
+    url_inst = f"https://github.com/{OWNER}/{REPO}/releases/download/{TAG}/{ASSET}"
     with open(os.path.join(PROJ, "version.json"), "w", encoding="utf-8") as f:
         json.dump({"version": nueva, "installer": url_inst, "notas": notas},
                   f, ensure_ascii=False, indent=2)
 
-    # 5. git commit + tag + push
+    # 5. git commit + tag movil "latest" + push
     print("\n[5/6] Subiendo al repositorio...")
     if not os.path.exists(os.path.join(PROJ, ".git")):
         git("init")
         git("branch", "-M", "main")
-    # remoto
     try:
         git("remote", "add", "origin", f"https://github.com/{OWNER}/{REPO}.git")
     except subprocess.CalledProcessError:
@@ -160,11 +161,10 @@ def main():
             "commit", "-m", f"Version {nueva}")
     except subprocess.CalledProcessError:
         print("  (sin cambios nuevos para confirmar, se continua)")
-    git("tag", "-f", f"v{nueva}")
+    git("tag", "-f", TAG)
     push_url = f"https://x-access-token:{token}@github.com/{OWNER}/{REPO}.git"
     def push(ref):
         print(f"  » git push origin {ref}")   # NO imprime el token
-        # capturamos la salida para que el token de la URL nunca aparezca en pantalla
         r = subprocess.run(["git", "-C", PROJ, "push", push_url, ref, "--force"],
                            capture_output=True, text=True)
         if r.returncode != 0:
@@ -177,36 +177,59 @@ def main():
                          "    configurar_token.bat y vuelve a intentar.\n")
             sys.exit("[X] Error al subir al repositorio:\n" + err)
     push("HEAD:main")
-    push(f"v{nueva}")
+    push(TAG)
 
-    # 6. Release + subir instalador
-    print("\n[6/6] Creando Release y subiendo el instalador...")
-    tag = f"v{nueva}"
+    # 6. Release unico "latest": crear o actualizar, y borrar lo antiguo
+    print("\n[6/6] Publicando Release unico (sobrescribe el anterior)...")
+    nombre_rel = f"Cotizador INNOBA v{nueva}"
     rel = None
     try:
         rel = api(f"https://api.github.com/repos/{OWNER}/{REPO}/releases", token,
-                  data={"tag_name": tag, "name": tag, "body": notas,
-                        "draft": False, "prerelease": False})
+                  data={"tag_name": TAG, "name": nombre_rel, "body": notas,
+                        "draft": False, "prerelease": False, "make_latest": "true"})
     except urllib.error.HTTPError as e:
-        if e.code == 422:  # ya existe -> obtenerlo
-            rel = api(f"https://api.github.com/repos/{OWNER}/{REPO}/releases/tags/{tag}", token)
+        if e.code == 422:  # ya existe -> actualizarlo
+            rel = api(f"https://api.github.com/repos/{OWNER}/{REPO}/releases/tags/{TAG}", token)
+            api(f"https://api.github.com/repos/{OWNER}/{REPO}/releases/{rel['id']}", token,
+                data={"tag_name": TAG, "name": nombre_rel, "body": notas,
+                      "make_latest": "true"}, method="PATCH")
         else:
             print(e.read().decode("utf-8", "ignore")); raise
-    # borrar asset previo con el mismo nombre (si re-publicas la misma version)
-    nombre = f"CotizadorInnoba-Setup-{nueva}.exe"
+    # borrar TODOS los assets anteriores del release
     for a in rel.get("assets", []):
-        if a.get("name") == nombre:
-            api(a["url"], token, method="DELETE")
+        api(a["url"], token, method="DELETE")
+    # subir el instalador nuevo (nombre fijo)
     up = rel["upload_url"].split("{")[0]
     with open(instalador, "rb") as f:
         data = f.read()
-    api(up + "?name=" + nombre, token, data=data, method="POST",
+    api(up + "?name=" + ASSET, token, data=data, method="POST",
         ctype="application/octet-stream")
 
+    # limpiar releases y tags viejos (deja solo "latest")
+    print("  » limpiando versiones antiguas...")
+    try:
+        for r in api(f"https://api.github.com/repos/{OWNER}/{REPO}/releases", token):
+            if r.get("tag_name") != TAG:
+                api(f"https://api.github.com/repos/{OWNER}/{REPO}/releases/{r['id']}",
+                    token, method="DELETE")
+    except Exception as e:
+        print("    (aviso al limpiar releases:", e, ")")
+    try:
+        for ref in api(f"https://api.github.com/repos/{OWNER}/{REPO}/git/matching-refs/tags/", token):
+            t = ref["ref"].split("/")[-1]
+            if t != TAG:
+                try:
+                    api(f"https://api.github.com/repos/{OWNER}/{REPO}/git/refs/tags/{t}",
+                        token, method="DELETE")
+                except Exception:
+                    pass
+    except Exception as e:
+        print("    (aviso al limpiar tags:", e, ")")
+
     print("\n==========================================================")
-    print(f"  PUBLICADO v{nueva}")
-    print(f"  Release:   https://github.com/{OWNER}/{REPO}/releases/tag/{tag}")
-    print(f"  Instalador para instalar/actualizar: {url_inst}")
+    print(f"  PUBLICADO v{nueva}  (Release unico 'latest', sobrescrito)")
+    print(f"  Release:   https://github.com/{OWNER}/{REPO}/releases/tag/{TAG}")
+    print(f"  Instalador (URL fija): {url_inst}")
     print("  Los equipos con la app instalada veran el aviso al abrir.")
     print("==========================================================")
 
