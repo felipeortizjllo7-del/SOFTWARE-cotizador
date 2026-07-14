@@ -162,8 +162,18 @@ def main():
     push_url = f"https://x-access-token:{token}@github.com/{OWNER}/{REPO}.git"
     def push(ref):
         print(f"  » git push origin {ref}")   # NO imprime el token
-        subprocess.run(["git", "-C", PROJ, "push", push_url, ref, "--force"],
-                       check=True)
+        # capturamos la salida para que el token de la URL nunca aparezca en pantalla
+        r = subprocess.run(["git", "-C", PROJ, "push", push_url, ref, "--force"],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            err = (r.stderr or "").replace(token, "***")
+            if "403" in err or "denied" in err.lower():
+                sys.exit("\n[X] GitHub rechazo la subida (403): el token no tiene permiso de\n"
+                         "    ESCRITURA sobre el repositorio.\n"
+                         "    Crea el token con 'Repository permissions -> Contents: Read and write'\n"
+                         "    (y 'Only select repositories -> SOFTWARE-cotizador'), pegalo con\n"
+                         "    configurar_token.bat y vuelve a intentar.\n")
+            sys.exit("[X] Error al subir al repositorio:\n" + err)
     push("HEAD:main")
     push(f"v{nueva}")
 
