@@ -1,0 +1,73 @@
+==========================================================
+   COTIZADOR INNOVA Colombia DMC  -  Guia rapida
+==========================================================
+
+QUE ES
+------
+Programa de escritorio para armar cotizaciones de turismo con
+ITINERARIO de hasta 5 destinos, generar el PDF en dolares (USD)
+y enviarlo automaticamente por correo al cliente.
+
+Ejecutable:  dist\CotizadorInnoba.exe   (doble clic, sin instalar)
+
+
+PASO 1 - CONFIGURAR (una sola vez)
+----------------------------------
+Boton "Datos de mi empresa":
+  - Nombre, NIT, telefono, email, logo, firma (Felipe Ortiz - Gerente).
+  - ENVIO DE CORREO (Office 365):
+      * Correo remitente: el correo desde el que se envian las
+        cotizaciones (ej. tucorreo@innobadmc.com).
+      * Contrasena del correo: la contrasena de ese correo. Si el
+        correo tiene verificacion en dos pasos, se necesita una
+        "contrasena de aplicacion".
+      * Servidor SMTP: smtp.office365.com   Puerto: 587  (ya vienen puestos)
+  Guardar.
+
+
+PASO 2 - HACER UNA COTIZACION
+-----------------------------
+1. Arriba (Datos del viaje): CLIENTE, EMAIL del cliente (ahi se
+   enviara la cotizacion), FECHAS y numero de ADULTOS / NINOS.
+
+2. DESTINOS DEL ITINERARIO (max 5):
+   - Usa "+ Agregar destino" para anadir una ciudad.
+   - Cada ciudad aparece como una ficha; haz clic en ella para
+     editarla, o en la "X" para quitarla.
+   - Puedes poner hasta 5 ciudades en una misma cotizacion.
+
+3. Para la ciudad seleccionada, elige TEMPORADA y NOCHES, y en las
+   pestanas:
+      * HOTEL: hotel + habitaciones (sencillas/dobles/triples).
+      * TRANSPORTES: traslados / asistencias.
+      * ACTIVIDADES: tours (con su descripcion en el PDF).
+   Cambia de ciudad con las fichas y repite. Cada ciudad guarda lo suyo.
+
+4. Abajo se ve el TOTAL del itinerario (suma de todas las ciudades).
+
+5. Boton "Generar PDF y enviar":
+   - Elige donde guardar el PDF.
+   - El programa lo ENVIA automaticamente al email del cliente.
+   - Si el correo no esta configurado o el cliente no tiene email,
+     solo guarda el PDF y te avisa.
+
+
+COMO SE CALCULA
+---------------
+- Margen: TERRESTRES 0,75  |  HOTELES 0,88.
+- Tasa del dolar: se consulta sola en dolar-colombia.com y se le
+  restan 100 (NO se muestra el valor en pantalla ni en el PDF).
+- Vigencia: cada cotizacion vale un (1) mes (fecha impresa en el PDF).
+- Descripciones de tours: del archivo "TARIFARIO - TOURS 2026".
+
+
+ARCHIVOS (junto al .exe, editables)
+-----------------------------------
+  precios_2026.json         tarifas
+  descripciones_tours.json  descripciones de tours
+  logo_innoba.png           logo
+  config_empresa.json       tus datos (incluye correo/contrasena)
+
+NOTA DE SEGURIDAD: la contrasena del correo se guarda en
+config_empresa.json en este equipo. No compartas ese archivo.
+==========================================================

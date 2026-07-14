@@ -1,0 +1,22 @@
+# Artefactos de compilacion
+build/
+dist/
+installer_output/
+__pycache__/
+*.pyc
+*.spec.bak
+# exe compilado en la raiz (se distribuye por el instalador de Releases)
+/CotizadorInnoba.exe
+
+# Datos y credenciales que NO deben subirse
+gh_token.txt
+config_empresa.json
+
+# Archivos fuente de tarifas (Excel/CSV grandes)
+*.xlsx
+*.xlsm
+*.csv
+
+# Sistema
+Thumbs.db
+desktop.ini
