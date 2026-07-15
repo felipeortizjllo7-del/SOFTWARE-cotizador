@@ -225,7 +225,7 @@ function periodoFecha(f){if(f){const p=f.split("-"),y=+p[0],m=+p[1];
  if(y===2026&&m>=9&&m<=12)return{desc:200,mh:null,mt:null};}
  return{desc:100,mh:null,mt:null};}
 function periodoActual(){const el=document.getElementById("fdesde");return periodoFecha(el?el.value:"");}
-function tasa(){const t=parseFloat((cfg.trm_hoy||"").toString().replace(/,/g,""));if(!(t>0))return null;return t-periodoActual().desc;}
+function tasa(){const t=parseFloat((cfg.trm_hoy||"").toString().replace(/,/g,""));if(!(t>=1000))return null;const r=t-periodoActual().desc;return r>0?r:null;}
 function margenes(dd){const p=periodoActual();const mh=p.mh||(dd.hoteles?dd.hoteles.margen:0.88);const mt=p.mt||(dd.terrestres?dd.terrestres.margen:0.75);return[mh,mt];}
 
 /* ---------- precios ---------- */
@@ -380,11 +380,12 @@ function recalc(){const[bloques,total,opc]=calcularTodo();
 /* ---------- TRM ---------- */
 async function cargarTRM(manualBtn){const s=document.getElementById("trmStatus");s.textContent="consultando...";
  let trm=null;
- try{const r=await fetch("https://www.dolar-colombia.com/",{mode:"cors"});const html=await r.text();
-  const m=html.match(/1\s*USD\s*=\s*<span[^>]*>\s*([\d.,]+)/i)||html.match(/(\d{1,2},\d{3}\.\d{2})/);
-  if(m)trm=parseFloat(m[1].replace(/,/g,""));}catch(e){}
+ // Fuente OFICIAL de la TRM (datos.gov.co) - estable, con CORS, se actualiza a diario
+ try{const r=await fetch("https://www.datos.gov.co/resource/32sa-8pi3.json?$order=vigenciadesde%20DESC&$limit=1",{cache:"no-store"});
+  const d=await r.json();const v=parseFloat(String(d[0].valor).replace(/,/g,""));
+  if(v>=1000&&v<=20000)trm=v;}catch(e){}
  if(trm){cfg.trm_hoy=String(trm);localStorage.setItem("innoba_cfg",JSON.stringify(cfg));s.textContent="actualizada (automatica) ✓";}
- else if(parseFloat(cfg.trm_hoy)>0){s.textContent="aplicada (manual) ✓";}
+ else if(parseFloat(cfg.trm_hoy)>=1000){s.textContent="aplicada (guardada) ✓";}
  else{s.textContent="falta: ponla en 'Datos de mi empresa'";if(manualBtn)abrirConfig();}
  recalc();}
 

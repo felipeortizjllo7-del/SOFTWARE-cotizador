@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "1.8"
+VERSION = "1.9"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Archivo con la ultima version publicada (rama main del repositorio)
@@ -111,7 +111,19 @@ LINE = "#D7E1EF"; RED = "#C0392B"
 # Tasa de cambio (TRM en vivo)
 # ============================================================================
 TRM_URL = "https://www.dolar-colombia.com/"
+# Fuente OFICIAL de la TRM (Superfinanciera via datos.gov.co): estable y con CORS.
+TRM_API = ("https://www.datos.gov.co/resource/32sa-8pi3.json"
+           "?$order=vigenciadesde%20DESC&$limit=1")
 DESCUENTO_DOLAR = 100.0   # descuento por defecto
+
+def _trm_valida(v):
+    """Acepta solo valores de TRM con sentido (evita precios negativos por un
+       parseo malo). La TRM COP/USD ronda 3000-5000; damos margen amplio."""
+    try:
+        v = float(str(v).replace(",", ""))
+    except (TypeError, ValueError):
+        return None
+    return v if 1000.0 <= v <= 20000.0 else None
 
 # Quien realiza la cotizacion (nombre, cargo) -> firma del PDF
 COTIZADORES = [
@@ -134,6 +146,21 @@ def periodo_por_fecha(fecha):
     return 100.0, None, None
 
 def obtener_trm(timeout=12):
+    """Devuelve la TRM del dia (COP por USD) o None. Primero la fuente oficial;
+       si falla, dolar-colombia.com. Siempre validando el rango."""
+    # 1) Fuente oficial (datos.gov.co) - estable y diaria
+    for ctx in (ssl.create_default_context(), ssl._create_unverified_context()):
+        try:
+            req = urllib.request.Request(TRM_API,
+                                         headers={"User-Agent": "CotizadorInnoba"})
+            with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
+                data = json.loads(r.read().decode("utf-8"))
+            v = _trm_valida(data[0].get("valor")) if data else None
+            if v:
+                return v
+        except Exception:
+            continue
+    # 2) Respaldo: dolar-colombia.com
     req = urllib.request.Request(
         TRM_URL, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
     html = None
@@ -146,15 +173,12 @@ def obtener_trm(timeout=12):
             continue
     if not html:
         return None
-    m = (re.search(r"1\s*USD\s*=\s*<span[^>]*>\s*([\d.,]+)", html, re.IGNORECASE)
-         or re.search(r"exchange-rate[^>]*>\s*([\d.,]+)", html, re.IGNORECASE)
-         or re.search(r"\b(\d{1,2},\d{3}\.\d{2})\b", html))
-    if not m:
-        return None
-    try:
-        return float(m.group(1).replace(",", ""))
-    except Exception:
-        return None
+    # tomar el primer numero con formato de miles (ej. 3,252.11) y validarlo
+    for m in re.finditer(r"(\d{1,2}[.,]\d{3}[.,]\d{2})", html):
+        v = _trm_valida(m.group(1).replace(",", ""))
+        if v:
+            return v
+    return None
 
 
 # ============================================================================
@@ -1277,10 +1301,7 @@ class App(ctk.CTk):
         self.q = {"hotel": "", "trans": "", "act": ""}   # textos de busqueda
 
         # TRM CRUDA (sin descuento). El descuento se aplica segun la fecha de viaje.
-        try:
-            self._trm = float(self.cfg.get("ultima_trm", "")) or None
-        except Exception:
-            self._trm = None
+        self._trm = _trm_valida(self.cfg.get("ultima_trm", ""))
         self.var_trm_status = tk.StringVar(value="Consultando tasa...")
 
         self._construir()
@@ -1673,10 +1694,11 @@ class App(ctk.CTk):
 
     def _tasa(self):
         """Dolar aplicado = TRM del dia - descuento del periodo (segun fecha de viaje)."""
-        if not self._trm:
+        if not self._trm or self._trm < 1000:
             return None
         desc = self._periodo()[0]
-        return self._trm - desc
+        tasa = self._trm - desc
+        return tasa if tasa > 0 else None   # nunca tasa negativa -> nunca precios negativos
 
     def _actualizar_trm(self, silencioso=True):
         self.var_trm_status.set("actualizando...")

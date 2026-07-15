@@ -1,5 +1,5 @@
 {
-  "version": "1.8",
+  "version": "1.9",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 1.8 de prueba - verificacion del ciclo (empaquetado en carpeta, estable)."
+  "notas": "Version 1.9 - CORRIGE precios negativos: la TRM ahora usa la fuente oficial (datos.gov.co), se actualiza sola a diario y valida el rango. Aplica a app y HTML."
 }
