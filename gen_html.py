@@ -117,6 +117,7 @@ display:flex;align-items:center;gap:16px;margin-top:6px}
  <img src="data:image/png;base64,__LOGO__" alt="logo">
  <div><div class="t1">Cotizador de Paquetes</div><div class="t2">INNOBA Colombia DMC &middot; v__VERSION__ &middot; Itinerario hasta 5 destinos &middot; Version HTML</div></div>
  <div class="sp"></div>
+ <button class="btn btn-navy" onclick="abrirItinerario()">Itinerario</button>
  <button class="btn btn-nav" onclick="abrirConfig()">Datos de mi empresa</button>
 </header>
 <div class="trmbar"><span>Tasa del dia (USD):</span> <b id="trmStatus">consultando...</b>
@@ -162,6 +163,14 @@ display:flex;align-items:center;gap:16px;margin-top:6px}
    <div><label class="lb">Adultos</label><div id="stAd"></div></div>
    <div><label class="lb">Ninos</label><div id="stNi"></div></div>
    <div class="col"><label class="lb">Edad de cada nino (obligatorio)</label><div class="ages" id="ages"></div></div>
+  </div>
+  <div class="row" style="margin-top:10px;align-items:center">
+   <label class="lb" style="margin:0">Habitaciones (para el precio total):</label>
+   <div style="display:flex;align-items:center;gap:6px"><span class="mut">Sencilla</span><div id="stHs"></div></div>
+   <div style="display:flex;align-items:center;gap:6px"><span class="mut">Doble</span><div id="stHd"></div></div>
+   <div style="display:flex;align-items:center;gap:6px"><span class="mut">Triple</span><div id="stHt"></div></div>
+   <button class="btn btn-nav" style="padding:6px 12px" onclick="sugerirHab()">Sugerir</button>
+   <span id="habMsg" class="mut" style="font-weight:700"></span>
   </div>
  </div>
 
@@ -211,7 +220,7 @@ const DEF_CFG = {empresa:"INNOBA Colombia DMC",nit:"",direccion:"",telefono:"",e
  notas:"Tarifas sujetas a disponibilidad al momento de la reserva. Precios en dolares americanos (USD) por el total indicado."};
 
 let cfg = Object.assign({}, DEF_CFG, JSON.parse(localStorage.getItem("innoba_cfg")||"{}"));
-let st = {adultos:2, ages:[], tramos:[], activo:null, tab:"hotel"};
+let st = {adultos:2, ages:[], tramos:[], activo:null, tab:"hotel", hab:{sencilla:0,doble:1,triple:0}, itinerario:""};
 
 /* ---------- utilidades ---------- */
 function norm(s){return (s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/\s+/g," ").trim();}
@@ -268,11 +277,19 @@ function stepper(el,get,set,min,max){el.className="step";el.innerHTML=`<button>-
  b[0].onclick=()=>{set(Math.max(min,get()-1));sp.textContent=get();};
  b[1].onclick=()=>{set(Math.min(max,get()+1));sp.textContent=get();};}
 function renderPax(){
- stepper(document.getElementById("stAd"),()=>st.adultos,v=>{st.adultos=v;recalc();},1,60);
+ stepper(document.getElementById("stAd"),()=>st.adultos,v=>{st.adultos=v;valHab();recalc();},1,60);
  stepper(document.getElementById("stNi"),()=>st.ages.length,v=>{
    while(st.ages.length<v)st.ages.push(3);while(st.ages.length>v)st.ages.pop();renderAges();recalc();},0,10);
- renderAges();
+ stepper(document.getElementById("stHs"),()=>st.hab.sencilla,v=>{st.hab.sencilla=v;valHab();recalc();},0,40);
+ stepper(document.getElementById("stHd"),()=>st.hab.doble,v=>{st.hab.doble=v;valHab();recalc();},0,40);
+ stepper(document.getElementById("stHt"),()=>st.hab.triple,v=>{st.hab.triple=v;valHab();recalc();},0,40);
+ renderAges();valHab();
 }
+function habOcup(){return st.hab.sencilla*1+st.hab.doble*2+st.hab.triple*3;}
+function sugerirHab(){const a=Math.max(st.adultos,0);st.hab={sencilla:a%2,doble:Math.floor(a/2),triple:0};renderPax();recalc();}
+function valHab(){const el=document.getElementById("habMsg");if(!el)return;const o=habOcup(),a=st.adultos;
+ if(o===a){el.textContent=`OK: ${o} plazas = ${a} adultos`;el.style.color="var(--green)";}
+ else{el.textContent=`Ojo: ${o} plazas vs ${a} adultos`;el.style.color="var(--red)";}}
 function renderAges(){const c=document.getElementById("ages");c.innerHTML="";
  st.ages.forEach((a,i)=>{const d=document.createElement("div");d.className="a";
   d.innerHTML=`<label>Nino ${i+1}</label><select>${EDADES.map((e,j)=>`<option value="${j}" ${j===a?"selected":""}>${e}</option>`).join("")}</select>`;
@@ -356,7 +373,7 @@ function calcularTramo(tr,ta){
    [...tr[tipo]].sort().forEach(n=>{const s=smap[n];if(!s)return;const priv=esPrivado(n);
     const imp=precioServicioGrupo(s,adultos,ages,ta,mt,priv);ss+=imp;const pp=precioTerrestreUSD(s,N,ta,mt)/N;adultPp+=pp;
     ages.forEach((a,i)=>{if(a===0)return;else if(a<=2)ninosServ[i]+=priv?10:pp;else ninosServ[i]+=0.5*pp;});
-    let d="";if(tipo==="act"){const r=buscarDesc(n,tr.destino);if(r)d=textoDesc(r);}filas.push([n,detPax,imp,d]);});
+    let d="";if(tipo==="act"){const r=buscarDesc(n,tr.destino);if(r)d=textoDesc(r);}filas.push([n,detPax,imp,pp,d]);});
    if(filas.length){baseSec.push([tit,filas,ss]);base+=ss;}});}
  const surch=precioHotelNino(ta,mh)*noches;
  const ninosTot=ages.map((a,i)=>ninosServ[i]+(a>=3?surch:0));
@@ -372,10 +389,19 @@ function calcularTodo(){const ta=tasa();if(ta===null)return[[],0,false];const bl
  st.tramos.forEach(tr=>{const b=calcularTramo(tr,ta);if(b.opciones.length>1)opc=true;
   if(b.opciones.length){const o=b.opciones[0];ref+=o.doble||o.sencilla||o.triple||0;}else ref+=b.base;bloques.push(b);});
  return[bloques,ref,opc];}
+function totalReserva(bloques){const OCC={sencilla:1,doble:2,triple:3};const conOp=bloques.filter(b=>b.opciones.length);
+ if(!conOp.length||habOcup()===0)return null;let t=0;
+ conOp.forEach(b=>{const o=b.opciones[0];
+  ["sencilla","doble","triple"].forEach(acc=>{if(o[acc]&&st.hab[acc])t+=st.hab[acc]*OCC[acc]*o[acc];});
+  t+=b.ninos.reduce((x,[a,c,pr])=>x+c*pr,0);});return t;}
 function recalc(){const[bloques,total,opc]=calcularTodo();
- if(tasa()===null){document.getElementById("total").textContent="USD --";document.getElementById("desg").textContent="Falta la TRM (ponla en Datos de mi empresa)";}
+ if(tasa()===null){document.getElementById("total").textContent="USD --";document.getElementById("desg").textContent="Falta la TRM (ponla en Datos de mi empresa)";return;}
+ const res=totalReserva(bloques);
+ if(res!==null){document.getElementById("total").textContent=usd(res);
+  const h=st.hab;const det=["sencilla","doble","triple"].filter(k=>h[k]).map(k=>h[k]+" "+k).join(", ");
+  document.getElementById("desg").textContent="Total reserva ("+det+") - 1a opcion";}
  else{document.getElementById("total").textContent=usd(total);
-  document.getElementById("desg").textContent="Por persona en doble (1a opcion) - ver PDF";}}
+  document.getElementById("desg").textContent="Indica las habitaciones para el total";}}
 
 /* ---------- TRM ---------- */
 async function cargarTRM(manualBtn){const s=document.getElementById("trmStatus");s.textContent="consultando...";
@@ -416,8 +442,8 @@ function generar(){
  const cel=v=>v?usd(v):"-";
  bloques.forEach(b=>{html+=`<div class="dband">${b.subtitulo}</div>`;
   b.baseSec.forEach(([tit,filas,sub])=>{html+=`<div style="color:var(--blue);font-weight:700;margin-top:6px">${tit}</div>
-   <table><tr><th>Concepto</th><th>Detalle</th><th style="text-align:right">Valor (USD)</th></tr>`;
-   filas.forEach(([c,det,val,d])=>{html+=`<tr><td><b>${c}</b>${d?`<div class="desc">${d}</div>`:""}</td><td>${det}</td><td style="text-align:right">${usd(val)}</td></tr>`;});
+   <table><tr><th>Concepto</th><th>Detalle</th><th style="text-align:right">Por pasajero</th><th style="text-align:right">Total (USD)</th></tr>`;
+   filas.forEach(([c,det,val,pp,d])=>{html+=`<tr><td><b>${c}</b>${d?`<div class="desc">${d}</div>`:""}</td><td>${det}</td><td style="text-align:right">${pp?usd(pp):"-"}</td><td style="text-align:right"><b>${usd(val)}</b></td></tr>`;});
    html+=`</table>`;});
   if(b.opciones.length){html+=`<div style="color:var(--blue);font-weight:700;margin-top:8px">${b.opciones.length>1?"OPCIONES DE HOTEL - precio por persona (el cliente elige)":"ALOJAMIENTO - precio por persona"}</div>
    <table><tr><th>Hotel</th><th>Categoria</th><th style="text-align:right">Sencilla</th><th style="text-align:right">Doble</th><th style="text-align:right">Triple</th></tr>`;
@@ -425,16 +451,25 @@ function generar(){
    html+=`</table><div class="desc">Valores POR PERSONA (adulto) segun acomodacion, por todo el viaje. Incluye traslados y actividades.</div>`;}
   if(b.ninos.length){html+=`<div class="desc" style="margin-top:2px">Precio por nino: ${b.ninos.map(([a,c,pr])=>`${edadTxt(a)} (x${c}): ${usd(pr)}`).join("  |  ")}</div>`;}
  });
- // Costo total de la reserva con la 1a opcion de hotel
+ // Costo total de la reserva con la 1a opcion de hotel y las habitaciones indicadas
  const conOp=bloques.filter(b=>b.opciones.length);
- if(conOp.length){const nAd=conOp[0].n_adultos;const nNi=conOp.reduce((s,b)=>s+b.ninos.reduce((x,[a,c])=>x+c,0),0);
-  const tot={};["sencilla","doble","triple"].forEach(acc=>{tot[acc]=conOp.every(b=>b.opciones[0][acc])?conOp.reduce((s,b)=>s+b.n_adultos*b.opciones[0][acc]+b.ninos.reduce((x,[a,c,pr])=>x+c*pr,0),0):null;});
+ const OCC={sencilla:1,doble:2,triple:3};const ocup=habOcup();
+ if(conOp.length&&ocup>0){const nAd=conOp[0].n_adultos;const nNi=conOp.reduce((s,b)=>s+b.ninos.reduce((x,[a,c])=>x+c,0),0);
+  let totalRes=0;const detHab=[];
+  ["sencilla","doble","triple"].forEach(acc=>{const n=st.hab[acc];if(!n)return;detHab.push(n+" "+acc);
+   conOp.forEach(b=>{if(b.opciones[0][acc])totalRes+=n*OCC[acc]*b.opciones[0][acc];});});
+  totalRes+=conOp.reduce((s,b)=>s+b.ninos.reduce((x,[a,c,pr])=>x+c*pr,0),0);
   const hop=conOp.map(b=>b.opciones[0].nombre).join(" + ");
   html+=`<div class="tot"><span>COSTO TOTAL DE LA RESERVA - 1a opcion (${nAd} adulto(s)${nNi?` + ${nNi} nino(s)`:""})</span><span></span></div>
-   <table><tr><td>Acomodacion Sencilla</td><td style="text-align:right"><b>${tot.sencilla?usd(tot.sencilla):"-"}</b></td></tr>
-   <tr><td>Acomodacion Doble</td><td style="text-align:right"><b>${tot.doble?usd(tot.doble):"-"}</b></td></tr>
-   <tr><td>Acomodacion Triple</td><td style="text-align:right"><b>${tot.triple?usd(tot.triple):"-"}</b></td></tr></table>
+   <table><tr><td>Habitaciones solicitadas</td><td style="text-align:right">${detHab.join(", ")}</td></tr>
+   <tr><td style="font-size:14px"><b>TOTAL DE LA RESERVA (USD)</b></td><td style="text-align:right;font-size:14px"><b>${usd(totalRes)}</b></td></tr></table>
    <div class="desc">Calculado con la 1a opcion: ${hop}</div>`;}
+ // Itinerario dia por dia
+ const itin=(st.itinerario||itinerarioAuto()).trim();
+ if(itin){html+=`<div class="band" style="margin-top:14px">ITINERARIO DIA POR DIA</div>`;
+  itin.split("\n").forEach(par=>{par=par.trim();if(!par)return;
+   if(/^d[ií]a\s*\d/i.test(par))html+=`<div class="dband">${par}</div>`;
+   else html+=`<div style="font-size:11px;margin:3px 0;line-height:1.4">${par}</div>`;});}
  html+=`<div style="margin-top:10px;font-size:11px"><b>Notas:</b> Vigencia: esta cotizacion tiene una validez de un (1) mes, hasta el ${valida}. ${cfg.notas}</div>`;
  const ci=document.getElementById("cotizador").selectedIndex; const cz=COTIZADORES[ci]||COTIZADORES[0];
  html+=`<div class="firma"><div>Cordialmente,</div><br><br><div class="l"></div><b style="color:var(--navy)">${cz[0]}</b><br>${cz[1]}</div>`;
@@ -522,6 +557,28 @@ function eliminarClienteRapido(emp){if(!emp)return;
  if(document.getElementById("cli").value===emp){document.getElementById("cli").value="";document.getElementById("asesor").value="";document.getElementById("asesorTel").value="";}
  const q=document.getElementById("qcli");if(q)q.dispatchEvent(new Event("input"));}
 
+/* ---------- itinerario ---------- */
+function itinerarioAuto(){let L=[],dia=1;
+ if(st.tramos.length){L.push(`DIA 01: LLEGADA A ${st.tramos[0].destino.toUpperCase()}`);
+  L.push("Recepcion en el aeropuerto por nuestro equipo y traslado al hotel seleccionado. Registro y alojamiento.");dia=2;}
+ st.tramos.forEach(tr=>{[...tr.act].sort().forEach(act=>{const r=buscarDesc(act,tr.destino);const d=r?textoDesc(r):"";
+  L.push(`DIA ${String(dia).padStart(2,"0")}: ${tr.destino.toUpperCase()} - ${act.toUpperCase()}`);
+  L.push(d||"Actividad programada. Alojamiento.");dia++;});});
+ L.push(`DIA ${String(dia).padStart(2,"0")}: TRASLADO AL AEROPUERTO`);
+ L.push("Desayuno. A la hora indicada realizamos el traslado al aeropuerto. Fin de nuestros servicios.");
+ return L.join("\n");}
+function abrirItinerario(){if(!st.tramos.length){alert("Agrega al menos un destino primero.");return;}
+ const m=document.createElement("div");m.className="modal";m.id="modal";
+ m.innerHTML=`<div class="box" style="max-width:660px">
+  <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">Itinerario dia por dia</h3>
+   <button class="btn btn-nav" style="padding:4px 10px" onclick="cerrarModal()">Cerrar</button></div>
+  <div class="mut" style="margin:6px 0">Editable. Las lineas que empiezan por 'DIA' salen resaltadas en el PDF.</div>
+  <textarea id="itinTxt" style="width:100%;min-height:340px;font-size:13px">${(st.itinerario||itinerarioAuto()).replace(/</g,"&lt;")}</textarea>
+  <div style="display:flex;justify-content:space-between;gap:8px;margin-top:12px">
+   <button class="btn btn-nav" onclick="document.getElementById('itinTxt').value=itinerarioAuto()">Regenerar automatico</button>
+   <button class="btn btn-green" onclick="st.itinerario=document.getElementById('itinTxt').value.trim();cerrarModal()">Guardar</button></div></div>`;
+ document.body.appendChild(m);}
+
 /* ---------- config ---------- */
 function abrirConfig(){const m=document.createElement("div");m.className="modal";m.id="modal";
  const f=(k,l,t)=>`<label class="lb">${l}</label><input id="c_${k}" type="${t||"text"}" value="${(cfg[k]||"").replace(/"/g,"&quot;")}">`;
@@ -542,13 +599,13 @@ function guardarConfig(){["empresa","nit","direccion","telefono","email","web","
 
 /* ---------- render maestro ---------- */
 function render(){renderChips();renderActivo();renderPanel();recalc();}
-function nueva(){st={adultos:2,ages:[],tramos:[],activo:null,tab:"hotel"};
+function nueva(){st={adultos:2,ages:[],tramos:[],activo:null,tab:"hotel",hab:{sencilla:0,doble:1,triple:0},itinerario:""};
  document.getElementById("cli").value="";document.getElementById("email").value="";
  document.getElementById("asesor").value="";document.getElementById("asesorTel").value="";
  _vendActuales=[];document.getElementById("asesorSel").innerHTML='<option value="">(vendedor)</option>';
  document.getElementById("fdesde").value="";document.getElementById("fhasta").value="";
  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.t==="hotel"));
- renderPax();addDestino(Object.keys(PRECIOS)[0]);}
+ renderPax();addDestino(Object.keys(PRECIOS)[0]);sugerirHab();}
 
 /* fecha minima = hoy; al elegir la ida, la vuelta no puede ser antes */
 (function(){const t=new Date();const iso=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`;
@@ -568,7 +625,7 @@ async function chequearActualizacion(){try{
  }catch(e){}}
 
 /* init */
-renderPax();addDestino(Object.keys(PRECIOS)[0]);cargarTRM(false);chequearActualizacion();
+renderPax();addDestino(Object.keys(PRECIOS)[0]);sugerirHab();cargarTRM(false);chequearActualizacion();
 </script>
 </body>
 </html>"""

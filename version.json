@@ -1,5 +1,5 @@
 {
-  "version": "2.0",
+  "version": "2.1",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 2.0 - PDF con precio por pasajero Y total, parametrizacion de habitaciones (sencilla/doble/triple) para el total correcto de la reserva, e itinerario dia por dia editable. Incluye el arreglo de TRM (fuente oficial)."
+  "notas": "Version 2.1 - la version HTML ahora tiene tambien: precio por pasajero y total, habitaciones (sencilla/doble/triple) con total correcto de reserva, e itinerario dia por dia editable."
 }
