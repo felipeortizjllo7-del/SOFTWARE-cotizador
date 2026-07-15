@@ -1,5 +1,5 @@
 {
-  "version": "1.7",
+  "version": "1.8",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 1.6 - corrige 'Failed to load Python DLL' (empaquetado en carpeta) y compila fuera de OneDrive."
+  "notas": "Version 1.8 de prueba - verificacion del ciclo (empaquetado en carpeta, estable)."
 }
