@@ -120,12 +120,17 @@ def main():
     print("\n[1/6] Fijando numero de version...")
     fijar_version(nueva)
 
-    # 2. compilar exe + regenerar html
-    print("\n[2/6] Compilando .exe (PyInstaller)...")
-    run([PY, "-m", "PyInstaller", "CotizadorInnoba.spec", "--noconfirm"])
-    import shutil
-    shutil.copyfile(os.path.join(PROJ, "dist", "CotizadorInnoba.exe"),
-                    os.path.join(PROJ, "CotizadorInnoba.exe"))
+    # 2. compilar exe (modo carpeta onedir) FUERA de OneDrive (evita bloqueos)
+    print("\n[2/6] Compilando .exe (PyInstaller, modo carpeta)...")
+    base_build = os.environ.get("LOCALAPPDATA") or os.environ.get("TEMP") or PROJ
+    BUILD = os.path.join(base_build, "CotizadorInnoba_build")
+    dist_dir = os.path.join(BUILD, "dist")
+    work_dir = os.path.join(BUILD, "build")
+    run([PY, "-m", "PyInstaller", "CotizadorInnoba.spec", "--noconfirm",
+         "--distpath", dist_dir, "--workpath", work_dir])
+    exe_dir = os.path.join(dist_dir, "CotizadorInnoba", "CotizadorInnoba.exe")
+    if not os.path.exists(exe_dir):
+        sys.exit("No se genero el ejecutable en " + exe_dir + " (revisa el .spec).")
     print("\n[2b] Regenerando HTML...")
     run([PY, "gen_html.py"])
 
@@ -139,7 +144,7 @@ def main():
                     os.remove(os.path.join(outdir, fn))
                 except OSError:
                     pass
-    run([_iscc(), "/DMyAppVersion=" + nueva, "installer.iss"])
+    run([_iscc(), "/DMyAppVersion=" + nueva, "/DDistDir=" + dist_dir, "installer.iss"])
     instalador = os.path.join(PROJ, "installer_output", f"CotizadorInnoba-Setup-{nueva}.exe")
     if not os.path.exists(instalador):
         sys.exit("No se genero el instalador: " + instalador)

@@ -27,19 +27,19 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
+# Empaquetado en modo CARPETA (onedir): sin descompresion temporal (_MEI),
+# evita el error "Failed to load Python DLL". Se distribuye por el instalador.
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='CotizadorInnoba',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
-    runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -47,4 +47,13 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=['app.ico'],
+)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='CotizadorInnoba',
 )

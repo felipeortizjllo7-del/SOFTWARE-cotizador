@@ -5,6 +5,9 @@
 #ifndef MyAppVersion
   #define MyAppVersion "1.1.0"
 #endif
+#ifndef DistDir
+  #define DistDir "dist"
+#endif
 #define MyAppName "Cotizador INNOBA"
 #define MyAppPublisher "INNOBA Colombia DMC"
 #define MyAppExeName "CotizadorInnoba.exe"
@@ -42,7 +45,8 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 Name: "desktopicon"; Description: "Crear un acceso directo en el escritorio"; GroupDescription: "Accesos directos:"
 
 [Files]
-Source: "dist\CotizadorInnoba.exe"; DestDir: "{app}"; Flags: ignoreversion
+; Modo carpeta (onedir): se copia el exe + sus dependencias (python312.dll, etc.)
+Source: "{#DistDir}\CotizadorInnoba\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
