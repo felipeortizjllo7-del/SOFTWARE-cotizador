@@ -1,5 +1,5 @@
 {
-  "version": "2.1",
+  "version": "2.2",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 2.1 - la version HTML ahora tiene tambien: precio por pasajero y total, habitaciones (sencilla/doble/triple) con total correcto de reserva, e itinerario dia por dia editable."
+  "notas": "Version 2.2 - habitaciones junto a ninos (mejor uso del espacio), la app abre maximizada para ver siempre el boton Generar PDF, total y Nueva cotizacion."
 }

@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "2.1"
+VERSION = "2.2"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Archivo con la ultima version publicada (rama main del repositorio)
@@ -1323,7 +1323,7 @@ class App(ctk.CTk):
         self.clientes = cargar_clientes()
 
         self.title(f"Cotizador INNOBA Colombia DMC   v{VERSION}")
-        self.geometry("1180x800"); self.minsize(1040, 660)
+        self.geometry("1180x820"); self.minsize(1040, 620)
         self.configure(fg_color=BG)
         try:
             self.iconbitmap(recurso("app.ico"))
@@ -1343,13 +1343,20 @@ class App(ctk.CTk):
 
         self._construir()
         self._nueva()
+        # abrir maximizada para que TODO (incluido el pie con Generar PDF) sea visible
+        try:
+            self.after(60, lambda: self.state("zoomed"))
+        except Exception:
+            pass
         self.after(250, lambda: self._actualizar_trm(silencioso=True))
         self.after(1800, self._chequear_actualizacion)   # busca nueva version en el repo
 
     # ------------------------------------------------------------------ UI
     def _construir(self):
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(5, weight=1, minsize=290)
+        # sin minsize: el panel (con scroll propio) cede espacio para que el
+        # pie (Generar PDF / total) SIEMPRE quede visible, aun con escalado DPI
+        self.grid_rowconfigure(5, weight=1)
 
         # Encabezado
         head = ctk.CTkFrame(self, fg_color=CARD, corner_radius=0, height=60)
@@ -1464,37 +1471,29 @@ class App(ctk.CTk):
                      border_color=LINE, fg_color=CARD2, placeholder_text="Telefono del asesor"
                      ).grid(row=4, column=2, columnspan=2, sticky="ew", padx=16, pady=(0, 6))
         lab("ADULTOS", 5, 0); lab("NINOS", 5, 1)
-        lab("EDAD DE CADA NINO (obligatorio)", 5, 2, 4)
+        lab("HABITACIONES (Sen/Dob/Tri)", 5, 2, 2)
+        lab("EDAD DE CADA NINO", 5, 4, 2)
         self.st_ad = Stepper(g, value=2, minimo=1, maximo=60, command=self._on_pax)
-        self.st_ad.grid(row=6, column=0, sticky="w", padx=16, pady=(0, 8))
+        self.st_ad.grid(row=6, column=0, sticky="w", padx=16, pady=(0, 2))
         self.st_ninos = Stepper(g, value=0, minimo=0, maximo=10, command=self._on_ninos_count)
-        self.st_ninos.grid(row=6, column=1, sticky="w", padx=16, pady=(0, 8))
-        self.frame_edades = ctk.CTkFrame(g, fg_color=CARD2, corner_radius=8, height=40)
-        self.frame_edades.grid(row=6, column=2, columnspan=4, sticky="ew", padx=16, pady=(0, 8))
+        self.st_ninos.grid(row=6, column=1, sticky="w", padx=16, pady=(0, 2))
+        # Habitaciones al lado de ninos: 3 contadores compactos + Sugerir
+        habf = ctk.CTkFrame(g, fg_color="transparent")
+        habf.grid(row=6, column=2, columnspan=2, sticky="w", padx=16, pady=(0, 2))
+        for attr, val in (("st_hab_s", 0), ("st_hab_d", 1), ("st_hab_t", 0)):
+            st = Stepper(habf, value=val, minimo=0, maximo=40, width=84,
+                         command=self._on_hab_change)
+            st.pack(side="left", padx=(0, 4)); setattr(self, attr, st)
+        ctk.CTkButton(habf, text="Sugerir", width=72, height=28, corner_radius=8,
+                      fg_color=CARD2, text_color=NAVY, hover_color=LINE, border_width=1,
+                      border_color=LINE, font=("Segoe UI", 10, "bold"),
+                      command=self._sugerir_hab).pack(side="left", padx=(6, 0))
+        self.frame_edades = ctk.CTkFrame(g, fg_color=CARD2, corner_radius=8, height=34)
+        self.frame_edades.grid(row=6, column=4, columnspan=2, sticky="ew", padx=16, pady=(0, 2))
         self.frame_edades.grid_propagate(False)
         self.edad_vars = []
-        # Habitaciones (para el precio TOTAL de la reserva)
-        lab("HABITACIONES (para el precio total de la reserva)", 7, 0, 6)
-        habf = ctk.CTkFrame(g, fg_color="transparent")
-        habf.grid(row=8, column=0, columnspan=6, sticky="w", padx=12, pady=(0, 8))
-        ctk.CTkLabel(habf, text="Sencilla", text_color=MUTED,
-                     font=("Segoe UI", 11)).pack(side="left", padx=(6, 3))
-        self.st_hab_s = Stepper(habf, value=0, minimo=0, maximo=40, width=96,
-                                command=self._on_hab_change); self.st_hab_s.pack(side="left")
-        ctk.CTkLabel(habf, text="Doble", text_color=MUTED,
-                     font=("Segoe UI", 11)).pack(side="left", padx=(12, 3))
-        self.st_hab_d = Stepper(habf, value=1, minimo=0, maximo=40, width=96,
-                                command=self._on_hab_change); self.st_hab_d.pack(side="left")
-        ctk.CTkLabel(habf, text="Triple", text_color=MUTED,
-                     font=("Segoe UI", 11)).pack(side="left", padx=(12, 3))
-        self.st_hab_t = Stepper(habf, value=0, minimo=0, maximo=40, width=96,
-                                command=self._on_hab_change); self.st_hab_t.pack(side="left")
-        ctk.CTkButton(habf, text="Sugerir", width=78, height=28, corner_radius=8,
-                      fg_color=CARD2, text_color=NAVY, hover_color=LINE, border_width=1,
-                      border_color=LINE, font=("Segoe UI", 11, "bold"),
-                      command=self._sugerir_hab).pack(side="left", padx=(14, 6))
-        self.lbl_hab = ctk.CTkLabel(habf, text="", text_color=MUTED, font=("Segoe UI", 10))
-        self.lbl_hab.pack(side="left", padx=6)
+        self.lbl_hab = ctk.CTkLabel(g, text="", text_color=MUTED, font=("Segoe UI", 10), height=12)
+        self.lbl_hab.grid(row=7, column=0, columnspan=4, sticky="w", padx=16, pady=(0, 4))
 
         # Barra de destinos (itinerario)
         dst = ctk.CTkFrame(self, fg_color="#E4EDFA", corner_radius=14)

@@ -162,15 +162,14 @@ display:flex;align-items:center;gap:16px;margin-top:6px}
   <div class="row" style="margin-top:12px">
    <div><label class="lb">Adultos</label><div id="stAd"></div></div>
    <div><label class="lb">Ninos</label><div id="stNi"></div></div>
-   <div class="col"><label class="lb">Edad de cada nino (obligatorio)</label><div class="ages" id="ages"></div></div>
-  </div>
-  <div class="row" style="margin-top:10px;align-items:center">
-   <label class="lb" style="margin:0">Habitaciones (para el precio total):</label>
-   <div style="display:flex;align-items:center;gap:6px"><span class="mut">Sencilla</span><div id="stHs"></div></div>
-   <div style="display:flex;align-items:center;gap:6px"><span class="mut">Doble</span><div id="stHd"></div></div>
-   <div style="display:flex;align-items:center;gap:6px"><span class="mut">Triple</span><div id="stHt"></div></div>
-   <button class="btn btn-nav" style="padding:6px 12px" onclick="sugerirHab()">Sugerir</button>
-   <span id="habMsg" class="mut" style="font-weight:700"></span>
+   <div>
+    <label class="lb">Habitaciones (Sen / Dob / Tri) <span id="habMsg" style="font-weight:700"></span></label>
+    <div style="display:flex;align-items:center;gap:4px">
+     <div id="stHs"></div><div id="stHd"></div><div id="stHt"></div>
+     <button class="btn btn-nav" style="padding:6px 10px" onclick="sugerirHab()">Sug.</button>
+    </div>
+   </div>
+   <div class="col"><label class="lb">Edad de cada nino</label><div class="ages" id="ages"></div></div>
   </div>
  </div>
 
