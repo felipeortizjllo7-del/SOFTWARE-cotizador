@@ -1,5 +1,5 @@
 {
-  "version": "2.3",
+  "version": "2.4",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 2.3 - interfaz mas compacta: letra mas pequena en listas de hoteles y terrestres (se ven mas opciones a la vez), y todo cabe mejor en pantalla incluido el boton Generar PDF."
+  "notas": "Version 2.4 - Historial de cotizaciones: cada una se guarda con consecutivo (COT-00001...) y se puede buscar despues por consecutivo, agencia o asesor, mostrando agencia, asesor y fecha. Boton 'Cotizaciones' en app y HTML."
 }

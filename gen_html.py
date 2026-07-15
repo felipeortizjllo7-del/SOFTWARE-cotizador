@@ -118,6 +118,7 @@ display:flex;align-items:center;gap:16px;margin-top:6px}
  <img src="data:image/png;base64,__LOGO__" alt="logo">
  <div><div class="t1">Cotizador de Paquetes</div><div class="t2">INNOBA Colombia DMC &middot; v__VERSION__ &middot; Itinerario hasta 5 destinos &middot; Version HTML</div></div>
  <div class="sp"></div>
+ <button class="btn btn-green" onclick="abrirCotizaciones()">Cotizaciones</button>
  <button class="btn btn-navy" onclick="abrirItinerario()">Itinerario</button>
  <button class="btn btn-nav" onclick="abrirConfig()">Datos de mi empresa</button>
 </header>
@@ -214,6 +215,11 @@ const LOGO = "data:image/png;base64,__LOGO__";
 let CLIENTES = (()=>{try{const s=localStorage.getItem("innoba_clientes");if(s)return JSON.parse(s);}catch(e){}return CLIENTES_BASE.slice();})();
 function guardarClientes(){localStorage.setItem("innoba_clientes",JSON.stringify(CLIENTES));}
 let _vendActuales=[];
+/* historial de cotizaciones (con consecutivo, persistido en el navegador) */
+let COTIZS=(()=>{try{const s=localStorage.getItem("innoba_cotizs");if(s)return JSON.parse(s);}catch(e){}return {seq:0,items:[]};})();
+function guardarCotizs(){localStorage.setItem("innoba_cotizs",JSON.stringify(COTIZS));}
+function peekNumero(){return "COT-"+String((COTIZS.seq||0)+1).padStart(5,"0");}
+function registrarCotiz(rec){COTIZS.seq=(COTIZS.seq||0)+1;rec.numero="COT-"+String(COTIZS.seq).padStart(5,"0");COTIZS.items.push(rec);guardarCotizs();return rec.numero;}
 const EDADES = ["0-11 meses","1 ano","2 anos","3 anos","4 anos","5 anos","6 anos","7 anos","8 anos","9 anos"];
 const DEF_CFG = {empresa:"INNOBA Colombia DMC",nit:"",direccion:"",telefono:"",email:"",web:"",
  firma_nombre:"Felipe Ortiz",firma_cargo:"Gerente - INNOBA Colombia DMC",trm_hoy:"",
@@ -431,12 +437,13 @@ function generar(){
  const valida=`${String(v.getDate()).padStart(2,"0")}/${String(v.getMonth()+1).padStart(2,"0")}/${v.getFullYear()}`;
  const ad=st.adultos;let paxtxt=`${ad} adultos`;if(st.ages.length)paxtxt+=`, ${st.ages.length} ninos (${st.ages.map(a=>a===0?"bebe":a+" anos").join(", ")})`;
  const multi=bloques.length>1;
+ const numero=peekNumero();
  let html=`<div class="ph"><img src="${LOGO}"><div><div class="pe">${cfg.empresa}</div>
   <div style="font-size:11px">${[cfg.nit?"NIT/RUC: "+cfg.nit:"",cfg.telefono?"Tel: "+cfg.telefono:"",cfg.email,cfg.web].filter(Boolean).join(" | ")}</div></div></div>`;
  html+=`<div class="band">COTIZACION ${multi?"- ITINERARIO":"- "+bloques[0].destino}</div>`;
  html+=`<table style="margin-top:8px"><tr>
   <td style="width:50%"><b>Cliente:</b> ${document.getElementById("cli").value||"-"}<br><b>Email:</b> ${document.getElementById("email").value}${document.getElementById("asesor").value?`<br><b>Asesor:</b> ${document.getElementById("asesor").value}`:""}${document.getElementById("asesorTel").value?`<br><b>Tel. asesor:</b> ${document.getElementById("asesorTel").value}`:""}</td>
-  <td><b>No.:</b> COT-${hoy.getFullYear()}${mm}${dd}-001<br><b>Fecha:</b> ${fecha} &nbsp; <b>Valida hasta:</b> ${valida}<br>
+  <td><b>No.:</b> ${numero}<br><b>Fecha:</b> ${fecha} &nbsp; <b>Valida hasta:</b> ${valida}<br>
   <b>Fechas viaje:</b> ${fechasViaje} &nbsp; <b>Pasajeros:</b> ${paxtxt}</td></tr></table>`;
  const edadTxt=a=>a===0?"Bebe 0-11 meses":(a+(a===1?" ano":" anos"));
  const cel=v=>v?usd(v):"-";
@@ -474,6 +481,14 @@ function generar(){
  const ci=document.getElementById("cotizador").selectedIndex; const cz=COTIZADORES[ci]||COTIZADORES[0];
  html+=`<div class="firma"><div>Cordialmente,</div><br><br><div class="l"></div><b style="color:var(--navy)">${cz[0]}</b><br>${cz[1]}</div>`;
  document.getElementById("print").innerHTML=html;
+ // guardar en el historial (con consecutivo) antes de imprimir
+ registrarCotiz({cliente:document.getElementById("cli").value.trim(),
+   asesor:document.getElementById("asesor").value.trim(),
+   asesor_tel:document.getElementById("asesorTel").value.trim(),
+   fecha:fecha, fechas_viaje:fechasViaje, cotizado_por:cz[0],
+   email:document.getElementById("email").value.trim(),
+   destinos:bloques.map(b=>b.destino),
+   total:(totalReserva(bloques)!==null?totalReserva(bloques):total)});
  window.print();
 }
 
@@ -556,6 +571,30 @@ function eliminarClienteRapido(emp){if(!emp)return;
  CLIENTES=CLIENTES.filter(x=>x.empresa!==emp);guardarClientes();
  if(document.getElementById("cli").value===emp){document.getElementById("cli").value="";document.getElementById("asesor").value="";document.getElementById("asesorTel").value="";}
  const q=document.getElementById("qcli");if(q)q.dispatchEvent(new Event("input"));}
+
+/* ---------- historial de cotizaciones ---------- */
+function abrirCotizaciones(){const m=document.createElement("div");m.className="modal";m.id="modal";
+ m.innerHTML=`<div class="box" style="max-width:640px">
+  <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">Historial de cotizaciones</h3>
+   <button class="btn btn-nav" style="padding:4px 10px" onclick="cerrarModal()">Cerrar</button></div>
+  <input id="qcot" type="text" placeholder="Buscar por consecutivo, agencia o asesor..." style="margin:10px 0" autofocus>
+  <div class="list" id="cotlist" style="max-height:56vh"></div></div>`;
+ document.body.appendChild(m);
+ const pintar=()=>{const q=norm(document.getElementById("qcot").value);const L=document.getElementById("cotlist");L.innerHTML="";let n=0;
+  const items=(COTIZS.items||[]).slice().reverse();
+  for(const it of items){const campos=[it.numero,it.cliente,it.asesor].join(" ");
+   if(q&&!norm(campos).includes(q))continue;n++;
+   const it2=document.createElement("div");it2.className="item";it2.style.flexDirection="column";it2.style.alignItems="stretch";
+   it2.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center">
+     <b style="color:var(--navy)">${it.numero}  ${it.cliente||"(sin agencia)"}</b>
+     <button class="btn btn-nav" style="padding:3px 9px;color:var(--red)" onclick="eliminarCotiz(${JSON.stringify(it.numero)})">&#128465;</button></div>
+    <div class="mut" style="font-size:11px">Asesor: ${it.asesor||"-"} &nbsp; Fecha: ${it.fecha||""} &nbsp; ${(it.destinos||[]).join(", ")} &nbsp; ${usd(it.total||0)}</div>`;
+   L.appendChild(it2);}
+  if(!n)L.innerHTML='<div class="mut" style="padding:16px">'+((COTIZS.items||[]).length?"Sin resultados.":"Aun no hay cotizaciones. Genera un PDF y apareceran aqui.")+'</div>';};
+ document.getElementById("qcot").oninput=pintar;pintar();}
+function eliminarCotiz(numero){if(!confirm("¿Quitar "+numero+" del historial?"))return;
+ COTIZS.items=(COTIZS.items||[]).filter(x=>x.numero!==numero);guardarCotizs();
+ const q=document.getElementById("qcot");if(q)q.dispatchEvent(new Event("input"));}
 
 /* ---------- itinerario ---------- */
 function itinerarioAuto(){let L=[],dia=1;

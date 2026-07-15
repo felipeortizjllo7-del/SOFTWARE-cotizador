@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "2.3"
+VERSION = "2.4"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Archivo con la ultima version publicada (rama main del repositorio)
@@ -244,6 +244,39 @@ def cargar_clientes():
 def guardar_clientes(lst):
     with open(CLIENTES_PATH, "w", encoding="utf-8") as f:
         json.dump(lst, f, ensure_ascii=False, indent=2)
+
+
+# ---- Historial de cotizaciones (con consecutivo) ----
+COTIZACIONES_PATH = os.path.join(datos_dir(), "cotizaciones.json")
+
+def cargar_cotizaciones():
+    if os.path.exists(COTIZACIONES_PATH):
+        try:
+            with open(COTIZACIONES_PATH, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            if isinstance(d, dict) and "items" in d:
+                return d
+        except Exception:
+            pass
+    return {"seq": 0, "items": []}
+
+def guardar_cotizaciones(data):
+    with open(COTIZACIONES_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+def peek_numero_cotizacion():
+    """Devuelve el proximo consecutivo (sin reservarlo aun), ej. COT-00001."""
+    return f"COT-{cargar_cotizaciones().get('seq', 0) + 1:05d}"
+
+def registrar_cotizacion(rec):
+    """Asigna el consecutivo, guarda el registro y devuelve el numero asignado."""
+    data = cargar_cotizaciones()
+    data["seq"] = int(data.get("seq", 0)) + 1
+    numero = f"COT-{data['seq']:05d}"
+    rec = dict(rec); rec["numero"] = numero
+    data["items"].append(rec)
+    guardar_cotizaciones(data)
+    return numero
 
 def exportar_clientes_excel(lst, ruta):
     import openpyxl
@@ -962,6 +995,89 @@ class BuscadorClientes(ctk.CTkToplevel):
 
 
 # ============================================================================
+# Ventana de Historial de Cotizaciones (consecutivo + busqueda)
+# ============================================================================
+class VentanaCotizaciones(ctk.CTkToplevel):
+    def __init__(self, master):
+        super().__init__(master)
+        self.title("Historial de cotizaciones")
+        self.geometry("920x620"); self.configure(fg_color=BG)
+        self.transient(master); self.grab_set()
+        self.data = cargar_cotizaciones()
+        self.grid_columnconfigure(0, weight=1); self.grid_rowconfigure(2, weight=1)
+        ctk.CTkLabel(self, text="Historial de cotizaciones", text_color=NAVY,
+                     font=("Segoe UI", 16, "bold")).grid(row=0, column=0, sticky="w",
+                                                         padx=16, pady=(14, 2))
+        self.var_q = tk.StringVar()
+        e = ctk.CTkEntry(self, textvariable=self.var_q, height=36, corner_radius=10,
+                         border_color=BLUE, border_width=2, fg_color=CARD, font=("Segoe UI", 12),
+                         placeholder_text="Buscar por consecutivo, agencia o asesor...")
+        e.grid(row=1, column=0, sticky="ew", padx=16, pady=(2, 8))
+        self.var_q.trace_add("write", lambda *a: self._pintar())
+        self.lista = ctk.CTkScrollableFrame(self, fg_color=CARD, corner_radius=12)
+        self.lista.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 14))
+        self.after(120, e.focus_set)
+        self.bind("<Escape>", lambda ev: self.destroy())
+        self._pintar()
+
+    def _pintar(self):
+        for w in self.lista.winfo_children():
+            w.destroy()
+        q = _nz(self.var_q.get())
+        items = list(reversed(self.data.get("items", [])))   # mas recientes primero
+        n = 0
+        for it in items:
+            campos = " ".join([it.get("numero", ""), it.get("cliente", ""),
+                               it.get("asesor", "")])
+            if q and q not in _nz(campos):
+                continue
+            n += 1
+            fila = ctk.CTkFrame(self.lista, fg_color=CARD2, corner_radius=8)
+            fila.pack(fill="x", padx=4, pady=2)
+            fila.grid_columnconfigure(0, weight=1)
+            dest = ", ".join(it.get("destinos", []))
+            linea1 = f"{it.get('numero','')}    {it.get('cliente') or '(sin agencia)'}"
+            linea2 = (f"Asesor: {it.get('asesor') or '-'}     Fecha: {it.get('fecha','')}"
+                      f"     {dest}     {usd(it.get('total', 0))}")
+            cel = ctk.CTkFrame(fila, fg_color="transparent")
+            cel.grid(row=0, column=0, sticky="w", padx=10, pady=6)
+            ctk.CTkLabel(cel, text=linea1, text_color=NAVY, anchor="w",
+                         font=("Segoe UI", 12, "bold")).pack(anchor="w")
+            ctk.CTkLabel(cel, text=linea2, text_color=MUTED, anchor="w",
+                         font=("Segoe UI", 10)).pack(anchor="w")
+            if it.get("pdf"):
+                ctk.CTkButton(fila, text="Abrir PDF", width=90, height=30, corner_radius=8,
+                              fg_color=NAVY, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
+                              command=lambda p=it["pdf"]: self._abrir(p)).grid(row=0, column=1, padx=4)
+            ctk.CTkButton(fila, text="🗑", width=34, height=30, corner_radius=8,
+                          fg_color=CARD2, text_color=RED, hover_color=LINE,
+                          font=("Segoe UI", 13),
+                          command=lambda x=it: self._eliminar(x)).grid(row=0, column=2, padx=(0, 6))
+        if not n:
+            msg = ("Aun no hay cotizaciones guardadas.\nGenera un PDF y aparecera aqui."
+                   if not self.data.get("items") else "Sin resultados.")
+            ctk.CTkLabel(self.lista, text=msg, text_color=MUTED).pack(pady=24)
+
+    def _abrir(self, p):
+        if p and os.path.exists(p):
+            try:
+                os.startfile(p)
+            except Exception as e:
+                messagebox.showerror("Error", str(e))
+        else:
+            messagebox.showinfo("PDF no encontrado",
+                                "El archivo PDF ya no esta en:\n" + str(p))
+
+    def _eliminar(self, it):
+        if messagebox.askyesno("Quitar del historial",
+                               f"¿Quitar {it.get('numero','')} del historial?\n"
+                               "(No borra el archivo PDF)", parent=self):
+            self.data["items"] = [x for x in self.data["items"] if x is not it]
+            guardar_cotizaciones(self.data)
+            self._pintar()
+
+
+# ============================================================================
 # Ventana de Clientes / Empresas (con vendedores)
 # ============================================================================
 class VentanaClientes(ctk.CTkToplevel):
@@ -1382,6 +1498,9 @@ class App(ctk.CTk):
         ctk.CTkLabel(tit, text=f"INNOBA Colombia DMC  ·  v{VERSION}  ·  Itinerario hasta 5 destinos",
                      text_color=MUTED, font=("Segoe UI", 11), height=15).pack(anchor="w")
         hbtns = ctk.CTkFrame(head, fg_color="transparent"); hbtns.grid(row=0, column=2, padx=20)
+        ctk.CTkButton(hbtns, text="Cotizaciones", width=120, height=36, corner_radius=10,
+                      fg_color=GREEN, hover_color=GREEN_H, font=("Segoe UI", 12, "bold"),
+                      command=self._abrir_cotizaciones).pack(side="left", padx=(0, 8))
         ctk.CTkButton(hbtns, text="Itinerario", width=110, height=36, corner_radius=10,
                       fg_color=CYAN, hover_color=BLUE, font=("Segoe UI", 12, "bold"),
                       command=self._abrir_itinerario).pack(side="left", padx=(0, 8))
@@ -2273,6 +2392,9 @@ class App(ctk.CTk):
     def _on_cfg(self, cfg):
         self.cfg = cfg
 
+    def _abrir_cotizaciones(self):
+        VentanaCotizaciones(self)
+
     def _abrir_clientes(self):
         VentanaClientes(self, on_cambio=self._on_clientes_cambio)
 
@@ -2381,6 +2503,10 @@ class App(ctk.CTk):
         cliente = self.var_cli.get().strip(); email = self.var_email.get().strip()
         firma_nom, firma_cargo = self._cotz_map.get(self.var_cotizador.get(),
                                                     (COTIZADORES[0][0], COTIZADORES[0][1]))
+        # consecutivo de la cotizacion (se guarda en el historial al final)
+        self._numero = peek_numero_cotizacion()
+        reserva = self._total_reserva(bloques)
+        total_mostrar = reserva if reserva is not None else total
         datos = {"numero": self._numero, "fecha": self._fecha, "valida_hasta": self._valida,
                  "cliente": cliente, "cli_email": email,
                  "asesor": self.var_asesor.get().strip(),
@@ -2404,6 +2530,18 @@ class App(ctk.CTk):
             generar_pdf(self.cfg, datos, bloques, total, ruta)
         except Exception as e:
             messagebox.showerror("Error al generar PDF", str(e)); return
+        # guardar en el historial de cotizaciones (con consecutivo)
+        try:
+            numero = registrar_cotizacion({
+                "cliente": cliente, "asesor": self.var_asesor.get().strip(),
+                "asesor_tel": self.var_aso_tel.get().strip(),
+                "fecha": self._fecha, "fechas_viaje": datos["fechas_viaje"],
+                "cotizado_por": firma_nom, "email": email,
+                "destinos": [t["destino"] for t in self.tramos],
+                "total": total_mostrar, "pdf": ruta})
+            self.lbl_desglose.configure(text=f"Guardada {numero}")
+        except Exception:
+            pass
         # enviar por correo
         self._enviar_pdf(ruta, email, cliente, datos.get("asesor", ""))
 
