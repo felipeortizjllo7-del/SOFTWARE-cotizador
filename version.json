@@ -1,5 +1,5 @@
 {
-  "version": "1.9",
+  "version": "2.0",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 1.9 - CORRIGE precios negativos: la TRM ahora usa la fuente oficial (datos.gov.co), se actualiza sola a diario y valida el rango. Aplica a app y HTML."
+  "notas": "Version 2.0 - PDF con precio por pasajero Y total, parametrizacion de habitaciones (sencilla/doble/triple) para el total correcto de la reserva, e itinerario dia por dia editable. Incluye el arreglo de TRM (fuente oficial)."
 }

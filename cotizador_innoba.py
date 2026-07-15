@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "1.9"
+VERSION = "2.0"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Archivo con la ultima version publicada (rama main del repositorio)
@@ -604,17 +604,19 @@ def _seccion_tabla(pdf, titulo, filas, total_seccion):
     pdf.ln(1)
     pdf.set_font("Helvetica", "B", 10); pdf.set_text_color(*PDF_BLUE)
     pdf.cell(0, 6, T(titulo), ln=1)
-    w_desc, w_det, w_val = 105, 40, 35
+    w_desc, w_det, w_pp, w_val = 90, 30, 30, 30
     pdf.set_font("Helvetica", "B", 9)
     pdf.set_fill_color(*PDF_PRIM); pdf.set_text_color(255, 255, 255)
     pdf.cell(w_desc, 7, T("  Concepto"), fill=True)
     pdf.cell(w_det, 7, T("Detalle"), fill=True, align="C")
-    pdf.cell(w_val, 7, T("Valor (USD)"), fill=True, align="C", ln=1)
+    pdf.cell(w_pp, 7, T("Por pasajero"), fill=True, align="C")
+    pdf.cell(w_val, 7, T("Total (USD)"), fill=True, align="C", ln=1)
     pdf.set_text_color(*PDF_TXT)
     f = 0
     for fila in filas:
         desc, det, val = fila[0], fila[1], fila[2]
-        descripcion = fila[3] if len(fila) > 3 else ""
+        pp = fila[3] if len(fila) > 3 else None
+        descripcion = fila[4] if len(fila) > 4 else ""
         relleno = (f % 2 == 1)
         pdf.set_font("Helvetica", "B", 9)
         lin_c = pdf.multi_cell(w_desc - 4, 4.6, T("  " + desc), border=0,
@@ -642,7 +644,10 @@ def _seccion_tabla(pdf, titulo, filas, total_seccion):
             pdf.set_text_color(*PDF_TXT)
         pdf.set_xy(x0 + w_desc, y0); pdf.set_font("Helvetica", "", 9)
         pdf.cell(w_det, alto, T(det), align="C", fill=relleno)
+        pdf.cell(w_pp, alto, T(usd(pp) if pp else "-"), align="R", fill=relleno)
+        pdf.set_font("Helvetica", "B", 9)
         pdf.cell(w_val, alto, T(usd(val)), align="R", fill=relleno, ln=1)
+        pdf.set_font("Helvetica", "", 9)
         pdf.set_y(y0 + alto)
         f += 1
 
@@ -750,37 +755,68 @@ def generar_pdf(cfg, datos, bloques, total, ruta_salida):
             partes = [f"{edad_txt(a)} (x{c}): {usd(pr)}" for a, c, pr in b["ninos"]]
             pdf.multi_cell(0, 4.5, T("  Precio por nino: " + "   |   ".join(partes)))
 
-    # ---- Costo total de la reserva con la 1a opcion de hotel ----
+    # ---- Costo total de la reserva: 1a opcion de hotel + habitaciones indicadas ----
     con_op = [b for b in bloques if b["opciones"]]
-    if con_op:
-        n_ad = con_op[0]["n_adultos"]
+    hab = datos.get("habitaciones") or {}
+    OCCP = {"sencilla": 1, "doble": 2, "triple": 3}
+    ocup = sum(hab.get(k, 0) * OCCP[k] for k in OCCP)
+    if con_op and ocup > 0:
         n_ni = sum(c for b in con_op for a, c, pr in b["ninos"])
-        tot = {}
+        total_res = 0.0; detalle_hab = []
         for acc in ("sencilla", "doble", "triple"):
-            if all(b["opciones"][0].get(acc) for b in con_op):
-                tot[acc] = sum(b["n_adultos"] * b["opciones"][0][acc]
-                               + sum(c * pr for a, c, pr in b["ninos"]) for b in con_op)
-            else:
-                tot[acc] = None
+            n = hab.get(acc, 0)
+            if not n:
+                continue
+            detalle_hab.append(f"{n} {acc}")
+            for b in con_op:
+                pp = b["opciones"][0].get(acc)
+                if pp:
+                    total_res += n * OCCP[acc] * pp
+        total_res += sum(c * pr for b in con_op for a, c, pr in b["ninos"])
         hoteles_op1 = " + ".join(b["opciones"][0]["nombre"] for b in con_op)
         pdf.ln(4)
-        if pdf.get_y() > 250:
+        if pdf.get_y() > 245:
             pdf.add_page()
-        pax_txt = f"{n_ad} adulto(s)" + (f" + {n_ni} nino(s)" if n_ni else "")
+        pax_txt = (f"{con_op[0]['n_adultos']} adulto(s)"
+                   + (f" + {n_ni} nino(s)" if n_ni else ""))
         pdf.set_font("Helvetica", "B", 10); pdf.set_fill_color(*PDF_PRIM)
         pdf.set_text_color(255, 255, 255)
-        pdf.cell(0, 8, T("  COSTO TOTAL DE LA RESERVA - 1a opcion de hotel "
-                         f"({pax_txt})"), ln=1, fill=True)
+        pdf.cell(0, 8, T(f"  COSTO TOTAL DE LA RESERVA - 1a opcion ({pax_txt})"),
+                 ln=1, fill=True)
+        pdf.set_text_color(*PDF_TXT); pdf.set_font("Helvetica", "", 9)
+        pdf.set_fill_color(*PDF_CLARO)
+        pdf.cell(0, 7, T("  Habitaciones solicitadas: " + ", ".join(detalle_hab)),
+                 fill=True, ln=1)
+        pdf.set_font("Helvetica", "B", 12); pdf.set_fill_color(*PDF_PRIM)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(120, 9, T("  TOTAL DE LA RESERVA (USD)"), fill=True)
+        pdf.cell(0, 9, T(usd(total_res)), align="R", fill=True, ln=1)
+        pdf.set_text_color(110, 120, 135); pdf.set_font("Helvetica", "I", 8)
+        pdf.cell(0, 5, T(f"  Calculado con la 1a opcion: {hoteles_op1[:110]}"), ln=1)
         pdf.set_text_color(*PDF_TXT)
-        w1 = 60
-        pdf.set_font("Helvetica", "B", 10)
-        for etq, k in (("Sencilla", "sencilla"), ("Doble", "doble"), ("Triple", "triple")):
-            pdf.set_fill_color(*PDF_CLARO)
-            pdf.cell(w1, 8, T("  Acomodacion " + etq), fill=True)
-            pdf.cell(w1, 8, T(usd(tot[k]) if tot[k] else "-"), align="R", fill=True, ln=1)
-        pdf.set_font("Helvetica", "I", 8); pdf.set_text_color(110, 120, 135)
-        pdf.cell(0, 5, T(f"  Calculado con la 1a opcion: {hoteles_op1[:120]}"), ln=1)
+
+    # ---- Itinerario dia por dia (opcional) ----
+    itin = (datos.get("itinerario") or "").strip()
+    if itin:
+        pdf.add_page()
+        pdf.set_fill_color(*PDF_PRIM); pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Helvetica", "B", 13)
+        pdf.cell(0, 9, T("  ITINERARIO DIA POR DIA"), ln=1, fill=True); pdf.ln(2)
         pdf.set_text_color(*PDF_TXT)
+        for par in itin.split("\n"):
+            par = par.strip()
+            if not par:
+                pdf.ln(1); continue
+            if pdf.get_y() > 270:
+                pdf.add_page()
+            if re.match(r"(?i)^d[ií]a\s*\d", par):
+                pdf.ln(1); pdf.set_fill_color(*PDF_BLUE); pdf.set_text_color(255, 255, 255)
+                pdf.set_font("Helvetica", "B", 10)
+                pdf.cell(0, 7, T("  " + par), ln=1, fill=True)
+                pdf.set_text_color(*PDF_TXT)
+            else:
+                pdf.set_font("Helvetica", "", 9)
+                pdf.multi_cell(0, 4.8, T(par))
 
     pdf.ln(6); pdf.set_text_color(*PDF_PRIM); pdf.set_font("Helvetica", "B", 10)
     pdf.cell(0, 6, T("Notas y condiciones"), ln=1)
@@ -1299,6 +1335,7 @@ class App(ctk.CTk):
         self._cargando = False    # evita feedback al cargar widgets
         self.tab = "hotel"        # pestana activa
         self.q = {"hotel": "", "trans": "", "act": ""}   # textos de busqueda
+        self._itinerario = ""     # itinerario dia por dia (editable)
 
         # TRM CRUDA (sin descuento). El descuento se aplica segun la fecha de viaje.
         self._trm = _trm_valida(self.cfg.get("ultima_trm", ""))
@@ -1332,6 +1369,9 @@ class App(ctk.CTk):
         ctk.CTkLabel(tit, text=f"INNOBA Colombia DMC  ·  v{VERSION}  ·  Itinerario hasta 5 destinos",
                      text_color=MUTED, font=("Segoe UI", 11), height=15).pack(anchor="w")
         hbtns = ctk.CTkFrame(head, fg_color="transparent"); hbtns.grid(row=0, column=2, padx=20)
+        ctk.CTkButton(hbtns, text="Itinerario", width=110, height=36, corner_radius=10,
+                      fg_color=CYAN, hover_color=BLUE, font=("Segoe UI", 12, "bold"),
+                      command=self._abrir_itinerario).pack(side="left", padx=(0, 8))
         ctk.CTkButton(hbtns, text="Clientes", width=110, height=36, corner_radius=10,
                       fg_color=NAVY, hover_color=BLUE, font=("Segoe UI", 12, "bold"),
                       command=self._abrir_clientes).pack(side="left", padx=(0, 8))
@@ -1433,6 +1473,28 @@ class App(ctk.CTk):
         self.frame_edades.grid(row=6, column=2, columnspan=4, sticky="ew", padx=16, pady=(0, 8))
         self.frame_edades.grid_propagate(False)
         self.edad_vars = []
+        # Habitaciones (para el precio TOTAL de la reserva)
+        lab("HABITACIONES (para el precio total de la reserva)", 7, 0, 6)
+        habf = ctk.CTkFrame(g, fg_color="transparent")
+        habf.grid(row=8, column=0, columnspan=6, sticky="w", padx=12, pady=(0, 8))
+        ctk.CTkLabel(habf, text="Sencilla", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(side="left", padx=(6, 3))
+        self.st_hab_s = Stepper(habf, value=0, minimo=0, maximo=40, width=96,
+                                command=self._on_hab_change); self.st_hab_s.pack(side="left")
+        ctk.CTkLabel(habf, text="Doble", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(side="left", padx=(12, 3))
+        self.st_hab_d = Stepper(habf, value=1, minimo=0, maximo=40, width=96,
+                                command=self._on_hab_change); self.st_hab_d.pack(side="left")
+        ctk.CTkLabel(habf, text="Triple", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(side="left", padx=(12, 3))
+        self.st_hab_t = Stepper(habf, value=0, minimo=0, maximo=40, width=96,
+                                command=self._on_hab_change); self.st_hab_t.pack(side="left")
+        ctk.CTkButton(habf, text="Sugerir", width=78, height=28, corner_radius=8,
+                      fg_color=CARD2, text_color=NAVY, hover_color=LINE, border_width=1,
+                      border_color=LINE, font=("Segoe UI", 11, "bold"),
+                      command=self._sugerir_hab).pack(side="left", padx=(14, 6))
+        self.lbl_hab = ctk.CTkLabel(habf, text="", text_color=MUTED, font=("Segoe UI", 10))
+        self.lbl_hab.pack(side="left", padx=6)
 
         # Barra de destinos (itinerario)
         dst = ctk.CTkFrame(self, fg_color="#E4EDFA", corner_radius=14)
@@ -1934,6 +1996,8 @@ class App(ctk.CTk):
         if self.activo is not None and self.tab == "hotel" \
                 and hasattr(self, "_hcont") and self._hcont.winfo_exists():
             self._fill_hoteles(self.tramos[self.activo])
+        if hasattr(self, "lbl_hab"):
+            self._val_hab()
         self._recalcular()
 
     def _on_ninos_count(self):
@@ -2001,7 +2065,8 @@ class App(ctk.CTk):
                     if not serv:
                         continue
                     priv = es_privado(nombre)
-                    ss += precio_servicio_grupo(serv, adultos, ages, tasa, mt, priv)
+                    total_serv = precio_servicio_grupo(serv, adultos, ages, tasa, mt, priv)
+                    ss += total_serv
                     pp = precio_terrestre_usd(serv, N, tasa, mt) / N
                     adult_pp += pp
                     for i, a in enumerate(ages):
@@ -2016,8 +2081,8 @@ class App(ctk.CTk):
                         reg = buscar_descripcion(nombre, tr["destino"], self.descripciones)
                         if reg:
                             desc = texto_descripcion(reg)
-                    filas.append((nombre, det_pax, precio_servicio_grupo(
-                        serv, adultos, ages, tasa, mt, priv), desc))
+                    # fila: (concepto, detalle_pax, total, por_pasajero_adulto, descripcion)
+                    filas.append((nombre, det_pax, total_serv, pp, desc))
                 if filas:
                     base_sec.append((titulo, filas, ss)); base += ss
         # --- ninos: precio fijo (servicios + tarifa hotel 3-9); no varia por hotel ---
@@ -2061,6 +2126,110 @@ class App(ctk.CTk):
             bloques.append(b)
         return bloques, ref, opc_mode
 
+    # ------------------------------------------------------------- habitaciones
+    def _hab(self):
+        return {"sencilla": self.st_hab_s.get(),
+                "doble": self.st_hab_d.get(),
+                "triple": self.st_hab_t.get()}
+
+    def _hab_ocupacion(self, hab=None):
+        h = hab or self._hab()
+        return h["sencilla"] * 1 + h["doble"] * 2 + h["triple"] * 3
+
+    def _sugerir_hab(self):
+        a = max(self.st_ad.get(), 0)
+        self.st_hab_t.set(0)
+        self.st_hab_d.set(a // 2)
+        self.st_hab_s.set(a % 2)
+        self._on_hab_change()
+
+    def _val_hab(self):
+        try:
+            ocup = self._hab_ocupacion(); ad = self.st_ad.get()
+            if ocup == ad:
+                self.lbl_hab.configure(text=f"OK: {ocup} plazas = {ad} adultos",
+                                       text_color=GREEN)
+            else:
+                self.lbl_hab.configure(
+                    text=f"Ojo: {ocup} plazas vs {ad} adultos", text_color=RED)
+        except Exception:
+            pass
+
+    def _on_hab_change(self):
+        self._val_hab()
+        self._recalcular()
+
+    def _total_reserva(self, bloques):
+        """Precio TOTAL de la reserva usando la 1a opcion de hotel y las
+           habitaciones indicadas (sencilla/doble/triple)."""
+        hab = self._hab()
+        con_op = [b for b in bloques if b["opciones"]]
+        if not con_op or self._hab_ocupacion(hab) == 0:
+            return None
+        total = 0.0
+        for b in con_op:
+            o = b["opciones"][0]
+            for acc, occ in (("sencilla", 1), ("doble", 2), ("triple", 3)):
+                pp = o.get(acc)
+                if pp and hab[acc]:
+                    total += hab[acc] * occ * pp
+            total += sum(c * pr for a, c, pr in b["ninos"])
+        return total
+
+    # ------------------------------------------------------------- itinerario
+    def _itinerario_auto(self):
+        """Arma un borrador de itinerario dia por dia a partir de los destinos y
+           actividades elegidas (Dia 1 llegada, actividades, ultimo dia salida)."""
+        lineas = []
+        dia = 1
+        if self.tramos:
+            d0 = self.tramos[0]["destino"]
+            lineas.append(f"DIA {dia:02d}: LLEGADA A {d0.upper()}")
+            lineas.append("Recepcion en el aeropuerto por nuestro equipo y traslado al "
+                          "hotel seleccionado. Registro y alojamiento.")
+            dia += 1
+        for tr in self.tramos:
+            for act in sorted(tr["act"]):
+                reg = buscar_descripcion(act, tr["destino"], self.descripciones)
+                d = texto_descripcion(reg) if reg else ""
+                lineas.append(f"DIA {dia:02d}: {tr['destino'].upper()} - {act.upper()}")
+                lineas.append(d or "Actividad programada. Alojamiento.")
+                dia += 1
+        lineas.append(f"DIA {dia:02d}: TRASLADO AL AEROPUERTO")
+        lineas.append("Desayuno. A la hora indicada realizamos el traslado al aeropuerto. "
+                      "Fin de nuestros servicios.")
+        return "\n".join(lineas)
+
+    def _abrir_itinerario(self):
+        if not self.tramos:
+            messagebox.showinfo("Itinerario", "Agrega al menos un destino primero.")
+            return
+        win = ctk.CTkToplevel(self)
+        win.title("Itinerario dia por dia")
+        win.geometry("760x620"); win.configure(fg_color=BG)
+        win.transient(self); win.grab_set()
+        ctk.CTkLabel(win, text="Itinerario dia por dia (editable)", text_color=NAVY,
+                     font=("Segoe UI", 16, "bold")).pack(anchor="w", padx=16, pady=(14, 0))
+        ctk.CTkLabel(win, text="Se incluira en el PDF. Las lineas que empiezan por 'DIA' "
+                     "salen resaltadas.", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w", padx=16, pady=(0, 6))
+        cont = ctk.CTkFrame(win, fg_color=CARD, corner_radius=10)
+        cont.pack(fill="both", expand=True, padx=16, pady=6)
+        txt = tk.Text(cont, wrap="word", font=("Segoe UI", 11), bd=0, relief="flat",
+                      padx=12, pady=12, background="#FFFFFF", foreground=TEXT)
+        txt.pack(fill="both", expand=True, padx=4, pady=4)
+        txt.insert("1.0", getattr(self, "_itinerario", "") or self._itinerario_auto())
+        bar = ctk.CTkFrame(win, fg_color="transparent"); bar.pack(fill="x", padx=16, pady=(0, 14))
+        def regen():
+            txt.delete("1.0", "end"); txt.insert("1.0", self._itinerario_auto())
+        def guardar():
+            self._itinerario = txt.get("1.0", "end").strip(); win.destroy()
+        ctk.CTkButton(bar, text="Regenerar automatico", width=180, fg_color=CARD2,
+                      text_color=NAVY, hover_color=LINE, border_width=1, border_color=LINE,
+                      font=("Segoe UI", 12, "bold"), command=regen).pack(side="left")
+        ctk.CTkButton(bar, text="Guardar", width=140, fg_color=GREEN, hover_color=GREEN_H,
+                      font=("Segoe UI", 13, "bold"), command=guardar).pack(side="right")
+
     def _recalcular(self, *a):
         try:
             bloques, total, opc_mode = self._calcular_todo()
@@ -2069,9 +2238,16 @@ class App(ctk.CTk):
         if self._tasa() is None:
             self.lbl_total.configure(text="USD --")
             self.lbl_desglose.configure(text="Esperando tasa del dia...")
+            return
+        reserva = self._total_reserva(bloques)
+        if reserva is not None:
+            self.lbl_total.configure(text=usd(reserva))
+            h = self._hab()
+            det = ", ".join(f"{h[k]} {k}" for k in ("sencilla", "doble", "triple") if h[k])
+            self.lbl_desglose.configure(text=f"Total reserva ({det}) - 1a opcion")
         else:
             self.lbl_total.configure(text=usd(total))
-            self.lbl_desglose.configure(text="Por persona en doble (1a opcion) - ver PDF")
+            self.lbl_desglose.configure(text="Indica las habitaciones para el total")
 
     # ------------------------------------------------------------- acciones
     def _on_fecha_desde(self):
@@ -2163,9 +2339,12 @@ class App(ctk.CTk):
         self._fecha = hoy.strftime("%d/%m/%Y")
         self._valida = add_months(hoy, 1).strftime("%d/%m/%Y")
         self.tramos = []; self.activo = None
+        self._itinerario = ""
         self._rebuild_chips(); self._limpiar_activo()
         # agregar un primer destino por comodidad
         self._add_destino(list(self.precios.keys())[0])
+        if hasattr(self, "st_hab_s"):
+            self._sugerir_hab()
         self._recalcular()
 
     def _generar(self):
@@ -2202,6 +2381,8 @@ class App(ctk.CTk):
                  "asesor_tel": self.var_aso_tel.get().strip(),
                  "fechas_viaje": f"{self.sel_desde.get_str()} al {self.sel_hasta.get_str()}",
                  "pax_txt": pax_txt, "opc_mode": opc_mode,
+                 "habitaciones": self._hab(),
+                 "itinerario": (self._itinerario or self._itinerario_auto()),
                  "firma_nombre": firma_nom, "firma_cargo": firma_cargo,
                  "notas": (f"Vigencia: esta cotizacion tiene una validez de un (1) mes, "
                            f"hasta el {self._valida}. " + self.cfg.get("notas", ""))}
