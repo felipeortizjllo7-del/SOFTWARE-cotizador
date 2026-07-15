@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "2.2"
+VERSION = "2.3"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Archivo con la ultima version publicada (rama main del repositorio)
@@ -1310,6 +1310,12 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         ctk.set_appearance_mode("light")
+        # Escala mas compacta: letra y controles ~15% mas pequenos -> se ven mas
+        # opciones de hotel/terrestres y todo cabe mejor en pantalla.
+        try:
+            ctk.set_widget_scaling(0.85)
+        except Exception:
+            pass
         self.cfg = cargar_config()
         if not self.cfg.get("logo") or not os.path.exists(self.cfg["logo"]):
             lg = recurso("logo_innoba.png")
@@ -1354,9 +1360,9 @@ class App(ctk.CTk):
     # ------------------------------------------------------------------ UI
     def _construir(self):
         self.grid_columnconfigure(0, weight=1)
-        # sin minsize: el panel (con scroll propio) cede espacio para que el
-        # pie (Generar PDF / total) SIEMPRE quede visible, aun con escalado DPI
-        self.grid_rowconfigure(5, weight=1)
+        # el panel de seleccion tiene una altura minima decente (muestra varias
+        # opciones); como la app abre maximizada, el pie tambien cabe.
+        self.grid_rowconfigure(5, weight=1, minsize=240)
 
         # Encabezado
         head = ctk.CTkFrame(self, fg_color=CARD, corner_radius=0, height=60)
@@ -1599,17 +1605,17 @@ class App(ctk.CTk):
     # ---- panel HOTEL: lista con precio POR PERSONA ----
     def _render_hotel(self):
         tr = self.tramos[self.activo]
-        bar = ctk.CTkFrame(self.panel, fg_color=CARD2, corner_radius=10)
-        bar.grid(row=0, column=0, sticky="ew", padx=8, pady=8)
+        bar = ctk.CTkFrame(self.panel, fg_color=CARD2, corner_radius=8)
+        bar.grid(row=0, column=0, sticky="ew", padx=8, pady=(6, 4))
         ctk.CTkLabel(bar, text="Buscar hotel:", text_color=MUTED,
-                     font=("Segoe UI", 12)).pack(side="left", padx=(10, 6), pady=8)
-        eb = ctk.CTkEntry(bar, width=220, height=30, corner_radius=8, border_color=LINE,
+                     font=("Segoe UI", 11)).pack(side="left", padx=(10, 6), pady=5)
+        eb = ctk.CTkEntry(bar, width=220, height=26, corner_radius=8, border_color=LINE,
                           placeholder_text="nombre del hotel...")
         eb.pack(side="left"); eb.insert(0, self.q["hotel"])
         eb.bind("<KeyRelease>", lambda e: (self.q.__setitem__("hotel", eb.get()),
                                            self._fill_hoteles(tr)))
         ctk.CTkLabel(bar, text="Precio POR PERSONA en Sencilla / Doble / Triple",
-                     text_color=MUTED, font=("Segoe UI", 10)).pack(side="right", padx=12)
+                     text_color=MUTED, font=("Segoe UI", 9)).pack(side="right", padx=12)
         self._hcont = ctk.CTkScrollableFrame(self.panel, fg_color=CARD2, corner_radius=10)
         self._hcont.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 8))
         self._hcont.grid_columnconfigure(0, weight=1)
@@ -1633,10 +1639,10 @@ class App(ctk.CTk):
         # limpiar seleccionados que ya no existen
         tr["hoteles"] = [n for n in tr["hoteles"] if n in nombres]
         info = ctk.CTkLabel(self._hcont,
-                            text=f"Marca hasta 5 hoteles como opciones para el cliente  "
+                            text=f"Marca hasta 5 hoteles como opciones  "
                                  f"({len(tr['hoteles'])}/5 elegidos)",
-                            text_color=NAVY, font=("Segoe UI", 11, "bold"))
-        info.pack(anchor="w", padx=8, pady=(4, 6))
+                            text_color=NAVY, font=("Segoe UI", 10, "bold"))
+        info.pack(anchor="w", padx=8, pady=(2, 4))
         q = (self.q["hotel"] or "").lower()
         n_mostrados = 0
         for h, nom in zip(hoteles, nombres):
@@ -1645,15 +1651,15 @@ class App(ctk.CTk):
             sel = (nom in tr["hoteles"])
             cat = h.get("categoria", "")
             row = ctk.CTkFrame(self._hcont, fg_color="#E7F0FB" if sel else CARD,
-                               corner_radius=8, border_width=2 if sel else 0, border_color=NAVY)
-            row.pack(fill="x", padx=6, pady=2)
+                               corner_radius=6, border_width=2 if sel else 0, border_color=NAVY)
+            row.pack(fill="x", padx=6, pady=1)
             inner = ctk.CTkFrame(row, fg_color="transparent")
-            inner.pack(fill="x", padx=10, pady=4)
+            inner.pack(fill="x", padx=8, pady=2)
             ctk.CTkLabel(inner, text=("☑ " if sel else "☐ ") + nom, text_color=NAVY,
-                         font=("Segoe UI", 12, "bold"), anchor="w").pack(side="left")
+                         font=("Segoe UI", 10, "bold"), anchor="w").pack(side="left")
             if cat:
-                ctk.CTkLabel(inner, text=cat, text_color="#FFFFFF", fg_color=CYAN, corner_radius=7,
-                             font=("Segoe UI", 9, "bold"), width=62, height=18).pack(side="left", padx=8)
+                ctk.CTkLabel(inner, text=cat, text_color="#FFFFFF", fg_color=CYAN, corner_radius=6,
+                             font=("Segoe UI", 8, "bold"), width=54, height=15).pack(side="left", padx=6)
 
             def pp(k, hh=h):
                 v = hh.get(k)
@@ -1661,7 +1667,7 @@ class App(ctk.CTk):
                     return "N/D"
                 return usd(precio_hotel_usd_noche(v, tasa, mh) * noches / self.OCC[k])
             ctk.CTkLabel(inner, text=f"Sen {pp('sencilla')}    Dob {pp('doble')}    Tri {pp('triple')}",
-                         text_color=TEXT, font=("Segoe UI", 11), anchor="e").pack(side="right")
+                         text_color=TEXT, font=("Segoe UI", 10), anchor="e").pack(side="right")
             for wdg in (row, inner) + tuple(inner.winfo_children()):
                 wdg.bind("<Button-1>", lambda e, n=nom: self._toggle_hotel(n))
             n_mostrados += 1
@@ -1692,17 +1698,17 @@ class App(ctk.CTk):
     # ---- panel TRANSPORTES / ACTIVIDADES: lista con precio POR PERSONA ----
     def _render_lista(self, tipo):
         tr = self.tramos[self.activo]
-        bar = ctk.CTkFrame(self.panel, fg_color=CARD2, corner_radius=10)
-        bar.grid(row=0, column=0, sticky="ew", padx=8, pady=8)
+        bar = ctk.CTkFrame(self.panel, fg_color=CARD2, corner_radius=8)
+        bar.grid(row=0, column=0, sticky="ew", padx=8, pady=(6, 4))
         ctk.CTkLabel(bar, text="Buscar:", text_color=MUTED,
-                     font=("Segoe UI", 12)).pack(side="left", padx=(10, 6), pady=8)
-        eb = ctk.CTkEntry(bar, width=240, height=30, corner_radius=8, border_color=LINE,
+                     font=("Segoe UI", 11)).pack(side="left", padx=(10, 6), pady=5)
+        eb = ctk.CTkEntry(bar, width=240, height=26, corner_radius=8, border_color=LINE,
                           placeholder_text="nombre del servicio...")
         eb.pack(side="left"); eb.insert(0, self.q[tipo])
         eb.bind("<KeyRelease>", lambda e: (self.q.__setitem__(tipo, eb.get()),
                                            self._fill_lista(tr, tipo)))
         ctk.CTkLabel(bar, text="(valor por persona a la derecha)", text_color=MUTED,
-                     font=("Segoe UI", 10)).pack(side="right", padx=12)
+                     font=("Segoe UI", 9)).pack(side="right", padx=12)
         self._lcont = ctk.CTkScrollableFrame(self.panel, fg_color=CARD2, corner_radius=10)
         self._lcont.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 8))
         self._lcont.grid_columnconfigure(0, weight=1)
@@ -1723,8 +1729,8 @@ class App(ctk.CTk):
             nombre = serv["nombre"]
             if q and q not in nombre.lower():
                 continue
-            fila = ctk.CTkFrame(self._lcont, fg_color=CARD, corner_radius=8)
-            fila.pack(fill="x", padx=6, pady=2)
+            fila = ctk.CTkFrame(self._lcont, fg_color=CARD, corner_radius=6)
+            fila.pack(fill="x", padx=6, pady=1)
             fila.grid_columnconfigure(0, weight=1)
             chk = tk.BooleanVar(value=(nombre in sel))
             txt = nombre + ("   (privado)" if es_privado(nombre) else "")
@@ -1737,12 +1743,13 @@ class App(ctk.CTk):
                 self._recalcular()
 
             ctk.CTkCheckBox(fila, text=txt, variable=chk, onvalue=True, offvalue=False,
-                            corner_radius=6, fg_color=NAVY, hover_color=BLUE, text_color=TEXT,
-                            font=("Segoe UI", 12), command=on_toggle, height=20).grid(
-                row=0, column=0, sticky="w", padx=12, pady=5)
+                            corner_radius=5, fg_color=NAVY, hover_color=BLUE, text_color=TEXT,
+                            font=("Segoe UI", 10), command=on_toggle, height=18,
+                            checkbox_width=18, checkbox_height=18).grid(
+                row=0, column=0, sticky="w", padx=10, pady=3)
             pp = (precio_terrestre_usd(serv, N, tasa, margen) / N) if tasa else None
             ctk.CTkLabel(fila, text=(usd(pp) + " p/p") if pp else "", text_color=NAVY,
-                         font=("Segoe UI", 11, "bold")).grid(row=0, column=1, padx=12)
+                         font=("Segoe UI", 10, "bold")).grid(row=0, column=1, padx=10)
             n_mostrados += 1
         if not n_mostrados:
             ctk.CTkLabel(self._lcont, text="No hay servicios para este filtro.",

@@ -1,5 +1,5 @@
 {
-  "version": "2.2",
+  "version": "2.3",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 2.2 - habitaciones junto a ninos (mejor uso del espacio), la app abre maximizada para ver siempre el boton Generar PDF, total y Nueva cotizacion."
+  "notas": "Version 2.3 - interfaz mas compacta: letra mas pequena en listas de hoteles y terrestres (se ven mas opciones a la vez), y todo cabe mejor en pantalla incluido el boton Generar PDF."
 }
