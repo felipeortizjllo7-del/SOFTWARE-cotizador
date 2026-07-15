@@ -595,10 +595,16 @@ function abrirCotizaciones(){const m=document.createElement("div");m.className="
   const items=(COTIZS.items||[]).slice().reverse();
   for(const it of items){const campos=[it.numero,it.cliente,it.asesor].join(" ");
    if(q&&!norm(campos).includes(q))continue;n++;
+   const est=it.estado||"Pendiente";const colE={"Pendiente":"var(--muted)","Enviada":"var(--blue)","En seguimiento":"var(--cyan)","Ganada":"var(--green)","Perdida":"var(--red)"}[est]||"var(--muted)";
+   const pend=(it.tareas||[]).filter(t=>!t.hecha).length;
    const it2=document.createElement("div");it2.className="item";it2.style.flexDirection="column";it2.style.alignItems="stretch";
-   it2.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center">
-     <b style="color:var(--navy)">${it.numero}  ${it.cliente||"(sin agencia)"}</b>
-     <button class="btn btn-nav" style="padding:3px 9px;color:var(--red)" onclick="eliminarCotiz(${JSON.stringify(it.numero)})">&#128465;</button></div>
+   it2.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+     <div><b style="color:var(--navy)">${it.numero}  ${it.cliente||"(sin agencia)"}</b>
+      <span style="background:${colE};color:#fff;border-radius:6px;padding:1px 8px;font-size:10px;font-weight:700;margin-left:6px">${est}</span>
+      ${pend?`<span style="color:var(--red);font-size:10px;font-weight:700;margin-left:4px">${pend} tarea(s) pend.</span>`:""}</div>
+     <div style="display:flex;gap:4px">
+      <button class="btn btn-nav" style="padding:3px 9px" onclick="detalleCotiz(${JSON.stringify(it.numero)})">&#9998; Editar / Tareas</button>
+      <button class="btn btn-nav" style="padding:3px 9px;color:var(--red)" onclick="eliminarCotiz(${JSON.stringify(it.numero)})">&#128465;</button></div></div>
     <div class="mut" style="font-size:11px">Asesor: ${it.asesor||"-"} &nbsp; Fecha: ${it.fecha||""} &nbsp; ${(it.destinos||[]).join(", ")} &nbsp; ${usd(it.total||0)}</div>`;
    L.appendChild(it2);}
   if(!n)L.innerHTML='<div class="mut" style="padding:16px">'+((COTIZS.items||[]).length?"Sin resultados.":"Aun no hay cotizaciones. Genera un PDF y apareceran aqui.")+'</div>';};
@@ -606,6 +612,42 @@ function abrirCotizaciones(){const m=document.createElement("div");m.className="
 function eliminarCotiz(numero){if(!confirm("¿Quitar "+numero+" del historial?"))return;
  COTIZS.items=(COTIZS.items||[]).filter(x=>x.numero!==numero);guardarCotizs();
  const q=document.getElementById("qcot");if(q)q.dispatchEvent(new Event("input"));}
+const ESTADOS_COT=["Pendiente","Enviada","En seguimiento","Ganada","Perdida"];
+function detalleCotiz(numero){const it=(COTIZS.items||[]).find(x=>x.numero===numero);if(!it)return;
+ cerrarModal();const m=document.createElement("div");m.className="modal";m.id="modal";
+ m.innerHTML=`<div class="box" style="max-width:620px">
+  <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">${it.numero} &middot; ${it.fecha||""}</h3>
+   <button class="btn btn-nav" style="padding:4px 10px" onclick="abrirCotizaciones()">&larr; Volver</button></div>
+  <div class="mut" style="margin:2px 0 8px">${(it.destinos||[]).join(", ")} &nbsp; ${usd(it.total||0)}</div>
+  <label class="lb">Agencia / cliente</label><input id="d_cli" value="${(it.cliente||"").replace(/"/g,"&quot;")}">
+  <label class="lb">Asesor</label><input id="d_ase" value="${(it.asesor||"").replace(/"/g,"&quot;")}">
+  <label class="lb">Estado del seguimiento</label>
+  <select id="d_est">${ESTADOS_COT.map(e=>`<option ${e===(it.estado||"Pendiente")?"selected":""}>${e}</option>`).join("")}</select>
+  <label class="lb">Notas</label><textarea id="d_notas" style="min-height:60px">${(it.notas||"").replace(/</g,"&lt;")}</textarea>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+   <b style="color:var(--navy)">Tareas de seguimiento</b>
+   <button class="btn btn-nav" style="padding:4px 10px" onclick="addTareaRow()">+ Agregar tarea</button></div>
+  <div id="tareas"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+   <button class="btn btn-nav" onclick="abrirCotizaciones()">Cancelar</button>
+   <button class="btn btn-green" onclick="guardarDetalleCotiz(${JSON.stringify(numero)})">Guardar</button></div></div>`;
+ document.body.appendChild(m);
+ (it.tareas||[]).forEach(addTareaRow);if(!(it.tareas||[]).length)addTareaRow();}
+function addTareaRow(t){t=t||{};const cont=document.getElementById("tareas");const row=document.createElement("div");
+ row.className="trow";row.style.cssText="display:flex;gap:4px;align-items:center;margin:4px 0";
+ row.innerHTML=`<input type="checkbox" ${t.hecha?"checked":""} style="width:18px;height:18px">
+  <input placeholder="Que hacer (ej. llamar al cliente)" value="${(t.texto||"").replace(/"/g,"&quot;")}" style="flex:1">
+  <input placeholder="dd/mm/aaaa" value="${(t.fecha||"").replace(/"/g,"&quot;")}" style="width:110px">
+  <button class="btn btn-nav" style="color:var(--red);padding:4px 9px" onclick="this.parentNode.remove()">&#10005;</button>`;
+ cont.appendChild(row);}
+function guardarDetalleCotiz(numero){const it=(COTIZS.items||[]).find(x=>x.numero===numero);if(!it)return;
+ it.cliente=document.getElementById("d_cli").value.trim();
+ it.asesor=document.getElementById("d_ase").value.trim();
+ it.estado=document.getElementById("d_est").value;
+ it.notas=document.getElementById("d_notas").value.trim();
+ it.tareas=[...document.querySelectorAll("#tareas .trow")].map(r=>{const i=r.querySelectorAll("input");
+   return{hecha:i[0].checked,texto:i[1].value.trim(),fecha:i[2].value.trim()};}).filter(t=>t.texto);
+ guardarCotizs();abrirCotizaciones();}
 
 /* ---------- itinerario ---------- */
 function itinerarioAuto(){let L=[],dia=1;

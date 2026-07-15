@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "2.5"
+VERSION = "2.6"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Archivo con la ultima version publicada (rama main del repositorio)
@@ -1060,8 +1060,105 @@ class BuscadorClientes(ctk.CTkToplevel):
 
 
 # ============================================================================
-# Ventana de Historial de Cotizaciones (consecutivo + busqueda)
+# Ventana de Historial de Cotizaciones (consecutivo + busqueda + seguimiento)
 # ============================================================================
+ESTADOS_COT = ["Pendiente", "Enviada", "En seguimiento", "Ganada", "Perdida"]
+ESTADO_COLOR = {"Pendiente": MUTED, "Enviada": BLUE, "En seguimiento": CYAN,
+                "Ganada": GREEN, "Perdida": RED}
+
+
+class VentanaCotizacionDetalle(ctk.CTkToplevel):
+    """Editar la cotizacion y gestionar tareas de seguimiento."""
+    def __init__(self, master, item, on_save):
+        super().__init__(master)
+        self.item = item; self.on_save = on_save
+        self.title("Cotizacion " + item.get("numero", ""))
+        self.geometry("660x700"); self.configure(fg_color=BG)
+        self.transient(master); self.grab_set()
+        cont = ctk.CTkScrollableFrame(self, fg_color=BG)
+        cont.pack(fill="both", expand=True, padx=16, pady=16)
+        ctk.CTkLabel(cont, text=f"{item.get('numero','')}   ·   {item.get('fecha','')}",
+                     text_color=NAVY, font=("Segoe UI", 16, "bold")).pack(anchor="w")
+        dest = ", ".join(item.get("destinos", []))
+        ctk.CTkLabel(cont, text=f"{dest}   ·   {usd(item.get('total', 0))}",
+                     text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", pady=(0, 8))
+
+        def campo(lbl, val):
+            ctk.CTkLabel(cont, text=lbl, text_color=MUTED,
+                         font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+            v = tk.StringVar(value=val)
+            ctk.CTkEntry(cont, textvariable=v, height=32, corner_radius=8,
+                         border_color=LINE).pack(fill="x", pady=(0, 8))
+            return v
+        self.v_cli = campo("Agencia / cliente", item.get("cliente", ""))
+        self.v_ase = campo("Asesor", item.get("asesor", ""))
+        ctk.CTkLabel(cont, text="Estado del seguimiento", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        self.v_estado = tk.StringVar(value=item.get("estado", "Pendiente"))
+        ctk.CTkOptionMenu(cont, variable=self.v_estado, values=ESTADOS_COT, width=220,
+                          height=32, corner_radius=8, fg_color=NAVY, button_color=NAVY2,
+                          button_hover_color=BLUE, dropdown_fg_color=CARD,
+                          dropdown_text_color=TEXT).pack(anchor="w", pady=(0, 8))
+        ctk.CTkLabel(cont, text="Notas", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        self.txt_notas = ctk.CTkTextbox(cont, height=70, corner_radius=8, border_width=1,
+                                        border_color=LINE, fg_color=CARD)
+        self.txt_notas.insert("1.0", item.get("notas", "")); self.txt_notas.pack(fill="x", pady=(0, 10))
+        # --- tareas de seguimiento ---
+        hdr = ctk.CTkFrame(cont, fg_color="transparent"); hdr.pack(fill="x", pady=(4, 2))
+        ctk.CTkLabel(hdr, text="Tareas de seguimiento", text_color=NAVY,
+                     font=("Segoe UI", 14, "bold")).pack(side="left")
+        ctk.CTkButton(hdr, text="+ Agregar tarea", width=140, height=28, corner_radius=8,
+                      fg_color=CARD2, text_color=NAVY, hover_color=LINE, border_width=1,
+                      border_color=LINE, font=("Segoe UI", 11, "bold"),
+                      command=lambda: self._add_tarea()).pack(side="right")
+        self.tfr = ctk.CTkFrame(cont, fg_color="transparent"); self.tfr.pack(fill="x", pady=4)
+        self.tareas_rows = []
+        for t in item.get("tareas", []):
+            self._add_tarea(t)
+        if not item.get("tareas"):
+            self._add_tarea()
+        bts = ctk.CTkFrame(cont, fg_color="transparent"); bts.pack(fill="x", pady=12)
+        ctk.CTkButton(bts, text="Guardar", fg_color=GREEN, hover_color=GREEN_H,
+                      font=("Segoe UI", 13, "bold"), command=self._guardar).pack(side="right")
+        ctk.CTkButton(bts, text="Cancelar", fg_color=CARD2, text_color=NAVY, hover_color=LINE,
+                      command=self.destroy).pack(side="right", padx=8)
+
+    def _add_tarea(self, t=None):
+        t = t or {}
+        row = ctk.CTkFrame(self.tfr, fg_color=CARD2, corner_radius=8)
+        row.pack(fill="x", pady=3)
+        hecha = tk.BooleanVar(value=bool(t.get("hecha")))
+        ctk.CTkCheckBox(row, text="", variable=hecha, width=24, checkbox_width=20,
+                        checkbox_height=20, corner_radius=5, fg_color=GREEN,
+                        hover_color=GREEN_H).pack(side="left", padx=(8, 2), pady=6)
+        v_txt = tk.StringVar(value=t.get("texto", ""))
+        ctk.CTkEntry(row, textvariable=v_txt, height=30, corner_radius=6, border_color=LINE,
+                     placeholder_text="Que hacer (ej. llamar al cliente)").pack(
+            side="left", fill="x", expand=True, padx=3, pady=6)
+        v_fec = tk.StringVar(value=t.get("fecha", ""))
+        ctk.CTkEntry(row, textvariable=v_fec, width=110, height=30, corner_radius=6,
+                     border_color=LINE, placeholder_text="dd/mm/aaaa").pack(side="left", padx=3)
+        entry = {"frame": row, "hecha": hecha, "texto": v_txt, "fecha": v_fec}
+        ctk.CTkButton(row, text="✕", width=28, height=28, corner_radius=6, fg_color="transparent",
+                      text_color=RED, hover_color=LINE,
+                      command=lambda: (self.tareas_rows.remove(entry), row.destroy())).pack(
+            side="left", padx=(2, 6))
+        self.tareas_rows.append(entry)
+
+    def _guardar(self):
+        self.item["cliente"] = self.v_cli.get().strip()
+        self.item["asesor"] = self.v_ase.get().strip()
+        self.item["estado"] = self.v_estado.get()
+        self.item["notas"] = self.txt_notas.get("1.0", "end").strip()
+        self.item["tareas"] = [
+            {"texto": r["texto"].get().strip(), "fecha": r["fecha"].get().strip(),
+             "hecha": r["hecha"].get()}
+            for r in self.tareas_rows if r["texto"].get().strip()]
+        self.on_save()
+        self.destroy()
+
+
 class VentanaCotizaciones(ctk.CTkToplevel):
     def __init__(self, master):
         super().__init__(master)
@@ -1101,27 +1198,47 @@ class VentanaCotizaciones(ctk.CTkToplevel):
             fila.pack(fill="x", padx=4, pady=2)
             fila.grid_columnconfigure(0, weight=1)
             dest = ", ".join(it.get("destinos", []))
-            linea1 = f"{it.get('numero','')}    {it.get('cliente') or '(sin agencia)'}"
-            linea2 = (f"Asesor: {it.get('asesor') or '-'}     Fecha: {it.get('fecha','')}"
-                      f"     {dest}     {usd(it.get('total', 0))}")
+            estado = it.get("estado", "Pendiente")
+            tareas = it.get("tareas", []) or []
+            pend = sum(1 for t in tareas if not t.get("hecha"))
             cel = ctk.CTkFrame(fila, fg_color="transparent")
             cel.grid(row=0, column=0, sticky="w", padx=10, pady=6)
-            ctk.CTkLabel(cel, text=linea1, text_color=NAVY, anchor="w",
-                         font=("Segoe UI", 12, "bold")).pack(anchor="w")
+            top = ctk.CTkFrame(cel, fg_color="transparent"); top.pack(anchor="w")
+            ctk.CTkLabel(top, text=f"{it.get('numero','')}    {it.get('cliente') or '(sin agencia)'}",
+                         text_color=NAVY, anchor="w",
+                         font=("Segoe UI", 12, "bold")).pack(side="left")
+            ctk.CTkLabel(top, text=" " + estado + " ", text_color="#FFFFFF",
+                         fg_color=ESTADO_COLOR.get(estado, MUTED), corner_radius=6,
+                         font=("Segoe UI", 9, "bold")).pack(side="left", padx=8)
+            if pend:
+                ctk.CTkLabel(top, text=f"{pend} tarea(s) pendiente(s)", text_color=RED,
+                             font=("Segoe UI", 9, "bold")).pack(side="left", padx=4)
+            linea2 = (f"Asesor: {it.get('asesor') or '-'}     Fecha: {it.get('fecha','')}"
+                      f"     {dest}     {usd(it.get('total', 0))}")
             ctk.CTkLabel(cel, text=linea2, text_color=MUTED, anchor="w",
                          font=("Segoe UI", 10)).pack(anchor="w")
+            ctk.CTkButton(fila, text="Editar / Tareas", width=110, height=30, corner_radius=8,
+                          fg_color=CYAN, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
+                          command=lambda x=it: self._detalle(x)).grid(row=0, column=1, padx=4)
             if it.get("pdf"):
                 ctk.CTkButton(fila, text="Abrir PDF", width=90, height=30, corner_radius=8,
                               fg_color=NAVY, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
-                              command=lambda p=it["pdf"]: self._abrir(p)).grid(row=0, column=1, padx=4)
+                              command=lambda p=it["pdf"]: self._abrir(p)).grid(row=0, column=2, padx=4)
             ctk.CTkButton(fila, text="🗑", width=34, height=30, corner_radius=8,
                           fg_color=CARD2, text_color=RED, hover_color=LINE,
                           font=("Segoe UI", 13),
-                          command=lambda x=it: self._eliminar(x)).grid(row=0, column=2, padx=(0, 6))
+                          command=lambda x=it: self._eliminar(x)).grid(row=0, column=3, padx=(0, 6))
         if not n:
             msg = ("Aun no hay cotizaciones guardadas.\nGenera un PDF y aparecera aqui."
                    if not self.data.get("items") else "Sin resultados.")
             ctk.CTkLabel(self.lista, text=msg, text_color=MUTED).pack(pady=24)
+
+    def _detalle(self, it):
+        VentanaCotizacionDetalle(self, it, self._on_guardado)
+
+    def _on_guardado(self):
+        guardar_cotizaciones(self.data)
+        self._pintar()
 
     def _abrir(self, p):
         if p and os.path.exists(p):
