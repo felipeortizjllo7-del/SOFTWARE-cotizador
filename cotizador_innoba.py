@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "2.6"
+VERSION = "2.7"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Archivo con la ultima version publicada (rama main del repositorio)
@@ -277,6 +277,41 @@ def registrar_cotizacion(rec):
     data["items"].append(rec)
     guardar_cotizaciones(data)
     return numero
+
+def parse_fecha(s):
+    """Convierte 'dd/mm/aaaa' (o similares) a date; None si no se puede."""
+    s = (s or "").strip()
+    if not s:
+        return None
+    for fmt in ("%d/%m/%Y", "%d/%m/%y", "%Y-%m-%d", "%d-%m-%Y"):
+        try:
+            return datetime.datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+def seguimientos_pendientes(data=None):
+    """Cotizaciones (no cerradas) cuya fecha de seguimiento o alguna tarea ya
+       vencio (<= hoy). Devuelve lista de (item, motivo)."""
+    data = data or cargar_cotizaciones()
+    hoy = datetime.date.today()
+    res = []
+    for it in data.get("items", []):
+        if it.get("estado") in ("Ganada", "Perdida"):
+            continue
+        motivos = []
+        fs = parse_fecha(it.get("fecha_seg", ""))
+        if fs and fs <= hoy:
+            motivos.append(f"seguimiento {it.get('fecha_seg')}")
+        for t in it.get("tareas", []):
+            if t.get("hecha"):
+                continue
+            ft = parse_fecha(t.get("fecha", ""))
+            if ft and ft <= hoy:
+                motivos.append(f"tarea: {t.get('texto','')[:30]} ({t.get('fecha')})")
+        if motivos:
+            res.append((it, "; ".join(motivos)))
+    return res
 
 def exportar_clientes_excel(lst, ruta):
     import openpyxl
@@ -1065,6 +1100,9 @@ class BuscadorClientes(ctk.CTkToplevel):
 ESTADOS_COT = ["Pendiente", "Enviada", "En seguimiento", "Ganada", "Perdida"]
 ESTADO_COLOR = {"Pendiente": MUTED, "Enviada": BLUE, "En seguimiento": CYAN,
                 "Ganada": GREEN, "Perdida": RED}
+# color de fondo de la fila segun estado (Ganada verde, Perdida rojo, En segui. blanco)
+ESTADO_FILA = {"Pendiente": "#F1F5FB", "Enviada": "#EAF2FD", "En seguimiento": "#FFFFFF",
+               "Ganada": "#E3F5EA", "Perdida": "#FBE6E6"}
 
 
 class VentanaCotizacionDetalle(ctk.CTkToplevel):
@@ -1099,6 +1137,10 @@ class VentanaCotizacionDetalle(ctk.CTkToplevel):
                           height=32, corner_radius=8, fg_color=NAVY, button_color=NAVY2,
                           button_hover_color=BLUE, dropdown_fg_color=CARD,
                           dropdown_text_color=TEXT).pack(anchor="w", pady=(0, 8))
+        self.v_fecha_seg = campo("Fecha de seguimiento / recordatorio (dd/mm/aaaa)",
+                                 item.get("fecha_seg", ""))
+        ctk.CTkLabel(cont, text="El sistema te avisara al abrir cuando llegue esa fecha.",
+                     text_color=MUTED, font=("Segoe UI", 9)).pack(anchor="w", padx=2, pady=(0, 6))
         ctk.CTkLabel(cont, text="Notas", text_color=MUTED,
                      font=("Segoe UI", 11)).pack(anchor="w", padx=2)
         self.txt_notas = ctk.CTkTextbox(cont, height=70, corner_radius=8, border_width=1,
@@ -1150,6 +1192,7 @@ class VentanaCotizacionDetalle(ctk.CTkToplevel):
         self.item["cliente"] = self.v_cli.get().strip()
         self.item["asesor"] = self.v_ase.get().strip()
         self.item["estado"] = self.v_estado.get()
+        self.item["fecha_seg"] = self.v_fecha_seg.get().strip()
         self.item["notas"] = self.txt_notas.get("1.0", "end").strip()
         self.item["tareas"] = [
             {"texto": r["texto"].get().strip(), "fecha": r["fecha"].get().strip(),
@@ -1194,13 +1237,16 @@ class VentanaCotizaciones(ctk.CTkToplevel):
             if q and q not in _nz(campos):
                 continue
             n += 1
-            fila = ctk.CTkFrame(self.lista, fg_color=CARD2, corner_radius=8)
+            estado = it.get("estado", "Pendiente")
+            fila = ctk.CTkFrame(self.lista, fg_color=ESTADO_FILA.get(estado, CARD2),
+                                corner_radius=8, border_width=1, border_color=LINE)
             fila.pack(fill="x", padx=4, pady=2)
             fila.grid_columnconfigure(0, weight=1)
             dest = ", ".join(it.get("destinos", []))
-            estado = it.get("estado", "Pendiente")
             tareas = it.get("tareas", []) or []
             pend = sum(1 for t in tareas if not t.get("hecha"))
+            fseg = parse_fecha(it.get("fecha_seg", ""))
+            venc = fseg and fseg <= datetime.date.today() and estado not in ("Ganada", "Perdida")
             cel = ctk.CTkFrame(fila, fg_color="transparent")
             cel.grid(row=0, column=0, sticky="w", padx=10, pady=6)
             top = ctk.CTkFrame(cel, fg_color="transparent"); top.pack(anchor="w")
@@ -1210,8 +1256,12 @@ class VentanaCotizaciones(ctk.CTkToplevel):
             ctk.CTkLabel(top, text=" " + estado + " ", text_color="#FFFFFF",
                          fg_color=ESTADO_COLOR.get(estado, MUTED), corner_radius=6,
                          font=("Segoe UI", 9, "bold")).pack(side="left", padx=8)
+            if it.get("fecha_seg"):
+                ctk.CTkLabel(top, text=("🔔 seguimiento " + it.get("fecha_seg", "")),
+                             text_color=(RED if venc else MUTED),
+                             font=("Segoe UI", 9, "bold")).pack(side="left", padx=6)
             if pend:
-                ctk.CTkLabel(top, text=f"{pend} tarea(s) pendiente(s)", text_color=RED,
+                ctk.CTkLabel(top, text=f"{pend} tarea(s) pend.", text_color=RED,
                              font=("Segoe UI", 9, "bold")).pack(side="left", padx=4)
             linea2 = (f"Asesor: {it.get('asesor') or '-'}     Fecha: {it.get('fecha','')}"
                       f"     {dest}     {usd(it.get('total', 0))}")
@@ -1654,6 +1704,7 @@ class App(ctk.CTk):
             pass
         self.after(250, lambda: self._actualizar_trm(silencioso=True))
         self.after(1800, self._chequear_actualizacion)   # busca nueva version en el repo
+        self.after(1200, self._chequear_seguimientos)    # alerta de cotizaciones a seguir
 
     # ------------------------------------------------------------------ UI
     def _construir(self):
@@ -2576,6 +2627,23 @@ class App(ctk.CTk):
 
     def _abrir_cotizaciones(self):
         VentanaCotizaciones(self)
+
+    def _chequear_seguimientos(self):
+        """Alerta al abrir: cotizaciones cuyo seguimiento/tarea ya vencio."""
+        try:
+            pend = seguimientos_pendientes()
+        except Exception:
+            return
+        if not pend:
+            return
+        lineas = [f"• {it.get('numero','')}  {it.get('cliente','') or '(sin agencia)'}"
+                  f"  ->  {motivo}" for it, motivo in pend[:15]]
+        extra = f"\n\n(y {len(pend) - 15} mas)" if len(pend) > 15 else ""
+        if messagebox.askyesno(
+                "Seguimiento de cotizaciones",
+                f"Tienes {len(pend)} cotizacion(es) para dar seguimiento hoy:\n\n"
+                + "\n".join(lineas) + extra + "\n\n¿Abrir el historial de cotizaciones?"):
+            self._abrir_cotizaciones()
 
     def _abrir_clientes(self):
         VentanaClientes(self, on_cambio=self._on_clientes_cambio)

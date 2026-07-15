@@ -1,5 +1,5 @@
 {
-  "version": "2.6",
+  "version": "2.7",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 2.6 - El historial de cotizaciones ahora permite EDITAR cada cotizacion (agencia, asesor, estado del seguimiento, notas) y agregarle TAREAS de seguimiento (con fecha y check de hecha). Estado y tareas pendientes visibles en la lista. App y HTML."
+  "notas": "Version 2.7 - Seguimiento con recordatorio: cada cotizacion puede tener una FECHA DE SEGUIMIENTO y el sistema ALERTA al abrir cuando llega/vence. Las cotizaciones se colorean por estado (Perdida=rojo, Ganada=verde, En seguimiento=blanco). App y HTML."
 }

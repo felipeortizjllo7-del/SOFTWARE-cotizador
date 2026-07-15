@@ -125,6 +125,7 @@ display:flex;align-items:center;gap:16px;margin-top:6px}
 <div class="trmbar"><span>Tasa del dia (USD):</span> <b id="trmStatus">consultando...</b>
  <span class="sp"></span><button class="btn btn-navy" style="padding:6px 12px" onclick="cargarTRM(true)">Actualizar</button></div>
 <div id="updbar" class="hidden" style="background:var(--green);color:#fff;padding:9px 20px;font-weight:700;text-align:center"></div>
+<div id="segbar" class="hidden" style="background:#c0392b;color:#fff;padding:9px 20px;font-weight:700;text-align:center;cursor:pointer" onclick="abrirCotizaciones()"></div>
 
 <div class="wrap">
  <div class="card">
@@ -232,6 +233,7 @@ let st = {adultos:2, ages:[], tramos:[], activo:null, tab:"hotel", hab:{sencilla
 function norm(s){return (s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/\s+/g," ").trim();}
 function usd(v){try{return "USD "+Number(v).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});}catch(e){return "USD "+v;}}
 function fmtISO(s){if(!s)return"";const p=s.split("-");return p[2]+"/"+p[1]+"/"+p[0];}
+function hoyISO(){const t=new Date();return t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0");}
 function esTransporte(n){n=n.toLowerCase();return ["traslado","asistencia","asitencia","transporte"].some(k=>n.includes(k));}
 function esPrivado(n){n=norm(n);return n.includes("privado")||n.includes("privada");}
 const COTIZADORES=[["Felipe Ortiz Jaramillo","Gerente - Innoba DMC"],["Carlos Ortiz Jaramillo","Gerente Comercial - Innoba DMC"]];
@@ -596,11 +598,14 @@ function abrirCotizaciones(){const m=document.createElement("div");m.className="
   for(const it of items){const campos=[it.numero,it.cliente,it.asesor].join(" ");
    if(q&&!norm(campos).includes(q))continue;n++;
    const est=it.estado||"Pendiente";const colE={"Pendiente":"var(--muted)","Enviada":"var(--blue)","En seguimiento":"var(--cyan)","Ganada":"var(--green)","Perdida":"var(--red)"}[est]||"var(--muted)";
+   const filaBg={"Pendiente":"#F1F5FB","Enviada":"#EAF2FD","En seguimiento":"#FFFFFF","Ganada":"#E3F5EA","Perdida":"#FBE6E6"}[est]||"#FFFFFF";
    const pend=(it.tareas||[]).filter(t=>!t.hecha).length;
-   const it2=document.createElement("div");it2.className="item";it2.style.flexDirection="column";it2.style.alignItems="stretch";
+   const venc=it.fecha_seg && it.fecha_seg<=hoyISO() && !["Ganada","Perdida"].includes(est);
+   const it2=document.createElement("div");it2.className="item";it2.style.flexDirection="column";it2.style.alignItems="stretch";it2.style.background=filaBg;
    it2.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
      <div><b style="color:var(--navy)">${it.numero}  ${it.cliente||"(sin agencia)"}</b>
       <span style="background:${colE};color:#fff;border-radius:6px;padding:1px 8px;font-size:10px;font-weight:700;margin-left:6px">${est}</span>
+      ${it.fecha_seg?`<span style="color:${venc?"var(--red)":"var(--muted)"};font-size:10px;font-weight:700;margin-left:6px">&#128276; ${fmtISO(it.fecha_seg)}</span>`:""}
       ${pend?`<span style="color:var(--red);font-size:10px;font-weight:700;margin-left:4px">${pend} tarea(s) pend.</span>`:""}</div>
      <div style="display:flex;gap:4px">
       <button class="btn btn-nav" style="padding:3px 9px" onclick="detalleCotiz(${JSON.stringify(it.numero)})">&#9998; Editar / Tareas</button>
@@ -623,6 +628,9 @@ function detalleCotiz(numero){const it=(COTIZS.items||[]).find(x=>x.numero===num
   <label class="lb">Asesor</label><input id="d_ase" value="${(it.asesor||"").replace(/"/g,"&quot;")}">
   <label class="lb">Estado del seguimiento</label>
   <select id="d_est">${ESTADOS_COT.map(e=>`<option ${e===(it.estado||"Pendiente")?"selected":""}>${e}</option>`).join("")}</select>
+  <label class="lb">Fecha de seguimiento / recordatorio</label>
+  <input id="d_fseg" type="date" value="${it.fecha_seg||""}">
+  <div class="mut" style="font-size:11px;margin-bottom:4px">El sistema avisara al abrir cuando llegue esa fecha.</div>
   <label class="lb">Notas</label><textarea id="d_notas" style="min-height:60px">${(it.notas||"").replace(/</g,"&lt;")}</textarea>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
    <b style="color:var(--navy)">Tareas de seguimiento</b>
@@ -644,6 +652,7 @@ function guardarDetalleCotiz(numero){const it=(COTIZS.items||[]).find(x=>x.numer
  it.cliente=document.getElementById("d_cli").value.trim();
  it.asesor=document.getElementById("d_ase").value.trim();
  it.estado=document.getElementById("d_est").value;
+ it.fecha_seg=document.getElementById("d_fseg").value;
  it.notas=document.getElementById("d_notas").value.trim();
  it.tareas=[...document.querySelectorAll("#tareas .trow")].map(r=>{const i=r.querySelectorAll("input");
    return{hecha:i[0].checked,texto:i[1].value.trim(),fecha:i[2].value.trim()};}).filter(t=>t.texto);
@@ -716,8 +725,14 @@ async function chequearActualizacion(){try{
    b.classList.remove("hidden");}
  }catch(e){}}
 
+/* ---------- alerta de seguimiento ---------- */
+function segPendientes(){const hoy=hoyISO();return (COTIZS.items||[]).filter(it=>it.fecha_seg&&it.fecha_seg<=hoy&&!["Ganada","Perdida"].includes(it.estado||"Pendiente"));}
+function chequearSeguimientos(){const p=segPendientes();const b=document.getElementById("segbar");if(!b)return;
+ if(p.length){b.textContent="🔔 Tienes "+p.length+" cotizacion(es) para dar seguimiento hoy - clic para ver ("+p.slice(0,6).map(x=>x.numero).join(", ")+")";b.classList.remove("hidden");}
+ else b.classList.add("hidden");}
+
 /* init */
-renderPax();addDestino(Object.keys(PRECIOS)[0]);sugerirHab();cargarTRM(false);chequearActualizacion();
+renderPax();addDestino(Object.keys(PRECIOS)[0]);sugerirHab();cargarTRM(false);chequearActualizacion();chequearSeguimientos();
 </script>
 </body>
 </html>"""
