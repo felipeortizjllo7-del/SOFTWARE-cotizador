@@ -1,5 +1,5 @@
 {
-  "version": "2.4",
+  "version": "2.5",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 2.4 - Historial de cotizaciones: cada una se guarda con consecutivo (COT-00001...) y se puede buscar despues por consecutivo, agencia o asesor, mostrando agencia, asesor y fecha. Boton 'Cotizaciones' en app y HTML."
+  "notas": "Version 2.5 - Multidestino: el PDF muestra una sola tabla de hoteles combinada que empareja el hotel de cada destino y SUMA los precios por persona (Sencilla/Doble/Triple). Aplica a app y HTML."
 }

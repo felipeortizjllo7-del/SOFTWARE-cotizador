@@ -447,19 +447,30 @@ function generar(){
   <b>Fechas viaje:</b> ${fechasViaje} &nbsp; <b>Pasajeros:</b> ${paxtxt}</td></tr></table>`;
  const edadTxt=a=>a===0?"Bebe 0-11 meses":(a+(a===1?" ano":" anos"));
  const cel=v=>v?usd(v):"-";
+ const conOp=bloques.filter(b=>b.opciones.length);
+ const combinar=conOp.length>1;   // multidestino: tabla de hoteles combinada (suma)
  bloques.forEach(b=>{html+=`<div class="dband">${b.subtitulo}</div>`;
   b.baseSec.forEach(([tit,filas,sub])=>{html+=`<div style="color:var(--blue);font-weight:700;margin-top:6px">${tit}</div>
    <table><tr><th>Concepto</th><th>Detalle</th><th style="text-align:right">Por pasajero</th><th style="text-align:right">Total (USD)</th></tr>`;
    filas.forEach(([c,det,val,pp,d])=>{html+=`<tr><td><b>${c}</b>${d?`<div class="desc">${d}</div>`:""}</td><td>${det}</td><td style="text-align:right">${pp?usd(pp):"-"}</td><td style="text-align:right"><b>${usd(val)}</b></td></tr>`;});
    html+=`</table>`;});
-  if(b.opciones.length){html+=`<div style="color:var(--blue);font-weight:700;margin-top:8px">${b.opciones.length>1?"OPCIONES DE HOTEL - precio por persona (el cliente elige)":"ALOJAMIENTO - precio por persona"}</div>
+  if(b.opciones.length&&!combinar){html+=`<div style="color:var(--blue);font-weight:700;margin-top:8px">${b.opciones.length>1?"OPCIONES DE HOTEL - precio por persona (el cliente elige)":"ALOJAMIENTO - precio por persona"}</div>
    <table><tr><th>Hotel</th><th>Categoria</th><th style="text-align:right">Sencilla</th><th style="text-align:right">Doble</th><th style="text-align:right">Triple</th></tr>`;
    b.opciones.forEach(o=>{html+=`<tr><td><b>${o.nombre}</b></td><td>${o.categoria||"-"}</td><td style="text-align:right"><b>${cel(o.sencilla)}</b></td><td style="text-align:right"><b>${cel(o.doble)}</b></td><td style="text-align:right"><b>${cel(o.triple)}</b></td></tr>`;});
    html+=`</table><div class="desc">Valores POR PERSONA (adulto) segun acomodacion, por todo el viaje. Incluye traslados y actividades.</div>`;}
   if(b.ninos.length){html+=`<div class="desc" style="margin-top:2px">Precio por nino: ${b.ninos.map(([a,c,pr])=>`${edadTxt(a)} (x${c}): ${usd(pr)}`).join("  |  ")}</div>`;}
  });
+ // Multidestino: tabla de hoteles combinada (empareja por orden y SUMA los destinos)
+ if(combinar){const dests=conOp.map(b=>b.destino);
+  html+=`<div style="color:var(--blue);font-weight:700;margin-top:10px">OPCIONES DE HOTEL - precio por persona SUMANDO los ${dests.length} destinos (el cliente elige)</div>
+   <table><tr>${conOp.map(b=>`<th>Hotel ${b.destino}</th>`).join("")}<th>Categoria</th><th style="text-align:right">Sencilla</th><th style="text-align:right">Doble</th><th style="text-align:right">Triple</th></tr>`;
+  const maxn=Math.max(...conOp.map(b=>b.opciones.length));
+  for(let i=0;i<maxn;i++){const fila=conOp.map(b=>b.opciones[Math.min(i,b.opciones.length-1)]);
+   const cats=[...new Set(fila.map(o=>o.categoria).filter(Boolean))].join("/")||"-";
+   const suma=acc=>fila.every(o=>o[acc])?fila.reduce((s,o)=>s+o[acc],0):null;
+   html+=`<tr>${fila.map(o=>`<td><b>${o.nombre}</b></td>`).join("")}<td>${cats}</td><td style="text-align:right"><b>${cel(suma("sencilla"))}</b></td><td style="text-align:right"><b>${cel(suma("doble"))}</b></td><td style="text-align:right"><b>${cel(suma("triple"))}</b></td></tr>`;}
+  html+=`</table><div class="desc">Valores POR PERSONA (adulto), SUMANDO ${dests.join(" + ")}, por todo el viaje. Incluye traslados y actividades.</div>`;}
  // Costo total de la reserva con la 1a opcion de hotel y las habitaciones indicadas
- const conOp=bloques.filter(b=>b.opciones.length);
  const OCC={sencilla:1,doble:2,triple:3};const ocup=habOcup();
  if(conOp.length&&ocup>0){const nAd=conOp[0].n_adultos;const nNi=conOp.reduce((s,b)=>s+b.ninos.reduce((x,[a,c])=>x+c,0),0);
   let totalRes=0;const detHab=[];

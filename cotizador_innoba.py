@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "2.4"
+VERSION = "2.5"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Archivo con la ultima version publicada (rama main del repositorio)
@@ -696,6 +696,66 @@ def _banda_destino(pdf, texto):
     pdf.set_text_color(*PDF_TXT)
 
 
+def _tabla_hoteles_combinada(pdf, con_op):
+    """Multidestino: una sola tabla que empareja el hotel de cada destino (por
+       orden) y SUMA los precios por persona (Sencilla/Doble/Triple)."""
+    T = pdf._t
+    dests = [b["destino"] for b in con_op]
+    pdf.ln(2)
+    if pdf.get_y() > 230:
+        pdf.add_page()
+    pdf.set_font("Helvetica", "B", 10); pdf.set_text_color(*PDF_BLUE)
+    pdf.cell(0, 6, T("OPCIONES DE HOTEL - precio por persona SUMANDO los "
+                     f"{len(dests)} destinos (el cliente elige)"), ln=1)
+    n = len(con_op)
+    w_price, w_cat = 22.0, 24.0
+    w_h = max(24.0, (180.0 - w_cat - 3 * w_price) / n)
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_fill_color(*PDF_PRIM); pdf.set_text_color(255, 255, 255)
+    for b in con_op:
+        pdf.cell(w_h, 7, T("  Hotel " + b["destino"][:13]), fill=True)
+    pdf.cell(w_cat, 7, T("Categoria"), fill=True, align="C")
+    pdf.cell(w_price, 7, T("Sencilla"), fill=True, align="C")
+    pdf.cell(w_price, 7, T("Doble"), fill=True, align="C")
+    pdf.cell(w_price, 7, T("Triple"), fill=True, align="C", ln=1)
+    pdf.set_text_color(*PDF_TXT)
+
+    def money(v):
+        return f"{v:,.2f}" if v else "-"
+
+    maxn = max(len(b["opciones"]) for b in con_op)
+    for i in range(maxn):
+        fila = [b["opciones"][min(i, len(b["opciones"]) - 1)] for b in con_op]
+        relleno = (i % 2 == 1)
+        if relleno:
+            pdf.set_fill_color(*PDF_CLARO)
+        if pdf.get_y() > 275:
+            pdf.add_page()
+        pdf.set_font("Helvetica", "B", 8)
+        for o in fila:
+            pdf.cell(w_h, 8, T("  " + o["nombre"][:24]), fill=relleno)
+        cats = []
+        for o in fila:
+            c = (o.get("categoria") or "").strip()
+            if c and c not in cats:
+                cats.append(c)
+        pdf.set_font("Helvetica", "", 8)
+        pdf.cell(w_cat, 8, T(("/".join(cats))[:14] or "-"), align="C", fill=relleno)
+
+        def suma(acc):
+            vals = [o.get(acc) for o in fila]
+            return sum(vals) if all(v for v in vals) else None
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.cell(w_price, 8, T(money(suma("sencilla"))), align="R", fill=relleno)
+        pdf.cell(w_price, 8, T(money(suma("doble"))), align="R", fill=relleno)
+        pdf.cell(w_price, 8, T(money(suma("triple"))), align="R", fill=relleno, ln=1)
+    pdf.set_font("Helvetica", "I", 8); pdf.set_text_color(110, 120, 135)
+    pdf.cell(0, 5, T("  Valores en USD POR PERSONA (adulto), SUMANDO "
+                     + " + ".join(dests) + ", por todo el viaje. Incluye traslados "
+                     "y actividades."), ln=1)
+    pdf.set_text_color(*PDF_TXT)
+
+
 def generar_pdf(cfg, datos, bloques, total, ruta_salida):
     """bloques: lista de dicts {destino, subtitulo, secciones:[(t,filas,sub)], subtotal}."""
     pdf = CotizacionPDF(cfg)
@@ -743,13 +803,15 @@ def generar_pdf(cfg, datos, bloques, total, ruta_salida):
     def cel(v):
         return usd(v) if v else "-"
 
+    con_op = [b for b in bloques if b["opciones"]]
+    combinar = len(con_op) > 1   # multidestino: tabla de hoteles combinada al final
     for b in bloques:
         _banda_destino(pdf, b["subtitulo"])
         for titulo_s, filas, sub in b["base_secciones"]:
             _seccion_tabla(pdf, titulo_s, filas, sub)
         ops = b["opciones"]
-        # Opciones de hotel: precio POR PERSONA en sencilla / doble / triple
-        if ops:
+        # Opciones de hotel POR DESTINO (solo si NO es multidestino)
+        if ops and not combinar:
             pdf.ln(2)
             if pdf.get_y() > 240:
                 pdf.add_page()
@@ -788,8 +850,11 @@ def generar_pdf(cfg, datos, bloques, total, ruta_salida):
             partes = [f"{edad_txt(a)} (x{c}): {usd(pr)}" for a, c, pr in b["ninos"]]
             pdf.multi_cell(0, 4.5, T("  Precio por nino: " + "   |   ".join(partes)))
 
+    # ---- Multidestino: tabla de hoteles combinada (suma de destinos) ----
+    if combinar:
+        _tabla_hoteles_combinada(pdf, con_op)
+
     # ---- Costo total de la reserva: 1a opcion de hotel + habitaciones indicadas ----
-    con_op = [b for b in bloques if b["opciones"]]
     hab = datos.get("habitaciones") or {}
     OCCP = {"sencilla": 1, "doble": 2, "triple": 3}
     ocup = sum(hab.get(k, 0) * OCCP[k] for k in OCCP)
