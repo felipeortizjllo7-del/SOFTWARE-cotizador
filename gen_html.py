@@ -735,7 +735,7 @@ renderPax();addDestino(Object.keys(PRECIOS)[0]);sugerirHab();cargarTRM(false);ch
 </html>"""
 
 # El HTML es para CLIENTES: NO se embebe la base de clientes de INNOBA (privacidad).
-WEBHOOK = ""   # Apps Script /exec (INNOBA lo configura para recibir cotizaciones del HTML)
+WEBHOOK = "https://script.google.com/macros/s/AKfycby0tbuYavMW7dl5cah7qfIsJVM3hOmt6Sh6h4M2ZQD4l7ncIGxyCdHK2w3ogny0o3oWVQ/exec"
 HTML = (HTML.replace("__PRECIOS__", json.dumps(precios, ensure_ascii=False))
             .replace("__DESC__", json.dumps(desc, ensure_ascii=False))
             .replace("__CLIENTES__", "[]")

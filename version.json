@@ -1,5 +1,5 @@
 {
-  "version": "2.8",
+  "version": "2.9",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 2.8 - HTML separado para clientes (sin modulo de clientes ni cotizaciones; llenan datos a mano) y envia sus cotizaciones a INNOBA. .exe: importa las del HTML, color amarillo para 'En seguimiento', recordatorio de calendario (.ics) por correo al guardar la fecha de seguimiento. Ambos: alerta si las noches del itinerario no cuadran con las fechas."
+  "notas": "Version 2.9 - Puente HTML->exe activo: las cotizaciones que los clientes hagan en el HTML se envian a INNOBA y el .exe las importa al historial (boton 'Importar del HTML' y al abrir). Incluye separacion HTML/exe, alerta noches vs fechas, color amarillo en seguimiento y recordatorio .ics."
 }
