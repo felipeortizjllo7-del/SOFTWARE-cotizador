@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "3.0"
+VERSION = "3.1"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1264,10 +1264,22 @@ class VentanaCotizacionDetalle(ctk.CTkToplevel):
                           height=32, corner_radius=8, fg_color=NAVY, button_color=NAVY2,
                           button_hover_color=BLUE, dropdown_fg_color=CARD,
                           dropdown_text_color=TEXT).pack(anchor="w", pady=(0, 8))
-        self.v_fecha_seg = campo("Fecha de seguimiento / recordatorio (dd/mm/aaaa)",
-                                 item.get("fecha_seg", ""))
+        ctk.CTkLabel(cont, text="Fecha de seguimiento / recordatorio", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        self.sel_fecha_seg = SelectorFecha(cont, minimo=datetime.date.today())
+        self.sel_fecha_seg.pack(anchor="w", pady=(0, 2))
+        f0 = parse_fecha(item.get("fecha_seg", ""))
+        if f0:
+            self.sel_fecha_seg._set(f0)
         ctk.CTkLabel(cont, text="El sistema te avisara al abrir cuando llegue esa fecha.",
                      text_color=MUTED, font=("Segoe UI", 9)).pack(anchor="w", padx=2, pady=(0, 6))
+        # correo donde llega el recordatorio de seguimiento
+        _app0 = getattr(self.master, "master", None)
+        _cfg0 = getattr(_app0, "cfg", None) if _app0 else None
+        correo_def = (item.get("correo_seg") or item.get("email")
+                      or (_cfg0.get("correo_remitente") if _cfg0 else "") or "")
+        self.v_correo_seg = campo("Correo donde llega el recordatorio de seguimiento",
+                                  correo_def)
         ctk.CTkLabel(cont, text="Notas", text_color=MUTED,
                      font=("Segoe UI", 11)).pack(anchor="w", padx=2)
         self.txt_notas = ctk.CTkTextbox(cont, height=70, corner_radius=8, border_width=1,
@@ -1319,7 +1331,8 @@ class VentanaCotizacionDetalle(ctk.CTkToplevel):
         self.item["cliente"] = self.v_cli.get().strip()
         self.item["asesor"] = self.v_ase.get().strip()
         self.item["estado"] = self.v_estado.get()
-        self.item["fecha_seg"] = self.v_fecha_seg.get().strip()
+        self.item["fecha_seg"] = self.sel_fecha_seg.get_str()
+        self.item["correo_seg"] = self.v_correo_seg.get().strip()
         self.item["notas"] = self.txt_notas.get("1.0", "end").strip()
         self.item["tareas"] = [
             {"texto": r["texto"].get().strip(), "fecha": r["fecha"].get().strip(),
@@ -1331,16 +1344,20 @@ class VentanaCotizacionDetalle(ctk.CTkToplevel):
         if fseg and self.item.get("estado") not in ("Ganada", "Perdida"):
             app = getattr(self.master, "master", None)
             cfg = getattr(app, "cfg", None) if app else None
+            correo_dest = (self.item.get("correo_seg", "").strip()
+                           or cfg.get("correo_remitente", "") if cfg else "")
             if cfg and cfg.get("correo_remitente") and cfg.get("smtp_password"):
                 if messagebox.askyesno(
                         "Recordatorio de seguimiento",
                         f"¿Enviar un recordatorio de calendario para el "
-                        f"{self.item.get('fecha_seg')} a tu correo?", parent=self):
+                        f"{self.item.get('fecha_seg')} a {correo_dest}?", parent=self):
                     try:
-                        dest = [cfg.get("correo_remitente")]
+                        dest = list(dict.fromkeys(
+                            [correo_dest, cfg.get("correo_remitente")]))
                         enviar_recordatorio_ics(cfg, dest, self.item, fseg)
                         messagebox.showinfo("Recordatorio",
-                                            "Recordatorio de calendario enviado.", parent=self)
+                                            "Recordatorio de calendario enviado a:\n"
+                                            + ", ".join(d for d in dest if d), parent=self)
                     except Exception as e:
                         messagebox.showwarning("Recordatorio",
                                                "No se pudo enviar el recordatorio:\n" + str(e),

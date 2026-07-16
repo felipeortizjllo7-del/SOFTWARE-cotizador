@@ -1,5 +1,5 @@
 {
-  "version": "3.0",
+  "version": "3.1",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 3.0 - Respaldo automatico: las cotizaciones y clientes se copian a %APPDATA%\\CotizadorInnoba\\respaldos (copia 'ultimo' en cada apertura y copia permanente por version al actualizar), para que NUNCA se pierdan al actualizar. Los datos ya viven en %APPDATA%, separados del programa, asi que las actualizaciones no los tocan."
+  "notas": "Version 3.1 - En el seguimiento de cotizaciones: la fecha ahora se elige con CALENDARIO y se agrega un campo de CORREO donde llega el recordatorio (.ics) del seguimiento."
 }
