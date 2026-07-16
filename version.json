@@ -1,5 +1,5 @@
 {
-  "version": "2.7",
+  "version": "2.8",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 2.7 - Seguimiento con recordatorio: cada cotizacion puede tener una FECHA DE SEGUIMIENTO y el sistema ALERTA al abrir cuando llega/vence. Las cotizaciones se colorean por estado (Perdida=rojo, Ganada=verde, En seguimiento=blanco). App y HTML."
+  "notas": "Version 2.8 - HTML separado para clientes (sin modulo de clientes ni cotizaciones; llenan datos a mano) y envia sus cotizaciones a INNOBA. .exe: importa las del HTML, color amarillo para 'En seguimiento', recordatorio de calendario (.ics) por correo al guardar la fecha de seguimiento. Ambos: alerta si las noches del itinerario no cuadran con las fechas."
 }

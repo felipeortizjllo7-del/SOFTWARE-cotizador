@@ -118,14 +118,12 @@ display:flex;align-items:center;gap:16px;margin-top:6px}
  <img src="data:image/png;base64,__LOGO__" alt="logo">
  <div><div class="t1">Cotizador de Paquetes</div><div class="t2">INNOBA Colombia DMC &middot; v__VERSION__ &middot; Itinerario hasta 5 destinos &middot; Version HTML</div></div>
  <div class="sp"></div>
- <button class="btn btn-green" onclick="abrirCotizaciones()">Cotizaciones</button>
  <button class="btn btn-navy" onclick="abrirItinerario()">Itinerario</button>
  <button class="btn btn-nav" onclick="abrirConfig()">Datos de mi empresa</button>
 </header>
 <div class="trmbar"><span>Tasa del dia (USD):</span> <b id="trmStatus">consultando...</b>
  <span class="sp"></span><button class="btn btn-navy" style="padding:6px 12px" onclick="cargarTRM(true)">Actualizar</button></div>
 <div id="updbar" class="hidden" style="background:var(--green);color:#fff;padding:9px 20px;font-weight:700;text-align:center"></div>
-<div id="segbar" class="hidden" style="background:#c0392b;color:#fff;padding:9px 20px;font-weight:700;text-align:center;cursor:pointer" onclick="abrirCotizaciones()"></div>
 
 <div class="wrap">
  <div class="card">
@@ -138,15 +136,8 @@ display:flex;align-items:center;gap:16px;margin-top:6px}
     </select></div>
   </div>
   <div class="row" style="margin-top:8px">
-   <div class="col">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-     <label class="lb">Cliente</label>
-     <div style="display:flex;gap:4px">
-      <button class="btn btn-navy" style="padding:3px 10px;font-size:11px" onclick="buscarCliente()">&#128269; Buscar</button>
-      <button class="btn btn-nav" style="padding:3px 10px;font-size:11px" onclick="editarClienteActual()">&#9998; Editar</button>
-     </div></div>
-    <input id="cli" type="text" placeholder="Nombre del cliente"></div>
-   <div class="col"><label class="lb">Email cliente</label><input id="email" type="email" placeholder="correo@cliente.com"></div>
+   <div class="col"><label class="lb">Cliente / agencia</label><input id="cli" type="text" placeholder="Nombre del cliente o agencia"></div>
+   <div class="col"><label class="lb">Email</label><input id="email" type="email" placeholder="correo@cliente.com"></div>
    <div class="col"><label class="lb">Fechas del viaje</label>
     <div style="display:flex;gap:6px;align-items:center">
      <input id="fdesde" type="date" style="flex:1" title="Fecha de ida">
@@ -154,11 +145,7 @@ display:flex;align-items:center;gap:16px;margin-top:6px}
      <input id="fhasta" type="date" style="flex:1" title="Fecha de regreso"></div></div>
   </div>
   <div class="row" style="margin-top:10px">
-   <div class="col"><label class="lb">Asesor (contacto)</label>
-    <div style="display:flex;gap:6px">
-     <input id="asesor" type="text" placeholder="Nombre del asesor" style="flex:1">
-     <select id="asesorSel" style="width:150px" onchange="usarAsesor(this.value)"><option value="">(vendedor)</option></select>
-    </div></div>
+   <div class="col"><label class="lb">Asesor (contacto)</label><input id="asesor" type="text" placeholder="Nombre del asesor"></div>
    <div class="col"><label class="lb">Telefono asesor</label><input id="asesorTel" type="text" placeholder="Telefono del asesor"></div>
    <div class="col"></div>
   </div>
@@ -208,6 +195,7 @@ display:flex;align-items:center;gap:16px;margin-top:6px}
 <script>
 const VERSION = "__VERSION__";
 const UPDATE_URL = "https://raw.githubusercontent.com/felipeortizjllo7-del/SOFTWARE-cotizador/main/version.json";
+const WEBHOOK_URL = "__WEBHOOK__";   // Apps Script /exec: envia cotizaciones a INNOBA (.exe)
 const PRECIOS = __PRECIOS__;
 const DESC = __DESC__;
 const CLIENTES_BASE = __CLIENTES__;
@@ -432,6 +420,10 @@ function generar(){
  const fd=document.getElementById("fdesde").value, fh=document.getElementById("fhasta").value;
  if(!fd||!fh){alert("Debes elegir la FECHA DEL VIAJE (ida y regreso) en el calendario.");return;}
  if(fh<fd){alert("La fecha de regreso no puede ser anterior a la de ida.");return;}
+ // las noches del itinerario deben cuadrar con las fechas (uni o multidestino)
+ const totalNoches=st.tramos.reduce((s,t)=>s+Math.max(t.noches,1),0);
+ const diasViaje=Math.round((new Date(fh)-new Date(fd))/86400000);
+ if(diasViaje!==totalNoches){if(!confirm("Las noches del itinerario suman "+totalNoches+", pero entre las fechas elegidas hay "+diasViaje+" noche(s). No coinciden.\n\n¿Continuar de todos modos?"))return;}
  const fechasViaje=fmtISO(fd)+" al "+fmtISO(fh);
  if(!document.getElementById("email").value.trim()){alert("Debes ingresar el EMAIL del cliente.");return;}
  const hoy=new Date();const dd=String(hoy.getDate()).padStart(2,"0"),mm=String(hoy.getMonth()+1).padStart(2,"0");
@@ -494,16 +486,21 @@ function generar(){
  const ci=document.getElementById("cotizador").selectedIndex; const cz=COTIZADORES[ci]||COTIZADORES[0];
  html+=`<div class="firma"><div>Cordialmente,</div><br><br><div class="l"></div><b style="color:var(--navy)">${cz[0]}</b><br>${cz[1]}</div>`;
  document.getElementById("print").innerHTML=html;
- // guardar en el historial (con consecutivo) antes de imprimir
- registrarCotiz({cliente:document.getElementById("cli").value.trim(),
+ // registrar (numero local para el PDF) y enviar a INNOBA (.exe) para seguimiento
+ const rec={cliente:document.getElementById("cli").value.trim(),
    asesor:document.getElementById("asesor").value.trim(),
    asesor_tel:document.getElementById("asesorTel").value.trim(),
    fecha:fecha, fechas_viaje:fechasViaje, cotizado_por:cz[0],
    email:document.getElementById("email").value.trim(),
    destinos:bloques.map(b=>b.destino),
-   total:(totalReserva(bloques)!==null?totalReserva(bloques):total)});
+   total:(totalReserva(bloques)!==null?totalReserva(bloques):total),
+   id:"WEB-"+Date.now()+"-"+Math.floor(Math.random()*10000)};
+ registrarCotiz(rec);
+ enviarCotizWebhook(rec);
  window.print();
 }
+function enviarCotizWebhook(rec){if(!WEBHOOK_URL)return;
+ try{fetch(WEBHOOK_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(rec)});}catch(e){}}
 
 /* ---------- clientes: usar / buscar / editar ---------- */
 function usarCliente(emp){const c=CLIENTES.find(x=>x.empresa===emp);if(!c)return;
@@ -732,14 +729,17 @@ function chequearSeguimientos(){const p=segPendientes();const b=document.getElem
  else b.classList.add("hidden");}
 
 /* init */
-renderPax();addDestino(Object.keys(PRECIOS)[0]);sugerirHab();cargarTRM(false);chequearActualizacion();chequearSeguimientos();
+renderPax();addDestino(Object.keys(PRECIOS)[0]);sugerirHab();cargarTRM(false);chequearActualizacion();
 </script>
 </body>
 </html>"""
 
+# El HTML es para CLIENTES: NO se embebe la base de clientes de INNOBA (privacidad).
+WEBHOOK = ""   # Apps Script /exec (INNOBA lo configura para recibir cotizaciones del HTML)
 HTML = (HTML.replace("__PRECIOS__", json.dumps(precios, ensure_ascii=False))
             .replace("__DESC__", json.dumps(desc, ensure_ascii=False))
-            .replace("__CLIENTES__", json.dumps(clientes, ensure_ascii=False))
+            .replace("__CLIENTES__", "[]")
+            .replace("__WEBHOOK__", WEBHOOK)
             .replace("__VERSION__", VERSION)
             .replace("__LOGO__", logo_b64)
             .replace("__ICON__", icon_b64))

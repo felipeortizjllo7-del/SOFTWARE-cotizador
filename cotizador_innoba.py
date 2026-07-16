@@ -59,9 +59,12 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "2.7"
+VERSION = "2.8"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
+# Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
+# cotizaciones; el .exe las importa aqui. INNOBA lo configura una vez.
+WEBHOOK_URL = ""
 # Archivo con la ultima version publicada (rama main del repositorio)
 UPDATE_URL = (f"https://raw.githubusercontent.com/{GITHUB_OWNER}/{GITHUB_REPO}"
               f"/main/version.json")
@@ -278,6 +281,48 @@ def registrar_cotizacion(rec):
     guardar_cotizaciones(data)
     return numero
 
+def importar_cotizaciones_html():
+    """Trae las cotizaciones creadas por clientes en el HTML (via WEBHOOK_URL) y
+       las agrega al historial local sin duplicar. Devuelve cuantas nuevas."""
+    if not WEBHOOK_URL:
+        return 0
+    try:
+        ctx = ssl.create_default_context()
+        req = urllib.request.Request(WEBHOOK_URL, headers={"User-Agent": "CotizadorInnoba"})
+        with urllib.request.urlopen(req, context=ctx, timeout=20) as r:
+            remotas = json.loads(r.read().decode("utf-8"))
+    except Exception:
+        return 0
+    if isinstance(remotas, dict):
+        remotas = remotas.get("items", [])
+    if not isinstance(remotas, list):
+        return 0
+    data = cargar_cotizaciones()
+    existentes = {str(it.get("web_id")) for it in data["items"] if it.get("web_id")}
+    nuevas = 0
+    for rc in remotas:
+        wid = str(rc.get("id") or rc.get("web_id") or "")
+        if not wid or wid in existentes:
+            continue
+        dests = rc.get("destinos", [])
+        if isinstance(dests, str):
+            dests = [d.strip() for d in dests.split(",") if d.strip()]
+        try:
+            total = float(rc.get("total", 0) or 0)
+        except (TypeError, ValueError):
+            total = 0.0
+        data["seq"] = int(data.get("seq", 0)) + 1
+        data["items"].append({
+            "numero": f"COT-{data['seq']:05d}", "web_id": wid, "origen": "HTML (cliente)",
+            "cliente": rc.get("cliente", ""), "asesor": rc.get("asesor", ""),
+            "asesor_tel": rc.get("asesor_tel", ""), "email": rc.get("email", ""),
+            "fecha": rc.get("fecha", ""), "fechas_viaje": rc.get("fechas_viaje", ""),
+            "destinos": dests, "total": total, "estado": "Pendiente", "pdf": ""})
+        existentes.add(wid); nuevas += 1
+    if nuevas:
+        guardar_cotizaciones(data)
+    return nuevas
+
 def parse_fecha(s):
     """Convierte 'dd/mm/aaaa' (o similares) a date; None si no se puede."""
     s = (s or "").strip()
@@ -463,6 +508,60 @@ def enviar_correo(cfg, destinatario, asunto, cuerpo, adjunto):
         s.ehlo()
         s.login(remit, pw)
         s.send_message(msg)
+
+
+def _ics_recordatorio(item, fecha_dt):
+    """Construye un evento de calendario (todo el dia) con recordatorio para el
+       seguimiento de una cotizacion."""
+    uid = (item.get("numero", "COT") + "-seg@innobadmc.com")
+    ymd = fecha_dt.strftime("%Y%m%d")
+    fin = (fecha_dt + datetime.timedelta(days=1)).strftime("%Y%m%d")
+    stamp = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
+    cli = (item.get("cliente", "") or "").replace(",", " ")
+    ase = (item.get("asesor", "") or "")
+    summ = f"Seguimiento cotizacion {item.get('numero','')} - {cli}"
+    desc = (f"Dar seguimiento a la cotizacion {item.get('numero','')} de {cli}. "
+            f"Asesor: {ase}. Destinos: {', '.join(item.get('destinos', []))}. "
+            f"Total: {usd(item.get('total', 0))}.")
+    return ("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//INNOBA//Cotizador//ES\r\n"
+            "CALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\nBEGIN:VEVENT\r\n"
+            f"UID:{uid}\r\nDTSTAMP:{stamp}\r\n"
+            f"DTSTART;VALUE=DATE:{ymd}\r\nDTEND;VALUE=DATE:{fin}\r\n"
+            f"SUMMARY:{summ}\r\nDESCRIPTION:{desc}\r\n"
+            "BEGIN:VALARM\r\nTRIGGER:-PT9H\r\nACTION:DISPLAY\r\n"
+            "DESCRIPTION:Recordatorio de seguimiento\r\nEND:VALARM\r\n"
+            "END:VEVENT\r\nEND:VCALENDAR\r\n")
+
+def enviar_recordatorio_ics(cfg, destinatarios, item, fecha_dt):
+    """Envia por correo una invitacion de calendario (.ics) con el recordatorio."""
+    remit = cfg.get("correo_remitente", "").strip()
+    pw = cfg.get("smtp_password", "")
+    if not remit or not pw:
+        raise ValueError("Falta configurar el correo remitente y su contrasena.")
+    dest = [d for d in destinatarios if d]
+    if not dest:
+        raise ValueError("No hay destinatario para el recordatorio.")
+    servidor = (cfg.get("smtp_servidor", "") or "smtp.office365.com").strip()
+    try:
+        puerto = int(cfg.get("smtp_puerto", "587") or 587)
+    except Exception:
+        puerto = 587
+    ics = _ics_recordatorio(item, fecha_dt)
+    msg = EmailMessage()
+    msg["From"] = remit
+    msg["To"] = ", ".join(dest)
+    msg["Subject"] = (f"Recordatorio seguimiento {item.get('numero','')} - "
+                      f"{item.get('cliente','')} ({fecha_dt.strftime('%d/%m/%Y')})")
+    msg.set_content(
+        f"Recordatorio automatico: dar seguimiento a la cotizacion "
+        f"{item.get('numero','')} de {item.get('cliente','')} el "
+        f"{fecha_dt.strftime('%d/%m/%Y')}.\n\nAsesor: {item.get('asesor','')}\n"
+        f"Adjuntamos una invitacion de calendario con recordatorio.")
+    msg.add_attachment(ics.encode("utf-8"), maintype="text", subtype="calendar",
+                       filename="seguimiento.ics", params={"method": "PUBLISH"})
+    with smtplib.SMTP(servidor, puerto, timeout=30) as s:
+        s.ehlo(); s.starttls(context=ssl.create_default_context()); s.ehlo()
+        s.login(remit, pw); s.send_message(msg)
 
 
 # ============================================================================
@@ -1098,10 +1197,10 @@ class BuscadorClientes(ctk.CTkToplevel):
 # Ventana de Historial de Cotizaciones (consecutivo + busqueda + seguimiento)
 # ============================================================================
 ESTADOS_COT = ["Pendiente", "Enviada", "En seguimiento", "Ganada", "Perdida"]
-ESTADO_COLOR = {"Pendiente": MUTED, "Enviada": BLUE, "En seguimiento": CYAN,
+ESTADO_COLOR = {"Pendiente": MUTED, "Enviada": BLUE, "En seguimiento": "#D9A400",
                 "Ganada": GREEN, "Perdida": RED}
-# color de fondo de la fila segun estado (Ganada verde, Perdida rojo, En segui. blanco)
-ESTADO_FILA = {"Pendiente": "#F1F5FB", "Enviada": "#EAF2FD", "En seguimiento": "#FFFFFF",
+# color de fondo de la fila segun estado (Ganada verde, Perdida rojo, En segui. AMARILLO)
+ESTADO_FILA = {"Pendiente": "#F1F5FB", "Enviada": "#EAF2FD", "En seguimiento": "#FFF3C4",
                "Ganada": "#E3F5EA", "Perdida": "#FBE6E6"}
 
 
@@ -1199,6 +1298,25 @@ class VentanaCotizacionDetalle(ctk.CTkToplevel):
              "hecha": r["hecha"].get()}
             for r in self.tareas_rows if r["texto"].get().strip()]
         self.on_save()
+        # ofrecer enviar recordatorio de calendario (.ics) para la fecha de seguimiento
+        fseg = parse_fecha(self.item.get("fecha_seg", ""))
+        if fseg and self.item.get("estado") not in ("Ganada", "Perdida"):
+            app = getattr(self.master, "master", None)
+            cfg = getattr(app, "cfg", None) if app else None
+            if cfg and cfg.get("correo_remitente") and cfg.get("smtp_password"):
+                if messagebox.askyesno(
+                        "Recordatorio de seguimiento",
+                        f"¿Enviar un recordatorio de calendario para el "
+                        f"{self.item.get('fecha_seg')} a tu correo?", parent=self):
+                    try:
+                        dest = [cfg.get("correo_remitente")]
+                        enviar_recordatorio_ics(cfg, dest, self.item, fseg)
+                        messagebox.showinfo("Recordatorio",
+                                            "Recordatorio de calendario enviado.", parent=self)
+                    except Exception as e:
+                        messagebox.showwarning("Recordatorio",
+                                               "No se pudo enviar el recordatorio:\n" + str(e),
+                                               parent=self)
         self.destroy()
 
 
@@ -1208,11 +1326,22 @@ class VentanaCotizaciones(ctk.CTkToplevel):
         self.title("Historial de cotizaciones")
         self.geometry("920x620"); self.configure(fg_color=BG)
         self.transient(master); self.grab_set()
+        # traer cotizaciones nuevas hechas por clientes en el HTML
+        try:
+            importar_cotizaciones_html()
+        except Exception:
+            pass
         self.data = cargar_cotizaciones()
         self.grid_columnconfigure(0, weight=1); self.grid_rowconfigure(2, weight=1)
-        ctk.CTkLabel(self, text="Historial de cotizaciones", text_color=NAVY,
-                     font=("Segoe UI", 16, "bold")).grid(row=0, column=0, sticky="w",
-                                                         padx=16, pady=(14, 2))
+        top = ctk.CTkFrame(self, fg_color="transparent")
+        top.grid(row=0, column=0, sticky="ew", padx=16, pady=(14, 2))
+        top.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(top, text="Historial de cotizaciones", text_color=NAVY,
+                     font=("Segoe UI", 16, "bold")).grid(row=0, column=0, sticky="w")
+        if WEBHOOK_URL:
+            ctk.CTkButton(top, text="↻ Importar del HTML", width=160, height=32, corner_radius=8,
+                          fg_color=NAVY, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
+                          command=self._importar_html).grid(row=0, column=1, sticky="e")
         self.var_q = tk.StringVar()
         e = ctk.CTkEntry(self, textvariable=self.var_q, height=36, corner_radius=10,
                          border_color=BLUE, border_width=2, fg_color=CARD, font=("Segoe UI", 12),
@@ -1282,6 +1411,16 @@ class VentanaCotizaciones(ctk.CTkToplevel):
             msg = ("Aun no hay cotizaciones guardadas.\nGenera un PDF y aparecera aqui."
                    if not self.data.get("items") else "Sin resultados.")
             ctk.CTkLabel(self.lista, text=msg, text_color=MUTED).pack(pady=24)
+
+    def _importar_html(self):
+        try:
+            n = importar_cotizaciones_html()
+        except Exception as e:
+            messagebox.showerror("Importar", str(e), parent=self); return
+        self.data = cargar_cotizaciones(); self._pintar()
+        messagebox.showinfo("Importar del HTML",
+                            (f"Se importaron {n} cotizacion(es) nueva(s) del HTML."
+                             if n else "No hay cotizaciones nuevas del HTML."), parent=self)
 
     def _detalle(self, it):
         VentanaCotizacionDetalle(self, it, self._on_guardado)
@@ -2629,13 +2768,21 @@ class App(ctk.CTk):
         VentanaCotizaciones(self)
 
     def _chequear_seguimientos(self):
-        """Alerta al abrir: cotizaciones cuyo seguimiento/tarea ya vencio."""
-        try:
-            pend = seguimientos_pendientes()
-        except Exception:
-            return
-        if not pend:
-            return
+        """Al abrir: importa las del HTML (clientes) y alerta de seguimientos vencidos."""
+        def worker():
+            try:
+                importar_cotizaciones_html()
+            except Exception:
+                pass
+            try:
+                pend = seguimientos_pendientes()
+            except Exception:
+                pend = []
+            if pend:
+                self.after(0, lambda: self._alerta_seguimientos(pend))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _alerta_seguimientos(self, pend):
         lineas = [f"• {it.get('numero','')}  {it.get('cliente','') or '(sin agencia)'}"
                   f"  ->  {motivo}" for it, motivo in pend[:15]]
         extra = f"\n\n(y {len(pend) - 15} mas)" if len(pend) > 15 else ""
@@ -2742,6 +2889,16 @@ class App(ctk.CTk):
         if self.sel_hasta.get() < self.sel_desde.get():
             messagebox.showwarning("Fechas invalidas",
                                    "La fecha de regreso no puede ser anterior a la de ida."); return
+        # las noches del itinerario deben cuadrar con las fechas del viaje
+        total_noches = sum(max(int(t.get("noches", 1)), 1) for t in self.tramos)
+        dias = (self.sel_hasta.get() - self.sel_desde.get()).days
+        if dias != total_noches:
+            if not messagebox.askyesno(
+                    "Noches vs fechas del viaje",
+                    f"Las noches del itinerario suman {total_noches}, pero entre las fechas "
+                    f"elegidas hay {dias} noche(s).\n\nNo coinciden. "
+                    "¿Deseas continuar de todos modos?"):
+                return
         if not self.var_email.get().strip():
             messagebox.showwarning("Falta el email del cliente",
                                    "Debes ingresar el EMAIL del cliente antes de generar."); return
