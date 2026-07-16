@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "2.9"
+VERSION = "3.0"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -266,6 +266,34 @@ def cargar_cotizaciones():
 def guardar_cotizaciones(data):
     with open(COTIZACIONES_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+def respaldar_datos(cfg):
+    """Guarda copias de seguridad de cotizaciones/clientes en %APPDATA%\\...\\respaldos.
+       Siempre deja un respaldo '_ultimo'; y si la version cambio (hubo una
+       actualizacion) deja una copia permanente por version, para que las
+       cotizaciones NUNCA se pierdan al actualizar."""
+    try:
+        carpeta = os.path.join(datos_dir(), "respaldos")
+        os.makedirs(carpeta, exist_ok=True)
+        cambio_version = cfg.get("ultima_version_vista", "") != VERSION
+        hoy = datetime.date.today().strftime("%Y%m%d")
+        for nombre in ("cotizaciones.json", "clientes.json", "config_empresa.json"):
+            src = os.path.join(datos_dir(), nombre)
+            if not os.path.exists(src):
+                continue
+            base = nombre.rsplit(".", 1)[0]
+            shutil.copyfile(src, os.path.join(carpeta, base + "_ultimo.json"))
+            if cambio_version:
+                shutil.copyfile(
+                    src, os.path.join(carpeta, f"{base}_v{VERSION}_{hoy}.json"))
+        if cambio_version:
+            cfg["ultima_version_vista"] = VERSION
+            try:
+                guardar_config(cfg)
+            except Exception:
+                pass
+    except Exception:
+        pass
 
 def peek_numero_cotizacion():
     """Devuelve el proximo consecutivo (sin reservarlo aun), ej. COT-00001."""
@@ -1804,6 +1832,7 @@ class App(ctk.CTk):
         except Exception:
             pass
         self.cfg = cargar_config()
+        respaldar_datos(self.cfg)   # respaldo automatico de cotizaciones/clientes
         if not self.cfg.get("logo") or not os.path.exists(self.cfg["logo"]):
             lg = recurso("logo_innoba.png")
             if os.path.exists(lg):

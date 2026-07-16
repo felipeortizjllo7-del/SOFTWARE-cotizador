@@ -1,5 +1,5 @@
 {
-  "version": "2.9",
+  "version": "3.0",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 2.9 - Puente HTML->exe activo: las cotizaciones que los clientes hagan en el HTML se envian a INNOBA y el .exe las importa al historial (boton 'Importar del HTML' y al abrir). Incluye separacion HTML/exe, alerta noches vs fechas, color amarillo en seguimiento y recordatorio .ics."
+  "notas": "Version 3.0 - Respaldo automatico: las cotizaciones y clientes se copian a %APPDATA%\\CotizadorInnoba\\respaldos (copia 'ultimo' en cada apertura y copia permanente por version al actualizar), para que NUNCA se pierdan al actualizar. Los datos ya viven en %APPDATA%, separados del programa, asi que las actualizaciones no los tocan."
 }
