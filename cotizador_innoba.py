@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "3.1"
+VERSION = "3.2"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1441,17 +1441,23 @@ class VentanaCotizaciones(ctk.CTkToplevel):
                       f"     {dest}     {usd(it.get('total', 0))}")
             ctk.CTkLabel(cel, text=linea2, text_color=MUTED, anchor="w",
                          font=("Segoe UI", 10)).pack(anchor="w")
-            ctk.CTkButton(fila, text="Editar / Tareas", width=110, height=30, corner_radius=8,
+            if it.get("snapshot"):
+                ctk.CTkButton(fila, text="✎ Editar cotizacion", width=130, height=30,
+                              corner_radius=8, fg_color=GREEN, hover_color=GREEN_H,
+                              font=("Segoe UI", 11, "bold"),
+                              command=lambda x=it: self._editar_cotizacion(x)).grid(
+                    row=0, column=1, padx=4)
+            ctk.CTkButton(fila, text="Seguimiento", width=100, height=30, corner_radius=8,
                           fg_color=CYAN, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
-                          command=lambda x=it: self._detalle(x)).grid(row=0, column=1, padx=4)
+                          command=lambda x=it: self._detalle(x)).grid(row=0, column=2, padx=4)
             if it.get("pdf"):
                 ctk.CTkButton(fila, text="Abrir PDF", width=90, height=30, corner_radius=8,
                               fg_color=NAVY, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
-                              command=lambda p=it["pdf"]: self._abrir(p)).grid(row=0, column=2, padx=4)
+                              command=lambda p=it["pdf"]: self._abrir(p)).grid(row=0, column=3, padx=4)
             ctk.CTkButton(fila, text="🗑", width=34, height=30, corner_radius=8,
                           fg_color=CARD2, text_color=RED, hover_color=LINE,
                           font=("Segoe UI", 13),
-                          command=lambda x=it: self._eliminar(x)).grid(row=0, column=3, padx=(0, 6))
+                          command=lambda x=it: self._eliminar(x)).grid(row=0, column=4, padx=(0, 6))
         if not n:
             msg = ("Aun no hay cotizaciones guardadas.\nGenera un PDF y aparecera aqui."
                    if not self.data.get("items") else "Sin resultados.")
@@ -1466,6 +1472,20 @@ class VentanaCotizaciones(ctk.CTkToplevel):
         messagebox.showinfo("Importar del HTML",
                             (f"Se importaron {n} cotizacion(es) nueva(s) del HTML."
                              if n else "No hay cotizaciones nuevas del HTML."), parent=self)
+
+    def _editar_cotizacion(self, it):
+        app = self.master
+        if not hasattr(app, "_cargar_cotizacion"):
+            return
+        if not messagebox.askyesno(
+                "Editar cotizacion",
+                f"Se cargara {it.get('numero','')} ({it.get('cliente','')}) en el cotizador "
+                "para editarla.\n\nSe reemplazara lo que tengas ahora en pantalla. "
+                "Al generar de nuevo se creara una cotizacion nueva.\n\n¿Continuar?",
+                parent=self):
+            return
+        app._cargar_cotizacion(it.get("snapshot"))
+        self.destroy()
 
     def _detalle(self, it):
         VentanaCotizacionDetalle(self, it, self._on_guardado)
@@ -2918,6 +2938,76 @@ class App(ctk.CTk):
             self._sugerir_hab()
         self._recalcular()
 
+    def _snapshot(self):
+        """Estado completo de la cotizacion actual (para re-cargarla/editarla)."""
+        d = self.sel_desde.get(); h = self.sel_hasta.get()
+        return {
+            "cliente": self.var_cli.get(), "email": self.var_email.get(),
+            "asesor": self.var_asesor.get(), "asesor_tel": self.var_aso_tel.get(),
+            "cotizador": self.var_cotizador.get(),
+            "fecha_desde": d.isoformat() if d else "",
+            "fecha_hasta": h.isoformat() if h else "",
+            "adultos": self.st_ad.get(), "ages": self._ninos_ages(),
+            "hab": self._hab(), "itinerario": self._itinerario,
+            "tramos": [{"destino": t["destino"], "temporada": t["temporada"],
+                        "noches": t["noches"], "hoteles": list(t["hoteles"]),
+                        "trans": sorted(t["trans"]), "act": sorted(t["act"])}
+                       for t in self.tramos],
+        }
+
+    def _cargar_cotizacion(self, snap):
+        """Carga una cotizacion guardada en el cotizador para editarla."""
+        if not snap:
+            messagebox.showinfo("Editar cotizacion",
+                                "Esta cotizacion no tiene datos para editar "
+                                "(se creo en una version anterior o vino del HTML).")
+            return
+        self.var_cli.set(snap.get("cliente", "")); self.var_email.set(snap.get("email", ""))
+        self.var_asesor.set(snap.get("asesor", ""))
+        self.var_aso_tel.set(snap.get("asesor_tel", ""))
+        if snap.get("cotizador") in self._cotz_map:
+            self.var_cotizador.set(snap["cotizador"])
+        self.sel_desde.clear(); self.sel_hasta.clear()
+        try:
+            if snap.get("fecha_desde"):
+                self.sel_desde._set(datetime.date.fromisoformat(snap["fecha_desde"]))
+            if snap.get("fecha_hasta"):
+                self.sel_hasta._set(datetime.date.fromisoformat(snap["fecha_hasta"]))
+        except Exception:
+            pass
+        self.st_ad.set(max(int(snap.get("adultos", 2)), 1))
+        ages = snap.get("ages", [])
+        self.st_ninos.set(len(ages))
+        self._rebuild_edades()
+        for i, a in enumerate(ages):
+            if i < len(self.edad_vars):
+                try:
+                    self.edad_vars[i].set(EDAD_OPCIONES[a])
+                except Exception:
+                    pass
+        hab = snap.get("hab", {})
+        self.st_hab_s.set(hab.get("sencilla", 0))
+        self.st_hab_d.set(hab.get("doble", 0))
+        self.st_hab_t.set(hab.get("triple", 0))
+        self._itinerario = snap.get("itinerario", "")
+        self.tramos = []
+        for t in snap.get("tramos", []):
+            if t.get("destino") not in self.precios:
+                continue
+            self.tramos.append({
+                "destino": t["destino"], "temporada": t.get("temporada", "Baja"),
+                "noches": t.get("noches", 3), "hoteles": list(t.get("hoteles", [])),
+                "hab": {"s": 0, "d": 1, "t": 0},
+                "trans": set(t.get("trans", [])), "act": set(t.get("act", []))})
+        self.activo = 0 if self.tramos else None
+        self._rebuild_chips()
+        if self.activo is not None:
+            self._cargar_activo()
+        else:
+            self._limpiar_activo()
+        self._val_hab()
+        self._recalcular()
+
     def _generar(self):
         if self._tasa() is None:
             messagebox.showwarning("Falta la tasa",
@@ -2983,7 +3073,7 @@ class App(ctk.CTk):
             generar_pdf(self.cfg, datos, bloques, total, ruta)
         except Exception as e:
             messagebox.showerror("Error al generar PDF", str(e)); return
-        # guardar en el historial de cotizaciones (con consecutivo)
+        # guardar en el historial de cotizaciones (con consecutivo + estado completo)
         try:
             numero = registrar_cotizacion({
                 "cliente": cliente, "asesor": self.var_asesor.get().strip(),
@@ -2991,7 +3081,8 @@ class App(ctk.CTk):
                 "fecha": self._fecha, "fechas_viaje": datos["fechas_viaje"],
                 "cotizado_por": firma_nom, "email": email,
                 "destinos": [t["destino"] for t in self.tramos],
-                "total": total_mostrar, "pdf": ruta})
+                "total": total_mostrar, "pdf": ruta,
+                "snapshot": self._snapshot()})
             self.lbl_desglose.configure(text=f"Guardada {numero}")
         except Exception:
             pass

@@ -1,5 +1,5 @@
 {
-  "version": "3.1",
+  "version": "3.2",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 3.1 - En el seguimiento de cotizaciones: la fecha ahora se elige con CALENDARIO y se agrega un campo de CORREO donde llega el recordatorio (.ics) del seguimiento."
+  "notas": "Version 3.2 - Editar cotizaciones del historial: cada cotizacion guarda su estado completo (destinos, hoteles, servicios, pax, habitaciones, fechas) y con el boton 'Editar cotizacion' se carga de vuelta al cotizador para modificarla sin rehacerla desde cero. (El boton de seguimiento ahora se llama 'Seguimiento'.)"
 }
