@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "5.0"
+VERSION = "5.1"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1370,6 +1370,53 @@ def resumen_seguimiento(res):
                 por_estado[s.get("estado_prov", "Pendiente")] = \
                     por_estado.get(s.get("estado_prov", "Pendiente"), 0) + 1
     return total, enviados, por_estado
+
+
+def renglon_de(res, di, cat, si):
+    """Construye el dict de renglon (para el voucher) desde un servicio anidado."""
+    tipo = next((t for k, _l, t in CATEGORIAS_SERV if k == cat), cat)
+    dest = res["destinos_detalle"][di]
+    s = dest[cat][si]
+    reng = {"tipo": tipo, "destino": dest.get("nombre", ""),
+            "servicio": s.get("servicio", ""), "proveedor": s.get("proveedor", ""),
+            "correo": s.get("correo", ""), "hora": s.get("hora", ""),
+            "origen": s.get("origen", ""), "vehiculo": s.get("vehiculo", ""),
+            "observacion": s.get("observacion", "")}
+    return reng, s
+
+
+def _dir_vouchers():
+    ruta = os.path.join(datos_dir(), "vouchers")
+    os.makedirs(ruta, exist_ok=True)
+    return ruta
+
+
+def generar_voucher_prov_archivo(cfg, res, di, cat, si):
+    reng, s = renglon_de(res, di, cat, si)
+    fn = os.path.join(_dir_vouchers(),
+                      f"Voucher_prov_{res.get('numero','')}_{di+1}_{cat}_{si+1}.pdf")
+    generar_voucher_proveedor(cfg, res, reng, fn)
+    return fn, reng, s
+
+
+def enviar_voucher_prov(cfg, res, di, cat, si):
+    """Genera y envia por correo el voucher del proveedor; marca 'enviado' y guarda."""
+    fn, reng, s = generar_voucher_prov_archivo(cfg, res, di, cat, si)
+    if not reng["correo"]:
+        raise ValueError("El proveedor no tiene correo.")
+    asunto = f"Reserva {res.get('numero','')} - {reng['servicio']} - {cfg.get('empresa','')}"
+    cuerpo = (f"Estimado {reng['proveedor']}:\n\n"
+              f"Adjuntamos el voucher de la reserva {res.get('numero','')} para "
+              f"{res.get('cliente','')}.\nDestino: {reng['destino']}\n"
+              f"Fechas de viaje: {res.get('fechas_viaje','')}\n"
+              f"Pasajeros: {res.get('pax_txt','')}\n\n"
+              f"Favor confirmar disponibilidad y remitir la facturacion a nombre de "
+              f"{cfg.get('empresa','')}.\n\nCordialmente,\n{cfg.get('empresa','')}")
+    enviar_correo(cfg, reng["correo"], asunto, cuerpo, fn)
+    s["enviado"] = True
+    s["fecha_envio"] = datetime.date.today().strftime("%d/%m/%Y")
+    actualizar_reserva(res.get("numero", ""), {"destinos_detalle": res["destinos_detalle"]})
+    return fn
 
 
 def _fechas_in_out(fechas_viaje):
@@ -4355,6 +4402,9 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
                                     corner_radius=8, font=("Segoe UI", 11, "bold"),
                                     anchor="w", justify="left")
         self.lbl_seg.pack(fill="x", pady=(4, 2), ipady=4, ipadx=8)
+        ctk.CTkButton(cont, text="📋  Panel de vouchers a proveedores  (enviar todos en un lugar)",
+                      height=34, fg_color=NAVY, hover_color=NAVY2, font=("Segoe UI", 12, "bold"),
+                      command=self._abrir_panel_vouchers).pack(fill="x", pady=(0, 4))
         self.serv_box = ctk.CTkFrame(cont, fg_color="transparent"); self.serv_box.pack(fill="x")
         self._pintar_servicios()
 
@@ -4535,6 +4585,10 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         for di, dest in enumerate(dd):
             self._card_destino(di, dest)
         self._refrescar_resumen()
+
+    def _abrir_panel_vouchers(self):
+        self._sync()
+        VentanaVouchersProveedores(self, self.res, self.cfg, on_change=self._pintar_servicios)
 
     def _refrescar_resumen(self):
         try:
@@ -4879,6 +4933,169 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
             self.on_save()
         messagebox.showinfo("Guardado", "Reserva actualizada.")
         self.destroy()
+
+
+class VentanaVouchersProveedores(ctk.CTkToplevel):
+    """Tablero para enviar los vouchers a todos los proveedores de una reserva
+       (hotel, transporte, guia, actividad) con su estado, en un solo lugar."""
+    def __init__(self, master, res, cfg, on_change=None):
+        super().__init__(master)
+        self.res = res; self.cfg = cfg; self.on_change = on_change
+        self.title("Vouchers a proveedores - Reserva " + res.get("numero", ""))
+        self.geometry("1040x600"); self.configure(fg_color=BG)
+        self.transient(master); self.grab_set()
+        ctk.CTkLabel(self, text=f"Vouchers a proveedores  ·  Reserva N. {res.get('numero','')}"
+                     f"  ·  {res.get('cliente','')}", font=("Segoe UI", 16, "bold"),
+                     text_color=NAVY).pack(anchor="w", padx=16, pady=(14, 2))
+        self.lbl_seg = ctk.CTkLabel(self, text="", text_color=NAVY, fg_color="#EAF2FD",
+                                    corner_radius=8, font=("Segoe UI", 11, "bold"),
+                                    anchor="w")
+        self.lbl_seg.pack(fill="x", padx=16, pady=(0, 6), ipady=4, ipadx=8)
+        top = ctk.CTkFrame(self, fg_color="transparent"); top.pack(fill="x", padx=16)
+        ctk.CTkButton(top, text="✉ Enviar TODOS los pendientes", height=34, fg_color=GREEN,
+                      hover_color=GREEN_H, font=("Segoe UI", 12, "bold"),
+                      command=self._enviar_todos).pack(side="left")
+        ctk.CTkLabel(top, text="(cada servicio necesita proveedor y correo)",
+                     text_color=MUTED, font=("Segoe UI", 10)).pack(side="left", padx=10)
+        self.box = ctk.CTkScrollableFrame(self, fg_color=BG)
+        self.box.pack(fill="both", expand=True, padx=16, pady=(8, 14))
+        self._pintar()
+
+    def _servicios(self):
+        out = []
+        for di, d in enumerate(destinos_detalle_de(self.res)):
+            for cat, etiqueta, tipo in CATEGORIAS_SERV:
+                for si, s in enumerate(d.get(cat, [])):
+                    if s.get("servicio") or s.get("proveedor"):
+                        out.append((di, cat, si, tipo, d.get("nombre", ""), s))
+        return out
+
+    def _pintar(self):
+        for w in self.box.winfo_children():
+            w.destroy()
+        servicios = self._servicios()
+        if not servicios:
+            ctk.CTkLabel(self.box, text="Esta reserva aun no tiene servicios con proveedor. "
+                         "Agrega destinos y servicios en la reserva.", text_color=MUTED).pack(pady=24)
+        for di, cat, si, tipo, dest, s in servicios:
+            self._fila(di, cat, si, tipo, dest, s)
+        self._resumen()
+
+    def _fila(self, di, cat, si, tipo, dest, s):
+        card = ctk.CTkFrame(self.box, fg_color=CARD, corner_radius=8,
+                            border_width=1, border_color=LINE)
+        card.pack(fill="x", pady=3)
+        # encabezado: tipo + destino + servicio
+        cab = ctk.CTkFrame(card, fg_color="transparent"); cab.pack(fill="x", padx=8, pady=(6, 2))
+        ctk.CTkLabel(cab, text=f"{tipo}", text_color="#FFFFFF", fg_color=NAVY, corner_radius=6,
+                     font=("Segoe UI", 10, "bold")).pack(side="left", ipadx=6, ipady=1)
+        ctk.CTkLabel(cab, text=f"  {dest}  ·  {s.get('servicio','(sin nombre)')}", text_color=NAVY,
+                     font=("Segoe UI", 12, "bold")).pack(side="left")
+        env = s.get("enviado")
+        ctk.CTkLabel(cab, text=("✓ enviado " + s.get("fecha_envio", "") if env else "sin enviar"),
+                     text_color=(GREEN if env else MUTED),
+                     font=("Segoe UI", 10, "bold" if env else "normal")).pack(side="right")
+        # proveedor + correo + estado
+        v_prov = tk.StringVar(value=s.get("proveedor", ""))
+        v_mail = tk.StringVar(value=s.get("correo", ""))
+        v_est = tk.StringVar(value=s.get("estado_prov", "Pendiente"))
+        fila = ctk.CTkFrame(card, fg_color="transparent"); fila.pack(fill="x", padx=8, pady=(0, 4))
+        ctk.CTkLabel(fila, text="Proveedor", text_color=MUTED, width=60).pack(side="left")
+        ctk.CTkEntry(fila, textvariable=v_prov, width=180, height=28).pack(side="left", padx=(0, 6))
+        ctk.CTkLabel(fila, text="Correo", text_color=MUTED, width=44).pack(side="left")
+        ctk.CTkEntry(fila, textvariable=v_mail, height=28).pack(side="left", padx=(0, 6),
+                                                                fill="x", expand=True)
+        om = ctk.CTkOptionMenu(fila, variable=v_est, values=ESTADOS_PROV, width=170, height=28,
+                               fg_color=ESTADO_PROV_COLOR.get(s.get("estado_prov", "Pendiente"), MUTED),
+                               button_color=NAVY2)
+        om.configure(command=lambda val, o=om, ss=s: self._set_estado(ss, val, o))
+        om.pack(side="left")
+        # acciones
+        acc = ctk.CTkFrame(card, fg_color="transparent"); acc.pack(fill="x", padx=8, pady=(0, 6))
+        ctk.CTkButton(acc, text="Generar voucher", width=130, height=28, fg_color=BLUE,
+                      hover_color=BLUE_H,
+                      command=lambda: self._generar(di, cat, si, v_prov, v_mail)).pack(side="right", padx=3)
+        ctk.CTkButton(acc, text="Enviar al proveedor", width=150, height=28, fg_color=GREEN,
+                      hover_color=GREEN_H,
+                      command=lambda: self._enviar(di, cat, si, v_prov, v_mail)).pack(side="right", padx=3)
+
+    def _aplicar(self, di, cat, si, v_prov, v_mail):
+        s = self.res["destinos_detalle"][di][cat][si]
+        s["proveedor"] = v_prov.get().strip()
+        s["correo"] = v_mail.get().strip()
+        return s
+
+    def _set_estado(self, s, val, menu):
+        s["estado_prov"] = val
+        try:
+            menu.configure(fg_color=ESTADO_PROV_COLOR.get(val, MUTED))
+        except Exception:
+            pass
+        actualizar_reserva(self.res.get("numero", ""),
+                           {"destinos_detalle": self.res["destinos_detalle"]})
+        self._resumen()
+        if self.on_change:
+            self.on_change()
+
+    def _generar(self, di, cat, si, v_prov, v_mail):
+        self._aplicar(di, cat, si, v_prov, v_mail)
+        try:
+            fn, _r, _s = generar_voucher_prov_archivo(self.cfg, self.res, di, cat, si)
+            os.startfile(fn)
+        except Exception as e:
+            messagebox.showerror("Error", str(e), parent=self)
+
+    def _enviar(self, di, cat, si, v_prov, v_mail):
+        self._aplicar(di, cat, si, v_prov, v_mail)
+        try:
+            enviar_voucher_prov(self.cfg, self.res, di, cat, si)
+        except Exception as e:
+            messagebox.showerror("No se pudo enviar", str(e), parent=self)
+            return
+        self._pintar()
+        if self.on_change:
+            self.on_change()
+        messagebox.showinfo("Enviado", "Voucher enviado al proveedor.", parent=self)
+
+    def _enviar_todos(self):
+        pendientes = [(di, cat, si) for di, cat, si, tipo, dest, s in self._servicios()
+                      if not s.get("enviado") and s.get("correo")]
+        sin_correo = [s for di, cat, si, tipo, dest, s in self._servicios()
+                      if not s.get("enviado") and not s.get("correo")]
+        if not pendientes:
+            messagebox.showinfo("Enviar todos", "No hay servicios pendientes con correo para enviar.",
+                                parent=self)
+            return
+        if not messagebox.askyesno("Enviar todos",
+                                   f"Enviar {len(pendientes)} voucher(s) a los proveedores ahora?",
+                                   parent=self):
+            return
+        ok = 0; errores = []
+        for di, cat, si in pendientes:
+            try:
+                enviar_voucher_prov(self.cfg, self.res, di, cat, si); ok += 1
+            except Exception as e:
+                errores.append(str(e))
+        self._pintar()
+        if self.on_change:
+            self.on_change()
+        msg = f"Enviados: {ok}."
+        if sin_correo:
+            msg += f"\nSin correo (no enviados): {len(sin_correo)}."
+        if errores:
+            msg += "\nErrores: " + "; ".join(errores[:3])
+        messagebox.showinfo("Envio de vouchers", msg, parent=self)
+
+    def _resumen(self):
+        try:
+            total, enviados, por_estado = resumen_seguimiento(self.res)
+        except Exception:
+            return
+        self.lbl_seg.configure(
+            text=(f"{enviados}/{total} con voucher enviado   ·   "
+                  f"✓ {por_estado.get('Reservado con pago', 0)} con pago   ·   "
+                  f"◐ {por_estado.get('Reservado sin pago', 0)} sin pago   ·   "
+                  f"○ {por_estado.get('Pendiente', 0)} pendiente"))
 
 
 class ModuloReservas(ctk.CTkToplevel):

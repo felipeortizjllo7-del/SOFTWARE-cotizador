@@ -1,5 +1,5 @@
 {
-  "version": "5.0",
+  "version": "5.1",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 5.0 - Historial de cotizaciones: el boton 'Editar' vuelve a estar siempre visible junto a 'Reserva' (si la cotizacion no tiene datos para editar, avisa)."
+  "notas": "Version 5.1 - Reservas: nuevo Panel de vouchers a proveedores. Desde cada reserva, un boton abre un tablero con TODOS los servicios (hotel, transporte, guia, actividad) en un solo lugar: proveedor, correo, estado (Pendiente/Reservado sin pago/con pago), evidencia de envio y botones Generar/Enviar por servicio, ademas de 'Enviar TODOS los pendientes'."
 }
