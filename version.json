@@ -1,5 +1,5 @@
 {
-  "version": "3.3",
+  "version": "3.4",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 3.3 - Las cotizaciones hechas en el HTML ahora llegan al .exe con su estado completo, asi se les puede EDITAR y GENERAR PDF (botones 'Editar cotizacion' y 'Generar PDF'). Privacidad: el HTML solo envia (nunca lee), y la lectura de la hoja requiere una clave que solo tiene el .exe, para que los clientes no vean lo que cotizan los demas."
+  "notas": "Version 3.4 - Privacidad activa: la lectura de la hoja de cotizaciones requiere clave (solo el .exe la tiene); el HTML solo envia. Actualizada la URL del webhook. Las cotizaciones nuevas del HTML llegan con estado completo para editar/generar PDF en el .exe."
 }

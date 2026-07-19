@@ -59,12 +59,12 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "3.3"
+VERSION = "3.4"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
 # cotizaciones; el .exe las importa aqui.
-WEBHOOK_URL = "https://script.google.com/macros/s/AKfycby0tbuYavMW7dl5cah7qfIsJVM3hOmt6Sh6h4M2ZQD4l7ncIGxyCdHK2w3ogny0o3oWVQ/exec"
+WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzzl9r500lei3AdM2LnIgtw6_n9wmvx1mDlnNPL-xccCX6Bsovb4PbLJBEX9bElYJIpBg/exec"
 # Clave para LEER las cotizaciones (solo el .exe la tiene). El HTML NUNCA lee, solo
 # envia; asi los clientes no pueden ver lo que cotizan los demas.
 WEBHOOK_KEY = "inb_9f3Kx72Qp_seg2026"
