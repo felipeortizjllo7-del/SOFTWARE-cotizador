@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "3.4"
+VERSION = "3.5"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1885,9 +1885,9 @@ class SelectorFecha(ctk.CTkFrame):
 # ============================================================================
 # Aplicacion
 # ============================================================================
-class App(ctk.CTk):
-    def __init__(self):
-        super().__init__()
+class App(ctk.CTkToplevel):
+    def __init__(self, master=None):
+        super().__init__(master)
         ctk.set_appearance_mode("light")
         # Escala mas compacta: letra y controles ~15% mas pequenos -> se ven mas
         # opciones de hotel/terrestres y todo cabe mejor en pantalla.
@@ -1963,6 +1963,9 @@ class App(ctk.CTk):
         ctk.CTkLabel(tit, text=f"INNOBA Colombia DMC  ·  v{VERSION}  ·  Itinerario hasta 5 destinos",
                      text_color=MUTED, font=("Segoe UI", 11), height=15).pack(anchor="w")
         hbtns = ctk.CTkFrame(head, fg_color="transparent"); hbtns.grid(row=0, column=2, padx=20)
+        ctk.CTkButton(hbtns, text="⌂ Modulos", width=100, height=36, corner_radius=10,
+                      fg_color=NAVY, hover_color=NAVY2, font=("Segoe UI", 12, "bold"),
+                      command=self._volver_inicio).pack(side="left", padx=(0, 8))
         ctk.CTkButton(hbtns, text="Cotizaciones", width=120, height=36, corner_radius=10,
                       fg_color=GREEN, hover_color=GREEN_H, font=("Segoe UI", 12, "bold"),
                       command=self._abrir_cotizaciones).pack(side="left", padx=(0, 8))
@@ -2860,6 +2863,26 @@ class App(ctk.CTk):
     def _abrir_cotizaciones(self):
         VentanaCotizaciones(self)
 
+    def _volver_inicio(self):
+        """Cierra el modulo de Cotizacion y vuelve al selector de modulos."""
+        lanz = self.master
+        try:
+            if lanz is not None and hasattr(lanz, "cotizador"):
+                lanz.cotizador = None
+        except Exception:
+            pass
+        try:
+            self.destroy()
+        except Exception:
+            pass
+        try:
+            if lanz is not None:
+                lanz.deiconify()
+                lanz.lift()
+                lanz.focus_force()
+        except Exception:
+            pass
+
     def _chequear_seguimientos(self):
         """Al abrir: importa las del HTML (clientes) y alerta de seguimientos vencidos."""
         def worker():
@@ -3241,6 +3264,157 @@ class VentanaEmpresa(ctk.CTkToplevel):
         self.destroy()
 
 
+class Launcher(ctk.CTk):
+    """Pantalla de inicio del .exe: permite elegir uno de los tres modulos
+    (Cotizacion, Reservas, Comercial). Solo Cotizacion esta desarrollado; los
+    otros dos quedan como modulos futuros."""
+
+    MODULOS = [
+        ("Cotizacion", "📄",
+         "Crear, guardar y dar seguimiento a las cotizaciones. Genera el PDF y las\n"
+         "importa desde la version HTML de los clientes.", GREEN, GREEN_H, True),
+        ("Reservas", "🧳",
+         "Convertir una cotizacion en reserva confirmada: hoteles, servicios,\n"
+         "vouchers y control de pagos. (En desarrollo)", NAVY, NAVY2, False),
+        ("Comercial", "📊",
+         "Gestion comercial: clientes, embudo de ventas, tareas y metricas del\n"
+         "equipo de asesores. (En desarrollo)", CYAN, BLUE_H, False),
+    ]
+
+    def __init__(self):
+        super().__init__()
+        ctk.set_appearance_mode("light")
+        try:
+            ctk.set_widget_scaling(0.9)
+        except Exception:
+            pass
+        self.title("INNOBA Colombia DMC  ·  Sistema de Gestion")
+        self.configure(fg_color=BG)
+        self.geometry("980x620")
+        self.minsize(860, 560)
+        try:
+            self.iconbitmap(recurso("app.ico"))
+        except Exception:
+            pass
+        self.cotizador = None
+        self._construir()
+        self._centrar()
+
+    def _centrar(self):
+        try:
+            self.update_idletasks()
+            w, h = 980, 620
+            x = (self.winfo_screenwidth() - w) // 2
+            y = (self.winfo_screenheight() - h) // 2
+            self.geometry(f"{w}x{h}+{max(0,x)}+{max(0,y)}")
+        except Exception:
+            pass
+
+    def _construir(self):
+        # Encabezado
+        head = ctk.CTkFrame(self, fg_color=CARD, corner_radius=0, height=76)
+        head.pack(fill="x"); head.pack_propagate(False)
+        izq = ctk.CTkFrame(head, fg_color="transparent"); izq.pack(side="left", padx=24)
+        try:
+            img = Image.open(recurso("logo_innoba.png")); w, h = img.size; hh = 44
+            self.logo_img = ctk.CTkImage(light_image=img, size=(int(w * hh / h), hh))
+            ctk.CTkLabel(izq, image=self.logo_img, text="").pack(side="left", pady=8)
+        except Exception:
+            ctk.CTkLabel(izq, text="INNOBA", font=("Segoe UI", 24, "bold"),
+                         text_color=NAVY).pack(side="left", pady=8)
+        ctk.CTkLabel(head, text=f"v{VERSION}", text_color=MUTED,
+                     font=("Segoe UI", 12)).pack(side="right", padx=24)
+
+        # Titulo central
+        ctk.CTkLabel(self, text="Bienvenido", text_color=NAVY,
+                     font=("Segoe UI", 26, "bold")).pack(pady=(28, 2))
+        ctk.CTkLabel(self, text="Elige el modulo con el que quieres trabajar",
+                     text_color=MUTED, font=("Segoe UI", 14)).pack(pady=(0, 24))
+
+        # Tarjetas de modulo
+        cont = ctk.CTkFrame(self, fg_color="transparent")
+        cont.pack(fill="both", expand=True, padx=30, pady=(0, 20))
+        for i in range(3):
+            cont.grid_columnconfigure(i, weight=1, uniform="mod")
+        cont.grid_rowconfigure(0, weight=1)
+        for i, (nombre, icono, desc, col, colh, activo) in enumerate(self.MODULOS):
+            self._tarjeta(cont, i, nombre, icono, desc, col, colh, activo)
+
+        # Pie
+        ctk.CTkLabel(self, text="INNOBA Colombia DMC   ·   Sistema interno",
+                     text_color=MUTED, font=("Segoe UI", 11)).pack(pady=(0, 12))
+
+    def _tarjeta(self, parent, col, nombre, icono, desc, color, colorh, activo):
+        card = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=16,
+                            border_width=1, border_color=LINE)
+        card.grid(row=0, column=col, padx=12, sticky="nsew")
+        card.grid_rowconfigure(3, weight=1)
+        card.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(card, text=icono, font=("Segoe UI Emoji", 46)).grid(
+            row=0, column=0, pady=(26, 4))
+        ctk.CTkLabel(card, text=nombre, text_color=NAVY,
+                     font=("Segoe UI", 19, "bold")).grid(row=1, column=0, pady=(0, 2))
+        if not activo:
+            ctk.CTkLabel(card, text="EN DESARROLLO", text_color="#B7791F",
+                         fg_color="#FFF3C4", corner_radius=8,
+                         font=("Segoe UI", 10, "bold")).grid(row=2, column=0, pady=(0, 6),
+                                                             ipadx=8, ipady=2)
+        else:
+            ctk.CTkLabel(card, text="DISPONIBLE", text_color=GREEN_H,
+                         fg_color="#E3F5EA", corner_radius=8,
+                         font=("Segoe UI", 10, "bold")).grid(row=2, column=0, pady=(0, 6),
+                                                            ipadx=8, ipady=2)
+        ctk.CTkLabel(card, text=desc, text_color=MUTED, justify="center",
+                     font=("Segoe UI", 12)).grid(row=3, column=0, padx=18, sticky="n")
+
+        txt = "Abrir modulo" if activo else "Proximamente"
+        cmd = (lambda n=nombre: self._abrir(n))
+        btn = ctk.CTkButton(card, text=txt, height=42, corner_radius=10,
+                            fg_color=color, hover_color=colorh,
+                            font=("Segoe UI", 13, "bold"), command=cmd)
+        btn.grid(row=4, column=0, padx=18, pady=(8, 22), sticky="ew")
+        if not activo:
+            btn.configure(fg_color="#CBD5E1", hover_color="#B8C4D6", text_color="#4B5563")
+
+    def _abrir(self, nombre):
+        if nombre == "Cotizacion":
+            self._abrir_cotizacion()
+        else:
+            messagebox.showinfo(
+                nombre,
+                f"El modulo '{nombre}' esta en desarrollo.\n\n"
+                "Pronto podras usarlo desde aqui. Por ahora ya puedes trabajar "
+                "con el modulo de Cotizacion.")
+
+    def _abrir_cotizacion(self):
+        try:
+            if self.cotizador is not None and self.cotizador.winfo_exists():
+                self.cotizador.deiconify(); self.cotizador.lift(); return
+        except Exception:
+            self.cotizador = None
+        self.withdraw()
+        try:
+            self.cotizador = App(self)
+            self.cotizador.protocol("WM_DELETE_WINDOW", self._cerrar_cotizador)
+        except Exception as e:
+            self.cotizador = None
+            self.deiconify()
+            messagebox.showerror("Error", f"No se pudo abrir Cotizacion:\n{e}")
+
+    def _cerrar_cotizador(self):
+        try:
+            if self.cotizador is not None:
+                self.cotizador.destroy()
+        except Exception:
+            pass
+        self.cotizador = None
+        try:
+            self.deiconify(); self.lift(); self.focus_force()
+        except Exception:
+            pass
+
+
 if __name__ == "__main__":
-    app = App()
+    app = Launcher()
     app.mainloop()

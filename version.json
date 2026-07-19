@@ -1,5 +1,5 @@
 {
-  "version": "3.4",
+  "version": "3.5",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 3.4 - Privacidad activa: la lectura de la hoja de cotizaciones requiere clave (solo el .exe la tiene); el HTML solo envia. Actualizada la URL del webhook. Las cotizaciones nuevas del HTML llegan con estado completo para editar/generar PDF en el .exe."
+  "notas": "Version 3.5 - Nuevo selector de modulos al abrir el sistema (.exe): elige entre Cotizacion (disponible), Reservas y Comercial (en desarrollo). Boton 'Modulos' para volver al inicio."
 }
