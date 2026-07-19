@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "3.5"
+VERSION = "3.6"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -280,7 +280,8 @@ def respaldar_datos(cfg):
         os.makedirs(carpeta, exist_ok=True)
         cambio_version = cfg.get("ultima_version_vista", "") != VERSION
         hoy = datetime.date.today().strftime("%Y%m%d")
-        for nombre in ("cotizaciones.json", "clientes.json", "config_empresa.json"):
+        for nombre in ("cotizaciones.json", "clientes.json", "config_empresa.json",
+                       "reservas.json"):
             src = os.path.join(datos_dir(), nombre)
             if not os.path.exists(src):
                 continue
@@ -1107,6 +1108,235 @@ def generar_pdf(cfg, datos, bloques, total, ruta_salida):
             pdf.cell(0, 5, T(firma_cargo), ln=1)
 
     pdf.output(ruta_salida)
+
+
+# ============================================================================
+# MODULO RESERVAS: datos, consecutivo, rotacion de asesores y vouchers PDF
+# ============================================================================
+RESERVAS_PATH = os.path.join(datos_dir(), "reservas.json")
+RES_SEQ_INICIAL = 2951   # el proximo consecutivo asignado sera 2952
+
+ESTADOS_RES = ["Confirmada", "Confirmada con pago", "Aplazada", "Anulada"]
+ESTADO_RES_COLOR = {"Confirmada": BLUE, "Confirmada con pago": GREEN,
+                    "Aplazada": "#D9A400", "Anulada": RED}
+ESTADO_RES_FILA = {"Confirmada": "#EAF2FD", "Confirmada con pago": "#E3F5EA",
+                   "Aplazada": "#FFF3C4", "Anulada": "#FBE6E6"}
+
+
+def cargar_reservas():
+    if os.path.exists(RESERVAS_PATH):
+        try:
+            with open(RESERVAS_PATH, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            if isinstance(d, dict) and "items" in d:
+                d.setdefault("seq", RES_SEQ_INICIAL)
+                d.setdefault("rot", 0)
+                return d
+        except Exception:
+            pass
+    return {"seq": RES_SEQ_INICIAL, "rot": 0, "items": []}
+
+
+def guardar_reservas(data):
+    with open(RESERVAS_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def peek_numero_reserva():
+    return str(cargar_reservas().get("seq", RES_SEQ_INICIAL) + 1)
+
+
+def asesores_reservas(cfg):
+    """Lista de asesores de reservas configurados (hasta 3, con nombre)."""
+    lst = cfg.get("asesores_reservas") or []
+    return [a for a in lst if isinstance(a, dict) and (a.get("nombre") or "").strip()]
+
+
+def registrar_reserva(rec, cfg):
+    """Asigna consecutivo + asesor por rotacion equitativa y guarda la reserva.
+       Devuelve (numero, asesor_asignado)."""
+    data = cargar_reservas()
+    data["seq"] = int(data.get("seq", RES_SEQ_INICIAL)) + 1
+    numero = str(data["seq"])
+    ases = asesores_reservas(cfg)
+    asesor = {}
+    if ases:
+        idx = int(data.get("rot", 0)) % len(ases)
+        asesor = ases[idx]
+        data["rot"] = idx + 1
+    rec = dict(rec)
+    rec["numero"] = numero
+    if not rec.get("asesor"):
+        rec["asesor"] = asesor
+    data["items"].append(rec)
+    guardar_reservas(data)
+    return numero, rec
+
+
+def actualizar_reserva(numero, cambios):
+    """Aplica cambios a la reserva con ese numero y guarda."""
+    data = cargar_reservas()
+    for it in data["items"]:
+        if it.get("numero") == numero:
+            it.update(cambios)
+            break
+    guardar_reservas(data)
+
+
+def _pax_desde_snapshot(snap):
+    ad = int(snap.get("adultos", 0) or 0)
+    ninos = len(snap.get("ages", []) or [])
+    partes = []
+    if ad:
+        partes.append(f"{ad} adulto" + ("s" if ad != 1 else ""))
+    if ninos:
+        partes.append(f"{ninos} nino" + ("s" if ninos != 1 else ""))
+    return ", ".join(partes) or "-"
+
+
+def reserva_desde_cotizacion(cot):
+    """Construye el borrador de reserva a partir de una cotizacion del historial.
+       Extrae hoteles y servicios (traslados/tours) como renglones asignables a
+       proveedor."""
+    snap = cot.get("snapshot") or {}
+    renglones = []
+    hoteles = []
+    for tr in snap.get("tramos", []):
+        dest = tr.get("destino", "")
+        for h in tr.get("hoteles", []):
+            renglones.append({"tipo": "Hotel", "destino": dest, "servicio": h,
+                              "proveedor": h, "correo": "", "enviado": False,
+                              "fecha_envio": ""})
+            hoteles.append({"destino": dest, "nombre": h})
+        for t in tr.get("trans", []):
+            renglones.append({"tipo": "Traslado", "destino": dest, "servicio": t,
+                              "proveedor": "", "correo": "", "enviado": False,
+                              "fecha_envio": ""})
+        for a in tr.get("act", []):
+            renglones.append({"tipo": "Tour", "destino": dest, "servicio": a,
+                              "proveedor": "", "correo": "", "enviado": False,
+                              "fecha_envio": ""})
+    return {
+        "cot_origen": cot.get("numero", ""),
+        "cliente": cot.get("cliente", ""),
+        "email": cot.get("email", "") or snap.get("email", ""),
+        "destinos": cot.get("destinos", []),
+        "fechas_viaje": cot.get("fechas_viaje", ""),
+        "pax_txt": _pax_desde_snapshot(snap),
+        "hab": snap.get("hab", ""),
+        "estado": "Confirmada",
+        "monto": float(cot.get("total", 0) or 0),
+        "moneda": "USD",
+        "hoteles": hoteles,
+        "renglones": renglones,
+        "notas": "",
+        "snapshot": snap,
+        "voucher_cliente": "",
+        "fecha_creacion": datetime.date.today().isoformat(),
+    }
+
+
+def _monto_fmt(v, moneda="USD"):
+    try:
+        return f"{moneda} {float(v):,.2f}"
+    except Exception:
+        return f"{moneda} {v}"
+
+
+def _voucher_encabezado(pdf, titulo):
+    T = pdf._t
+    pdf.set_fill_color(*PDF_PRIM); pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Helvetica", "B", 13)
+    pdf.cell(0, 9, T("  " + titulo), ln=1, fill=True)
+    pdf.ln(3)
+    pdf.set_text_color(*PDF_TXT)
+
+
+def _voucher_fila(pdf, etq, val):
+    if not val:
+        return
+    T = pdf._t
+    y = pdf.get_y()
+    pdf.set_xy(15, y)
+    pdf.set_font("Helvetica", "B", 10); pdf.set_text_color(*PDF_PRIM)
+    pdf.cell(46, 7, T(etq + ":"))
+    pdf.set_font("Helvetica", "", 10); pdf.set_text_color(*PDF_TXT)
+    pdf.set_xy(61, y)
+    pdf.multi_cell(134, 7, T(str(val)))
+
+
+def generar_voucher_cliente(cfg, res, ruta):
+    """Voucher de confirmacion para el cliente: reserva, servicios y contacto."""
+    pdf = CotizacionPDF(cfg); pdf.add_page(); T = pdf._t
+    _voucher_encabezado(pdf, "VOUCHER DE CONFIRMACION  -  RESERVA N. " + res.get("numero", ""))
+    ase = res.get("asesor", {}) or {}
+    for etq, val in [("Reserva No.", res.get("numero", "")),
+                     ("Estado", res.get("estado", "")),
+                     ("Cliente / Agencia", res.get("cliente", "")),
+                     ("Destinos", ", ".join(res.get("destinos", []))),
+                     ("Fechas de viaje", res.get("fechas_viaje", "")),
+                     ("Pasajeros", res.get("pax_txt", "")),
+                     ("Alojamiento", res.get("hab", "")),
+                     ("Asesor", ase.get("nombre", "")),
+                     ("Contacto asesor",
+                      "  ".join(x for x in [ase.get("tel", ""), ase.get("email", "")] if x))]:
+        _voucher_fila(pdf, etq, val)
+    pdf.ln(2)
+    pdf.set_font("Helvetica", "B", 11); pdf.set_text_color(*PDF_BLUE)
+    pdf.cell(0, 7, T("SERVICIOS CONFIRMADOS"), ln=1)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_fill_color(*PDF_PRIM); pdf.set_text_color(255, 255, 255)
+    pdf.cell(32, 7, T("  Tipo"), fill=True)
+    pdf.cell(48, 7, T("Destino"), fill=True)
+    pdf.cell(100, 7, T("Servicio"), fill=True, ln=1)
+    pdf.set_text_color(*PDF_TXT); fill = False
+    for r in res.get("renglones", []):
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_fill_color(*(PDF_CLARO if fill else (255, 255, 255)))
+        pdf.cell(32, 6, T("  " + r.get("tipo", "")), fill=True)
+        pdf.cell(48, 6, T(r.get("destino", "")), fill=True)
+        pdf.cell(100, 6, T(r.get("servicio", "")), fill=True, ln=1)
+        fill = not fill
+    pdf.ln(4)
+    pdf.set_font("Helvetica", "I", 9); pdf.set_text_color(110, 110, 110)
+    pdf.multi_cell(0, 5, T("Este documento confirma la reserva de los servicios indicados. "
+                           "Para cualquier cambio, contacte a su asesor. " + cfg.get("empresa", "")))
+    pdf.output(ruta)
+
+
+def generar_voucher_proveedor(cfg, res, renglon, ruta):
+    """Voucher/solicitud de reserva dirigido a un proveedor especifico."""
+    pdf = CotizacionPDF(cfg); pdf.add_page(); T = pdf._t
+    _voucher_encabezado(pdf, "VOUCHER A PROVEEDOR  -  RESERVA N. " + res.get("numero", ""))
+    ase = res.get("asesor", {}) or {}
+    filas = [("Reserva No.", res.get("numero", "")),
+             ("Proveedor", renglon.get("proveedor", "")),
+             ("Servicio", renglon.get("servicio", "")),
+             ("Tipo de servicio", renglon.get("tipo", "")),
+             ("Destino", renglon.get("destino", "")),
+             ("Fechas de viaje", res.get("fechas_viaje", "")),
+             ("Pasajeros", res.get("pax_txt", "")),
+             ("Cliente titular", res.get("cliente", ""))]
+    if renglon.get("tipo") == "Hotel":
+        filas.append(("Alojamiento", res.get("hab", "")))
+    for etq, val in filas:
+        _voucher_fila(pdf, etq, val)
+    pdf.ln(3)
+    pdf.set_font("Helvetica", "B", 10); pdf.set_text_color(*PDF_BLUE)
+    pdf.cell(0, 7, T("SOLICITUD DE RESERVA"), ln=1)
+    pdf.set_font("Helvetica", "", 10); pdf.set_text_color(*PDF_TXT)
+    nit = (" (NIT/RUC " + cfg.get("nit", "") + ")") if cfg.get("nit") else ""
+    pdf.multi_cell(0, 6, T("Estimado proveedor: confirmamos la reserva de los servicios arriba "
+                           "descritos para los pasajeros indicados. Favor confirmar disponibilidad "
+                           "y remitir la facturacion a nombre de " + cfg.get("empresa", "") + nit + "."))
+    pdf.ln(4)
+    if ase.get("nombre"):
+        pdf.set_font("Helvetica", "B", 10); pdf.set_text_color(*PDF_TXT)
+        pdf.cell(0, 6, T("Asesor a cargo: " + ase.get("nombre", "")), ln=1)
+        cont = "  ".join(x for x in [ase.get("tel", ""), ase.get("email", "")] if x)
+        if cont:
+            pdf.set_font("Helvetica", "", 9); pdf.cell(0, 5, T(cont), ln=1)
+    pdf.output(ruta)
 
 
 # ============================================================================
@@ -3264,6 +3494,541 @@ class VentanaEmpresa(ctk.CTkToplevel):
         self.destroy()
 
 
+# ============================================================================
+# MODULO RESERVAS - Interfaz
+# ============================================================================
+class DialogoAsesores(ctk.CTkToplevel):
+    """Configura los (hasta 3) asesores de reservas para la asignacion rotativa."""
+    def __init__(self, master, cfg, on_save=None):
+        super().__init__(master)
+        self.cfg = cfg; self.on_save = on_save
+        self.title("Asesores de reservas")
+        self.geometry("540x470"); self.configure(fg_color=BG)
+        self.transient(master); self.grab_set()
+        ctk.CTkLabel(self, text="Asesores de reservas", font=("Segoe UI", 16, "bold"),
+                     text_color=NAVY).pack(pady=(16, 2))
+        ctk.CTkLabel(self, text="Cada nueva reserva se asigna automaticamente al siguiente "
+                     "asesor (rotacion equitativa).", text_color=MUTED,
+                     wraplength=480).pack(pady=(0, 10))
+        self.filas = []
+        ases = (cfg.get("asesores_reservas") or []) + [{}, {}, {}]
+        cont = ctk.CTkFrame(self, fg_color="transparent"); cont.pack(fill="x", padx=20)
+        for i in range(3):
+            a = ases[i] if i < len(ases) else {}
+            f = ctk.CTkFrame(cont, fg_color=CARD, corner_radius=8,
+                             border_width=1, border_color=LINE)
+            f.pack(fill="x", pady=6)
+            ctk.CTkLabel(f, text=f"Asesor {i+1}", text_color=NAVY,
+                         font=("Segoe UI", 12, "bold")).grid(
+                row=0, column=0, columnspan=2, sticky="w", padx=8, pady=(6, 0))
+            vn = tk.StringVar(value=a.get("nombre", ""))
+            vt = tk.StringVar(value=a.get("tel", ""))
+            vm = tk.StringVar(value=a.get("email", ""))
+            ctk.CTkEntry(f, textvariable=vn, placeholder_text="Nombre",
+                         width=250, height=30).grid(row=1, column=0, padx=8, pady=4)
+            ctk.CTkEntry(f, textvariable=vt, placeholder_text="Telefono",
+                         width=200, height=30).grid(row=1, column=1, padx=8, pady=4)
+            ctk.CTkEntry(f, textvariable=vm, placeholder_text="Correo",
+                         height=30).grid(row=2, column=0, columnspan=2, padx=8,
+                                         pady=(0, 8), sticky="we")
+            f.grid_columnconfigure(0, weight=1)
+            self.filas.append((vn, vm, vt))
+        ctk.CTkButton(self, text="Guardar asesores", fg_color=GREEN, hover_color=GREEN_H,
+                      height=38, command=self._guardar).pack(pady=14)
+
+    def _guardar(self):
+        lst = []
+        for vn, vm, vt in self.filas:
+            if vn.get().strip():
+                lst.append({"nombre": vn.get().strip(), "email": vm.get().strip(),
+                            "tel": vt.get().strip()})
+        self.cfg["asesores_reservas"] = lst
+        guardar_config(self.cfg)
+        if self.on_save:
+            self.on_save()
+        messagebox.showinfo("Guardado", f"{len(lst)} asesor(es) guardado(s).")
+        self.destroy()
+
+
+class SelectorCotizacionReserva(ctk.CTkToplevel):
+    """Elegir una cotizacion del historial para convertirla en reserva."""
+    def __init__(self, master, on_pick):
+        super().__init__(master)
+        self.on_pick = on_pick
+        self.title("Elegir cotizacion")
+        self.geometry("760x640"); self.configure(fg_color=BG)
+        self.transient(master); self.grab_set()
+        ctk.CTkLabel(self, text="Selecciona la cotizacion a convertir en reserva",
+                     font=("Segoe UI", 15, "bold"), text_color=NAVY).pack(pady=(14, 6))
+        self.q = tk.StringVar()
+        bar = ctk.CTkFrame(self, fg_color="transparent"); bar.pack(fill="x", padx=16)
+        e = ctk.CTkEntry(bar, textvariable=self.q, height=34,
+                         placeholder_text="Buscar por cliente, destino o numero...")
+        e.pack(side="left", fill="x", expand=True)
+        e.bind("<KeyRelease>", lambda ev: self._pintar())
+        self.lista = ctk.CTkScrollableFrame(self, fg_color=BG)
+        self.lista.pack(fill="both", expand=True, padx=16, pady=12)
+        self._pintar()
+
+    def _pintar(self):
+        for w in self.lista.winfo_children():
+            w.destroy()
+        items = list(reversed(cargar_cotizaciones().get("items", [])))
+        q = self.q.get().lower().strip()
+        if q:
+            items = [it for it in items
+                     if q in json.dumps(it, ensure_ascii=False).lower()]
+        if not items:
+            ctk.CTkLabel(self.lista, text="No hay cotizaciones.",
+                         text_color=MUTED).pack(pady=20)
+            return
+        for it in items:
+            row = ctk.CTkFrame(self.lista, fg_color=CARD, corner_radius=8,
+                               border_width=1, border_color=LINE)
+            row.pack(fill="x", pady=4)
+            info = (f"{it.get('numero','')}   ·   {it.get('cliente','')}\n"
+                    f"{', '.join(it.get('destinos', []))}   ·   "
+                    f"{it.get('fechas_viaje','')}   ·   {usd(it.get('total', 0))}   ·   "
+                    f"{it.get('estado','')}")
+            ctk.CTkLabel(row, text=info, justify="left", text_color=TEXT,
+                         font=("Segoe UI", 11)).pack(side="left", padx=10, pady=8)
+            ctk.CTkButton(row, text="Convertir", width=110, fg_color=GREEN,
+                          hover_color=GREEN_H,
+                          command=lambda x=it: self._elegir(x)).pack(side="right", padx=10)
+
+    def _elegir(self, cot):
+        self.on_pick(cot)
+        self.destroy()
+
+
+class VentanaReservaDetalle(ctk.CTkToplevel):
+    """Editar una reserva: estado, monto, proveedores y emision de vouchers."""
+    def __init__(self, master, res, cfg, on_save=None):
+        super().__init__(master)
+        self.res = res; self.cfg = cfg; self.on_save = on_save
+        self.title("Reserva " + res.get("numero", ""))
+        self.geometry("800x780"); self.configure(fg_color=BG)
+        self.transient(master); self.grab_set()
+        cont = ctk.CTkScrollableFrame(self, fg_color=BG)
+        cont.pack(fill="both", expand=True, padx=16, pady=16)
+
+        ase = res.get("asesor", {}) or {}
+        ctk.CTkLabel(cont, text=f"Reserva N. {res.get('numero','')}",
+                     font=("Segoe UI", 19, "bold"), text_color=NAVY).pack(anchor="w")
+        ctk.CTkLabel(cont, text=f"{res.get('cliente','')}   ·   "
+                     f"{', '.join(res.get('destinos', []))}   ·   {res.get('fechas_viaje','')}",
+                     text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", pady=(0, 2))
+        ctk.CTkLabel(cont, text=f"Pasajeros: {res.get('pax_txt','')}   ·   "
+                     f"Alojamiento: {res.get('hab','')}", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w")
+        aso_txt = ase.get("nombre", "(sin asignar)")
+        if ase.get("email"):
+            aso_txt += "  ·  " + ase["email"]
+        ctk.CTkLabel(cont, text="Asesor asignado: " + aso_txt, text_color=BLUE,
+                     font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(4, 2))
+        if res.get("cot_origen"):
+            ctk.CTkLabel(cont, text="Origen: cotizacion " + res["cot_origen"],
+                         text_color=MUTED, font=("Segoe UI", 10)).pack(anchor="w")
+
+        # Estado + monto
+        fila = ctk.CTkFrame(cont, fg_color="transparent"); fila.pack(fill="x", pady=(10, 4))
+        izq = ctk.CTkFrame(fila, fg_color="transparent"); izq.pack(side="left")
+        ctk.CTkLabel(izq, text="Estado de la reserva", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w")
+        self.v_estado = tk.StringVar(value=res.get("estado", "Confirmada"))
+        ctk.CTkOptionMenu(izq, variable=self.v_estado, values=ESTADOS_RES, width=220,
+                          height=32, fg_color=NAVY, button_color=NAVY2).pack(anchor="w")
+        der = ctk.CTkFrame(fila, fg_color="transparent"); der.pack(side="left", padx=20)
+        ctk.CTkLabel(der, text="Monto negociado (USD)", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w")
+        self.v_monto = tk.StringVar(value=f"{float(res.get('monto', 0) or 0):.2f}")
+        ctk.CTkEntry(der, textvariable=self.v_monto, width=160, height=32).pack(anchor="w")
+
+        ctk.CTkLabel(cont, text="Notas internas", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w", pady=(8, 0))
+        self.v_notas = tk.StringVar(value=res.get("notas", ""))
+        ctk.CTkEntry(cont, textvariable=self.v_notas, height=32).pack(fill="x", pady=(0, 8))
+
+        # Proveedores / renglones
+        hdr = ctk.CTkFrame(cont, fg_color="transparent"); hdr.pack(fill="x", pady=(6, 2))
+        ctk.CTkLabel(hdr, text="PROVEEDORES Y VOUCHERS", text_color=NAVY,
+                     font=("Segoe UI", 13, "bold")).pack(side="left")
+        ctk.CTkButton(hdr, text="+ Agregar servicio", width=140, height=30, fg_color=BLUE,
+                      hover_color=BLUE_H, command=self._agregar_renglon).pack(side="right")
+        self.reng_box = ctk.CTkFrame(cont, fg_color="transparent"); self.reng_box.pack(fill="x")
+        self._pintar_renglones()
+
+        # Voucher cliente + guardar
+        pie = ctk.CTkFrame(cont, fg_color="transparent"); pie.pack(fill="x", pady=(14, 4))
+        ctk.CTkButton(pie, text="Voucher cliente (PDF)", height=40, fg_color=NAVY,
+                      hover_color=NAVY2, command=self._voucher_cliente).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(pie, text="Enviar voucher al cliente", height=40, fg_color=CYAN,
+                      hover_color=BLUE, command=self._enviar_cliente).pack(side="left")
+        ctk.CTkButton(pie, text="Guardar reserva", height=40, fg_color=GREEN,
+                      hover_color=GREEN_H, command=self._guardar).pack(side="right")
+
+    def _pintar_renglones(self):
+        for w in self.reng_box.winfo_children():
+            w.destroy()
+        self.reng_widgets = []
+        rens = self.res.get("renglones", [])
+        if not rens:
+            ctk.CTkLabel(self.reng_box, text="Sin servicios. Usa '+ Agregar servicio' para "
+                         "anadir hoteles/servicios y su proveedor.", text_color=MUTED).pack(
+                pady=8)
+        for i, r in enumerate(rens):
+            self._fila_renglon(i, r)
+
+    def _fila_renglon(self, i, r):
+        card = ctk.CTkFrame(self.reng_box, fg_color=CARD, corner_radius=8,
+                            border_width=1, border_color=LINE)
+        card.pack(fill="x", pady=4)
+        v_tipo = tk.StringVar(value=r.get("tipo", "Servicio"))
+        v_dest = tk.StringVar(value=r.get("destino", ""))
+        v_serv = tk.StringVar(value=r.get("servicio", ""))
+        v_prov = tk.StringVar(value=r.get("proveedor", ""))
+        v_mail = tk.StringVar(value=r.get("correo", ""))
+        top = ctk.CTkFrame(card, fg_color="transparent"); top.pack(fill="x", padx=8, pady=(6, 2))
+        ctk.CTkOptionMenu(top, variable=v_tipo, values=["Hotel", "Traslado", "Tour", "Servicio"],
+                          width=110, height=28, fg_color=NAVY, button_color=NAVY2).pack(side="left")
+        ctk.CTkEntry(top, textvariable=v_dest, placeholder_text="Destino", width=130,
+                     height=28).pack(side="left", padx=6)
+        ctk.CTkEntry(top, textvariable=v_serv, placeholder_text="Servicio / hotel",
+                     height=28).pack(side="left", fill="x", expand=True)
+        mid = ctk.CTkFrame(card, fg_color="transparent"); mid.pack(fill="x", padx=8, pady=2)
+        ctk.CTkLabel(mid, text="Proveedor", text_color=MUTED, width=64).pack(side="left")
+        ctk.CTkEntry(mid, textvariable=v_prov, placeholder_text="Nombre del proveedor",
+                     width=210, height=28).pack(side="left", padx=4)
+        ctk.CTkLabel(mid, text="Correo", text_color=MUTED, width=48).pack(side="left")
+        ctk.CTkEntry(mid, textvariable=v_mail, placeholder_text="correo@proveedor.com",
+                     height=28).pack(side="left", padx=4, fill="x", expand=True)
+        bot = ctk.CTkFrame(card, fg_color="transparent"); bot.pack(fill="x", padx=8, pady=(2, 6))
+        est = ctk.CTkLabel(bot, text=("Voucher enviado " + r.get("fecha_envio", "")
+                                      if r.get("enviado") else "Sin enviar"),
+                           text_color=(GREEN if r.get("enviado") else MUTED),
+                           font=("Segoe UI", 10))
+        est.pack(side="left")
+        ctk.CTkButton(bot, text="Quitar", width=60, height=28, fg_color=RED,
+                      hover_color="#9B2C22",
+                      command=lambda idx=i: self._quitar_renglon(idx)).pack(side="right", padx=3)
+        ctk.CTkButton(bot, text="Enviar al proveedor", width=150, height=28, fg_color=GREEN,
+                      hover_color=GREEN_H,
+                      command=lambda idx=i, l=est: self._enviar_prov(idx, l)).pack(side="right", padx=3)
+        ctk.CTkButton(bot, text="Generar voucher", width=130, height=28, fg_color=BLUE,
+                      hover_color=BLUE_H,
+                      command=lambda idx=i: self._voucher_prov(idx, abrir=True)).pack(side="right", padx=3)
+        self.reng_widgets.append({"tipo": v_tipo, "destino": v_dest, "servicio": v_serv,
+                                  "proveedor": v_prov, "correo": v_mail})
+
+    def _sync(self):
+        rens = self.res.setdefault("renglones", [])
+        for i, w in enumerate(self.reng_widgets):
+            if i < len(rens):
+                rens[i].update({"tipo": w["tipo"].get(), "destino": w["destino"].get().strip(),
+                                "servicio": w["servicio"].get().strip(),
+                                "proveedor": w["proveedor"].get().strip(),
+                                "correo": w["correo"].get().strip()})
+        self.res["estado"] = self.v_estado.get()
+        try:
+            self.res["monto"] = float(str(self.v_monto.get()).replace(",", "").strip() or 0)
+        except Exception:
+            pass
+        self.res["notas"] = self.v_notas.get().strip()
+
+    def _agregar_renglon(self):
+        self._sync()
+        self.res.setdefault("renglones", []).append(
+            {"tipo": "Servicio", "destino": "", "servicio": "", "proveedor": "",
+             "correo": "", "enviado": False, "fecha_envio": ""})
+        self._pintar_renglones()
+
+    def _quitar_renglon(self, i):
+        self._sync()
+        try:
+            del self.res["renglones"][i]
+        except Exception:
+            pass
+        self._pintar_renglones()
+
+    def _carpeta_vouchers(self):
+        ruta = os.path.join(datos_dir(), "vouchers")
+        os.makedirs(ruta, exist_ok=True)
+        return ruta
+
+    def _voucher_prov(self, i, abrir=False):
+        self._sync()
+        rens = self.res.get("renglones", [])
+        if i >= len(rens):
+            return None
+        r = rens[i]
+        if not (r.get("proveedor") or r.get("servicio")):
+            messagebox.showinfo("Datos incompletos",
+                                "Escribe al menos el proveedor o el servicio.")
+            return None
+        fn = os.path.join(self._carpeta_vouchers(),
+                          f"Voucher_prov_{self.res.get('numero','')}_{i+1}.pdf")
+        try:
+            generar_voucher_proveedor(self.cfg, self.res, r, fn)
+        except Exception as e:
+            messagebox.showerror("Error al generar el voucher", str(e))
+            return None
+        if abrir:
+            try:
+                os.startfile(fn)
+            except Exception:
+                pass
+        return fn
+
+    def _enviar_prov(self, i, lbl):
+        fn = self._voucher_prov(i, abrir=False)
+        if not fn:
+            return
+        r = self.res["renglones"][i]
+        if not r.get("correo"):
+            messagebox.showinfo("Correo del proveedor",
+                                "Escribe el correo del proveedor para enviarle el voucher.")
+            return
+        try:
+            asunto = (f"Reserva {self.res.get('numero','')} - {r.get('servicio','')} - "
+                      f"{self.cfg.get('empresa','')}")
+            cuerpo = (f"Estimado {r.get('proveedor','')}:\n\n"
+                      f"Adjuntamos el voucher de la reserva {self.res.get('numero','')} "
+                      f"para {self.res.get('cliente','')}.\n"
+                      f"Fechas de viaje: {self.res.get('fechas_viaje','')}\n"
+                      f"Pasajeros: {self.res.get('pax_txt','')}\n\n"
+                      f"Favor confirmar disponibilidad y remitir la facturacion a nombre de "
+                      f"{self.cfg.get('empresa','')}.\n\nCordialmente,\n{self.cfg.get('empresa','')}")
+            enviar_correo(self.cfg, r["correo"], asunto, cuerpo, fn)
+        except Exception as e:
+            messagebox.showerror("No se pudo enviar", str(e))
+            return
+        r["enviado"] = True
+        r["fecha_envio"] = datetime.date.today().strftime("%d/%m/%Y")
+        lbl.configure(text="Voucher enviado " + r["fecha_envio"], text_color=GREEN)
+        actualizar_reserva(self.res.get("numero", ""), {"renglones": self.res["renglones"]})
+        messagebox.showinfo("Enviado", f"Voucher enviado a {r['correo']}.")
+
+    def _voucher_cliente(self, abrir=True):
+        self._sync()
+        fn = os.path.join(self._carpeta_vouchers(),
+                          f"Voucher_cliente_{self.res.get('numero','')}.pdf")
+        try:
+            generar_voucher_cliente(self.cfg, self.res, fn)
+        except Exception as e:
+            messagebox.showerror("Error al generar el voucher", str(e))
+            return None
+        self.res["voucher_cliente"] = fn
+        actualizar_reserva(self.res.get("numero", ""), {"voucher_cliente": fn})
+        if abrir:
+            try:
+                os.startfile(fn)
+            except Exception:
+                pass
+        return fn
+
+    def _enviar_cliente(self):
+        fn = self._voucher_cliente(abrir=False)
+        if not fn:
+            return
+        dest = self.res.get("email", "")
+        if not dest:
+            messagebox.showinfo("Correo del cliente",
+                                "La reserva no tiene correo del cliente.")
+            return
+        try:
+            asunto = (f"Confirmacion de reserva {self.res.get('numero','')} - "
+                      f"{self.cfg.get('empresa','')}")
+            cuerpo = (f"Estimado(a) {self.res.get('cliente','')}:\n\n"
+                      f"Adjuntamos el voucher de confirmacion de su reserva "
+                      f"{self.res.get('numero','')}.\n\n"
+                      f"Feliz viaje.\n{self.cfg.get('empresa','')}")
+            enviar_correo(self.cfg, dest, asunto, cuerpo, fn)
+        except Exception as e:
+            messagebox.showerror("No se pudo enviar", str(e))
+            return
+        messagebox.showinfo("Enviado", f"Voucher de cliente enviado a {dest}.")
+
+    def _guardar(self):
+        self._sync()
+        actualizar_reserva(self.res.get("numero", ""), {
+            "estado": self.res["estado"], "monto": self.res.get("monto", 0),
+            "notas": self.res.get("notas", ""), "renglones": self.res.get("renglones", [])})
+        if self.on_save:
+            self.on_save()
+        messagebox.showinfo("Guardado", "Reserva actualizada.")
+        self.destroy()
+
+
+class ModuloReservas(ctk.CTkToplevel):
+    """Ventana principal del modulo de Reservas (historial + acciones)."""
+    def __init__(self, master=None):
+        super().__init__(master)
+        ctk.set_appearance_mode("light")
+        try:
+            ctk.set_widget_scaling(0.85)
+        except Exception:
+            pass
+        self.cfg = cargar_config()
+        try:
+            self.iconbitmap(recurso("app.ico"))
+        except Exception:
+            pass
+        self.title(f"Reservas - INNOBA Colombia DMC   v{VERSION}")
+        self.configure(fg_color=BG)
+        self.geometry("1180x720")
+        self._build()
+        self.after(60, lambda: self._max())
+
+    def _max(self):
+        try:
+            self.state("zoomed")
+        except Exception:
+            pass
+
+    def _volver_inicio(self):
+        lanz = self.master
+        try:
+            if lanz is not None and hasattr(lanz, "reservas"):
+                lanz.reservas = None
+        except Exception:
+            pass
+        try:
+            self.destroy()
+        except Exception:
+            pass
+        try:
+            if lanz is not None:
+                lanz.deiconify(); lanz.lift(); lanz.focus_force()
+        except Exception:
+            pass
+
+    def _build(self):
+        head = ctk.CTkFrame(self, fg_color=CARD, corner_radius=0, height=60)
+        head.pack(fill="x"); head.pack_propagate(False)
+        head.grid_columnconfigure(1, weight=1)
+        try:
+            img = Image.open(recurso("logo_innoba.png")); w, h = img.size; hh = 38
+            self.logo_img = ctk.CTkImage(light_image=img, size=(int(w * hh / h), hh))
+            ctk.CTkLabel(head, image=self.logo_img, text="").grid(row=0, column=0, padx=(18, 12), pady=8)
+        except Exception:
+            ctk.CTkLabel(head, text="INNOBA", font=("Segoe UI", 20, "bold"),
+                         text_color=NAVY).grid(row=0, column=0, padx=18)
+        tit = ctk.CTkFrame(head, fg_color="transparent"); tit.grid(row=0, column=1, sticky="w")
+        ctk.CTkLabel(tit, text="Modulo de Reservas", text_color=NAVY,
+                     font=("Segoe UI", 17, "bold"), height=20).pack(anchor="w")
+        ctk.CTkLabel(tit, text=f"INNOBA Colombia DMC  ·  v{VERSION}", text_color=MUTED,
+                     font=("Segoe UI", 11), height=15).pack(anchor="w")
+        hb = ctk.CTkFrame(head, fg_color="transparent"); hb.grid(row=0, column=2, padx=18)
+        ctk.CTkButton(hb, text="⌂ Modulos", width=100, height=36, corner_radius=10,
+                      fg_color=NAVY, hover_color=NAVY2, font=("Segoe UI", 12, "bold"),
+                      command=self._volver_inicio).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(hb, text="+ Nueva desde cotizacion", width=190, height=36, corner_radius=10,
+                      fg_color=GREEN, hover_color=GREEN_H, font=("Segoe UI", 12, "bold"),
+                      command=self._nueva_desde_cot).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(hb, text="Asesores", width=100, height=36, corner_radius=10,
+                      fg_color=CYAN, hover_color=BLUE, font=("Segoe UI", 12, "bold"),
+                      command=self._config_asesores).pack(side="left")
+
+        bar = ctk.CTkFrame(self, fg_color="transparent"); bar.pack(fill="x", padx=18, pady=(12, 4))
+        self.q = tk.StringVar()
+        e = ctk.CTkEntry(bar, textvariable=self.q, height=36, corner_radius=10,
+                         placeholder_text="Buscar reserva por numero, cliente, asesor, estado...")
+        e.pack(side="left", fill="x", expand=True)
+        e.bind("<KeyRelease>", lambda ev: self._pintar())
+        self.lbl_tot = ctk.CTkLabel(bar, text="", text_color=MUTED, font=("Segoe UI", 11))
+        self.lbl_tot.pack(side="right", padx=10)
+
+        self.lista = ctk.CTkScrollableFrame(self, fg_color=BG)
+        self.lista.pack(fill="both", expand=True, padx=18, pady=(4, 14))
+        self._pintar()
+
+    def _pintar(self):
+        for w in self.lista.winfo_children():
+            w.destroy()
+        items = list(reversed(cargar_reservas().get("items", [])))
+        q = self.q.get().lower().strip()
+        if q:
+            items = [it for it in items if q in json.dumps(it, ensure_ascii=False).lower()]
+        # totales negociados por moneda (excluye anuladas)
+        tot = sum(float(it.get("monto", 0) or 0) for it in items
+                  if it.get("estado") != "Anulada")
+        self.lbl_tot.configure(text=f"{len(items)} reserva(s)  ·  Negociado: {usd(tot)}")
+        if not items:
+            ctk.CTkLabel(self.lista, text="Aun no hay reservas. Crea una con "
+                         "'+ Nueva desde cotizacion'.", text_color=MUTED).pack(pady=24)
+            return
+        for it in items:
+            self._fila(it)
+
+    def _fila(self, it):
+        estado = it.get("estado", "Confirmada")
+        ase = it.get("asesor", {}) or {}
+        fila = ctk.CTkFrame(self.lista, fg_color=ESTADO_RES_FILA.get(estado, CARD2),
+                            corner_radius=10)
+        fila.pack(fill="x", pady=4, padx=2)
+        fila.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(fila, text="N. " + it.get("numero", ""), text_color=NAVY,
+                     font=("Segoe UI", 16, "bold"), width=90).grid(
+            row=0, column=0, rowspan=2, padx=(12, 6), pady=8)
+        info = ctk.CTkFrame(fila, fg_color="transparent"); info.grid(row=0, column=1, rowspan=2, sticky="w")
+        ctk.CTkLabel(info, text=it.get("cliente", ""), text_color=TEXT,
+                     font=("Segoe UI", 13, "bold")).pack(anchor="w")
+        ctk.CTkLabel(info, text=f"{', '.join(it.get('destinos', []))}  ·  "
+                     f"{it.get('fechas_viaje','')}", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w")
+        ctk.CTkLabel(info, text="Asesor: " + (ase.get("nombre", "") or "(sin asignar)"),
+                     text_color=BLUE, font=("Segoe UI", 11)).pack(anchor="w")
+        ctk.CTkLabel(fila, text=usd(it.get("monto", 0)), text_color=NAVY,
+                     font=("Segoe UI", 13, "bold")).grid(row=0, column=2, rowspan=2, padx=10)
+        badge = ctk.CTkLabel(fila, text=estado, fg_color=ESTADO_RES_COLOR.get(estado, MUTED),
+                             text_color="#FFFFFF", corner_radius=6,
+                             font=("Segoe UI", 11, "bold"))
+        badge.grid(row=0, column=3, rowspan=2, padx=8, ipadx=8, ipady=3)
+        btns = ctk.CTkFrame(fila, fg_color="transparent"); btns.grid(row=0, column=4, rowspan=2, padx=10)
+        ctk.CTkButton(btns, text="Abrir", width=90, height=32, fg_color=NAVY,
+                      hover_color=NAVY2, command=lambda x=it: self._abrir(x)).pack(pady=2)
+        ctk.CTkButton(btns, text="Voucher cliente", width=120, height=30, fg_color=CYAN,
+                      hover_color=BLUE, command=lambda x=it: self._voucher_cli(x)).pack(pady=2)
+
+    def _abrir(self, it):
+        VentanaReservaDetalle(self, it, self.cfg, on_save=self._pintar)
+
+    def _voucher_cli(self, it):
+        fn = os.path.join(datos_dir(), "vouchers")
+        os.makedirs(fn, exist_ok=True)
+        ruta = os.path.join(fn, f"Voucher_cliente_{it.get('numero','')}.pdf")
+        try:
+            generar_voucher_cliente(self.cfg, it, ruta)
+            os.startfile(ruta)
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
+    def _config_asesores(self):
+        DialogoAsesores(self, self.cfg, on_save=self._recargar_cfg)
+
+    def _recargar_cfg(self):
+        self.cfg = cargar_config()
+
+    def _nueva_desde_cot(self):
+        if not asesores_reservas(self.cfg):
+            messagebox.showinfo("Configura los asesores",
+                                "Primero configura los asesores de reservas para poder "
+                                "asignarlas automaticamente.")
+            DialogoAsesores(self, self.cfg, on_save=self._recargar_cfg)
+            return
+        SelectorCotizacionReserva(self, self._crear_desde)
+
+    def _crear_desde(self, cot):
+        rec = reserva_desde_cotizacion(cot)
+        numero, guardado = registrar_reserva(rec, self.cfg)
+        self._pintar()
+        ase = guardado.get("asesor", {}) or {}
+        messagebox.showinfo("Reserva creada",
+                            f"Reserva N. {numero} creada.\n"
+                            f"Asesor asignado: {ase.get('nombre','(sin asignar)')}")
+        VentanaReservaDetalle(self, guardado, self.cfg, on_save=self._pintar)
+
+
 class Launcher(ctk.CTk):
     """Pantalla de inicio del .exe: permite elegir uno de los tres modulos
     (Cotizacion, Reservas, Comercial). Solo Cotizacion esta desarrollado; los
@@ -3274,8 +4039,8 @@ class Launcher(ctk.CTk):
          "Crear, guardar y dar seguimiento a las cotizaciones. Genera el PDF y las\n"
          "importa desde la version HTML de los clientes.", GREEN, GREEN_H, True),
         ("Reservas", "🧳",
-         "Convertir una cotizacion en reserva confirmada: hoteles, servicios,\n"
-         "vouchers y control de pagos. (En desarrollo)", NAVY, NAVY2, False),
+         "Convertir una cotizacion en reserva confirmada: proveedores, vouchers a\n"
+         "cliente y proveedor, asignacion por asesor y control de estados.", NAVY, NAVY2, True),
         ("Comercial", "📊",
          "Gestion comercial: clientes, embudo de ventas, tareas y metricas del\n"
          "equipo de asesores. (En desarrollo)", CYAN, BLUE_H, False),
@@ -3297,6 +4062,7 @@ class Launcher(ctk.CTk):
         except Exception:
             pass
         self.cotizador = None
+        self.reservas = None
         self._construir()
         self._centrar()
 
@@ -3380,12 +4146,13 @@ class Launcher(ctk.CTk):
     def _abrir(self, nombre):
         if nombre == "Cotizacion":
             self._abrir_cotizacion()
+        elif nombre == "Reservas":
+            self._abrir_reservas()
         else:
             messagebox.showinfo(
                 nombre,
                 f"El modulo '{nombre}' esta en desarrollo.\n\n"
-                "Pronto podras usarlo desde aqui. Por ahora ya puedes trabajar "
-                "con el modulo de Cotizacion.")
+                "Pronto podras usarlo desde aqui.")
 
     def _abrir_cotizacion(self):
         try:
@@ -3409,6 +4176,33 @@ class Launcher(ctk.CTk):
         except Exception:
             pass
         self.cotizador = None
+        try:
+            self.deiconify(); self.lift(); self.focus_force()
+        except Exception:
+            pass
+
+    def _abrir_reservas(self):
+        try:
+            if self.reservas is not None and self.reservas.winfo_exists():
+                self.reservas.deiconify(); self.reservas.lift(); return
+        except Exception:
+            self.reservas = None
+        self.withdraw()
+        try:
+            self.reservas = ModuloReservas(self)
+            self.reservas.protocol("WM_DELETE_WINDOW", self._cerrar_reservas)
+        except Exception as e:
+            self.reservas = None
+            self.deiconify()
+            messagebox.showerror("Error", f"No se pudo abrir Reservas:\n{e}")
+
+    def _cerrar_reservas(self):
+        try:
+            if self.reservas is not None:
+                self.reservas.destroy()
+        except Exception:
+            pass
+        self.reservas = None
         try:
             self.deiconify(); self.lift(); self.focus_force()
         except Exception:

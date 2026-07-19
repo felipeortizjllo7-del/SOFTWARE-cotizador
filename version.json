@@ -1,5 +1,5 @@
 {
-  "version": "3.5",
+  "version": "3.6",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 3.5 - Nuevo selector de modulos al abrir el sistema (.exe): elige entre Cotizacion (disponible), Reservas y Comercial (en desarrollo). Boton 'Modulos' para volver al inicio."
+  "notas": "Version 3.6 - Nuevo MODULO DE RESERVAS (.exe): convierte una cotizacion en reserva con consecutivo (desde 2952), asignacion rotativa entre 3 asesores, seleccion de proveedor por servicio, emision y envio de voucher a cliente y a proveedor por correo, historial con estados (Confirmada, Confirmada con pago, Aplazada, Anulada) y monto negociado."
 }
