@@ -1,5 +1,5 @@
 {
-  "version": "3.8",
+  "version": "3.9",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 3.8 - Asesores de reservas: solo Nombre y Correo. Boton del modulo renombrado a 'Nueva reserva'."
+  "notas": "Version 3.9 - Reservas: ahora se puede crear una reserva EN BLANCO (manual) sin partir de una cotizacion. Los datos del cliente, destinos, fechas, pasajeros y alojamiento son editables en la reserva."
 }

@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "3.8"
+VERSION = "3.9"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -3648,20 +3648,48 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         ase = res.get("asesor", {}) or {}
         ctk.CTkLabel(cont, text=f"Reserva N. {res.get('numero','')}",
                      font=("Segoe UI", 19, "bold"), text_color=NAVY).pack(anchor="w")
-        ctk.CTkLabel(cont, text=f"{res.get('cliente','')}   ·   "
-                     f"{', '.join(res.get('destinos', []))}   ·   {res.get('fechas_viaje','')}",
-                     text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", pady=(0, 2))
-        ctk.CTkLabel(cont, text=f"Pasajeros: {res.get('pax_txt','')}   ·   "
-                     f"Alojamiento: {res.get('hab','')}", text_color=MUTED,
-                     font=("Segoe UI", 11)).pack(anchor="w")
         aso_txt = ase.get("nombre", "(sin asignar)")
         if ase.get("email"):
             aso_txt += "  ·  " + ase["email"]
         ctk.CTkLabel(cont, text="Asesor asignado: " + aso_txt, text_color=BLUE,
-                     font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(4, 2))
-        if res.get("cot_origen"):
-            ctk.CTkLabel(cont, text="Origen: cotizacion " + res["cot_origen"],
-                         text_color=MUTED, font=("Segoe UI", 10)).pack(anchor="w")
+                     font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(2, 2))
+        origen = ("cotizacion " + res["cot_origen"]) if res.get("cot_origen") else "manual"
+        ctk.CTkLabel(cont, text="Origen: " + origen, text_color=MUTED,
+                     font=("Segoe UI", 10)).pack(anchor="w", pady=(0, 6))
+
+        # Datos del cliente / viaje (editables)
+        def campo(lbl, valor, ancho=None):
+            ctk.CTkLabel(cont, text=lbl, text_color=MUTED,
+                         font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+            v = tk.StringVar(value=valor)
+            ctk.CTkEntry(cont, textvariable=v, height=32, corner_radius=8,
+                         border_color=LINE).pack(fill="x", pady=(0, 6))
+            return v
+
+        self.v_cli = campo("Cliente / Agencia", res.get("cliente", ""))
+        self.v_email = campo("Correo del cliente", res.get("email", ""))
+        f2 = ctk.CTkFrame(cont, fg_color="transparent"); f2.pack(fill="x")
+        c1 = ctk.CTkFrame(f2, fg_color="transparent"); c1.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        c2 = ctk.CTkFrame(f2, fg_color="transparent"); c2.pack(side="left", fill="x", expand=True, padx=(6, 0))
+        ctk.CTkLabel(c1, text="Destinos (separados por coma)", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        self.v_dest = tk.StringVar(value=", ".join(res.get("destinos", [])))
+        ctk.CTkEntry(c1, textvariable=self.v_dest, height=32).pack(fill="x", pady=(0, 6))
+        ctk.CTkLabel(c2, text="Fechas de viaje", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        self.v_fechas = tk.StringVar(value=res.get("fechas_viaje", ""))
+        ctk.CTkEntry(c2, textvariable=self.v_fechas, height=32).pack(fill="x", pady=(0, 6))
+        f3 = ctk.CTkFrame(cont, fg_color="transparent"); f3.pack(fill="x")
+        c3 = ctk.CTkFrame(f3, fg_color="transparent"); c3.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        c4 = ctk.CTkFrame(f3, fg_color="transparent"); c4.pack(side="left", fill="x", expand=True, padx=(6, 0))
+        ctk.CTkLabel(c3, text="Pasajeros", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        self.v_pax = tk.StringVar(value=res.get("pax_txt", ""))
+        ctk.CTkEntry(c3, textvariable=self.v_pax, height=32).pack(fill="x", pady=(0, 8))
+        ctk.CTkLabel(c4, text="Alojamiento / habitaciones", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        self.v_hab = tk.StringVar(value=res.get("hab", ""))
+        ctk.CTkEntry(c4, textvariable=self.v_hab, height=32).pack(fill="x", pady=(0, 8))
 
         # Estado + monto
         fila = ctk.CTkFrame(cont, fg_color="transparent"); fila.pack(fill="x", pady=(10, 4))
@@ -3773,6 +3801,12 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
                                 "servicio": w["servicio"].get().strip(),
                                 "proveedor": w["proveedor"].get().strip(),
                                 "correo": w["correo"].get().strip()})
+        self.res["cliente"] = self.v_cli.get().strip()
+        self.res["email"] = self.v_email.get().strip()
+        self.res["destinos"] = [d.strip() for d in self.v_dest.get().split(",") if d.strip()]
+        self.res["fechas_viaje"] = self.v_fechas.get().strip()
+        self.res["pax_txt"] = self.v_pax.get().strip()
+        self.res["hab"] = self.v_hab.get().strip()
         self.res["estado"] = self.v_estado.get()
         try:
             self.res["monto"] = float(str(self.v_monto.get()).replace(",", "").strip() or 0)
@@ -3900,6 +3934,10 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
     def _guardar(self):
         self._sync()
         actualizar_reserva(self.res.get("numero", ""), {
+            "cliente": self.res.get("cliente", ""), "email": self.res.get("email", ""),
+            "destinos": self.res.get("destinos", []),
+            "fechas_viaje": self.res.get("fechas_viaje", ""),
+            "pax_txt": self.res.get("pax_txt", ""), "hab": self.res.get("hab", ""),
             "estado": self.res["estado"], "monto": self.res.get("monto", 0),
             "notas": self.res.get("notas", ""), "itinerario": self.res.get("itinerario", ""),
             "renglones": self.res.get("renglones", [])})
@@ -4066,7 +4104,33 @@ class ModuloReservas(ctk.CTkToplevel):
                                 "asignarlas automaticamente.")
             DialogoAsesores(self, self.cfg, on_save=self._recargar_cfg)
             return
-        SelectorCotizacionReserva(self, self._crear_desde)
+        # Elegir origen: desde una cotizacion o en blanco (manual)
+        dlg = ctk.CTkToplevel(self); dlg.title("Nueva reserva")
+        dlg.geometry("460x250"); dlg.configure(fg_color=BG)
+        dlg.transient(self); dlg.grab_set()
+        try:
+            dlg.after(80, lambda: (dlg.lift(), dlg.focus_force()))
+        except Exception:
+            pass
+        ctk.CTkLabel(dlg, text="Nueva reserva", font=("Segoe UI", 16, "bold"),
+                     text_color=NAVY).pack(pady=(22, 2))
+        ctk.CTkLabel(dlg, text="Como quieres crear la reserva?", text_color=MUTED,
+                     font=("Segoe UI", 12)).pack(pady=(0, 16))
+
+        def desde():
+            dlg.destroy()
+            SelectorCotizacionReserva(self, self._crear_desde)
+
+        def blanco():
+            dlg.destroy()
+            self._crear_blanco()
+
+        ctk.CTkButton(dlg, text="Desde una cotizacion", height=46, corner_radius=10,
+                      fg_color=GREEN, hover_color=GREEN_H, font=("Segoe UI", 13, "bold"),
+                      command=desde).pack(fill="x", padx=34, pady=6)
+        ctk.CTkButton(dlg, text="En blanco (manual)", height=46, corner_radius=10,
+                      fg_color=NAVY, hover_color=NAVY2, font=("Segoe UI", 13, "bold"),
+                      command=blanco).pack(fill="x", padx=34, pady=6)
 
     def _crear_desde(self, cot):
         rec = reserva_desde_cotizacion(cot)
@@ -4076,6 +4140,21 @@ class ModuloReservas(ctk.CTkToplevel):
         messagebox.showinfo("Reserva creada",
                             f"Reserva N. {numero} creada.\n"
                             f"Asesor asignado: {ase.get('nombre','(sin asignar)')}")
+        VentanaReservaDetalle(self, guardado, self.cfg, on_save=self._pintar)
+
+    def _crear_blanco(self):
+        rec = {"cot_origen": "", "cliente": "", "email": "", "destinos": [],
+               "fechas_viaje": "", "pax_txt": "", "hab": "", "estado": "Confirmada",
+               "monto": 0.0, "moneda": "USD", "hoteles": [], "renglones": [],
+               "itinerario": "", "notas": "", "voucher_cliente": "",
+               "fecha_creacion": datetime.date.today().isoformat()}
+        numero, guardado = registrar_reserva(rec, self.cfg)
+        self._pintar()
+        ase = guardado.get("asesor", {}) or {}
+        messagebox.showinfo("Reserva creada",
+                            f"Reserva N. {numero} creada (manual).\n"
+                            f"Asesor asignado: {ase.get('nombre','(sin asignar)')}\n\n"
+                            "Completa los datos del cliente y agrega los servicios.")
         VentanaReservaDetalle(self, guardado, self.cfg, on_save=self._pintar)
 
 
