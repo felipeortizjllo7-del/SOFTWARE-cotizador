@@ -1,5 +1,5 @@
 {
-  "version": "3.2",
+  "version": "3.3",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 3.2 - Editar cotizaciones del historial: cada cotizacion guarda su estado completo (destinos, hoteles, servicios, pax, habitaciones, fechas) y con el boton 'Editar cotizacion' se carga de vuelta al cotizador para modificarla sin rehacerla desde cero. (El boton de seguimiento ahora se llama 'Seguimiento'.)"
+  "notas": "Version 3.3 - Las cotizaciones hechas en el HTML ahora llegan al .exe con su estado completo, asi se les puede EDITAR y GENERAR PDF (botones 'Editar cotizacion' y 'Generar PDF'). Privacidad: el HTML solo envia (nunca lee), y la lectura de la hoja requiere una clave que solo tiene el .exe, para que los clientes no vean lo que cotizan los demas."
 }

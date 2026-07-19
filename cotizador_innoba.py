@@ -59,12 +59,15 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "3.2"
+VERSION = "3.3"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
 # cotizaciones; el .exe las importa aqui.
 WEBHOOK_URL = "https://script.google.com/macros/s/AKfycby0tbuYavMW7dl5cah7qfIsJVM3hOmt6Sh6h4M2ZQD4l7ncIGxyCdHK2w3ogny0o3oWVQ/exec"
+# Clave para LEER las cotizaciones (solo el .exe la tiene). El HTML NUNCA lee, solo
+# envia; asi los clientes no pueden ver lo que cotizan los demas.
+WEBHOOK_KEY = "inb_9f3Kx72Qp_seg2026"
 # Archivo con la ultima version publicada (rama main del repositorio)
 UPDATE_URL = (f"https://raw.githubusercontent.com/{GITHUB_OWNER}/{GITHUB_REPO}"
               f"/main/version.json")
@@ -316,7 +319,8 @@ def importar_cotizaciones_html():
         return 0
     try:
         ctx = ssl.create_default_context()
-        req = urllib.request.Request(WEBHOOK_URL, headers={"User-Agent": "CotizadorInnoba"})
+        url = WEBHOOK_URL + ("&" if "?" in WEBHOOK_URL else "?") + "key=" + WEBHOOK_KEY
+        req = urllib.request.Request(url, headers={"User-Agent": "CotizadorInnoba"})
         with urllib.request.urlopen(req, context=ctx, timeout=20) as r:
             remotas = json.loads(r.read().decode("utf-8"))
     except Exception:
@@ -345,7 +349,8 @@ def importar_cotizaciones_html():
             "cliente": rc.get("cliente", ""), "asesor": rc.get("asesor", ""),
             "asesor_tel": rc.get("asesor_tel", ""), "email": rc.get("email", ""),
             "fecha": rc.get("fecha", ""), "fechas_viaje": rc.get("fechas_viaje", ""),
-            "destinos": dests, "total": total, "estado": "Pendiente", "pdf": ""})
+            "destinos": dests, "total": total, "estado": "Pendiente", "pdf": "",
+            "snapshot": rc.get("snapshot")})
         existentes.add(wid); nuevas += 1
     if nuevas:
         guardar_cotizaciones(data)
@@ -1441,23 +1446,31 @@ class VentanaCotizaciones(ctk.CTkToplevel):
                       f"     {dest}     {usd(it.get('total', 0))}")
             ctk.CTkLabel(cel, text=linea2, text_color=MUTED, anchor="w",
                          font=("Segoe UI", 10)).pack(anchor="w")
+            col = 1
             if it.get("snapshot"):
                 ctk.CTkButton(fila, text="✎ Editar cotizacion", width=130, height=30,
                               corner_radius=8, fg_color=GREEN, hover_color=GREEN_H,
                               font=("Segoe UI", 11, "bold"),
                               command=lambda x=it: self._editar_cotizacion(x)).grid(
-                    row=0, column=1, padx=4)
+                    row=0, column=col, padx=4); col += 1
             ctk.CTkButton(fila, text="Seguimiento", width=100, height=30, corner_radius=8,
                           fg_color=CYAN, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
-                          command=lambda x=it: self._detalle(x)).grid(row=0, column=2, padx=4)
+                          command=lambda x=it: self._detalle(x)).grid(row=0, column=col, padx=4)
+            col += 1
             if it.get("pdf"):
                 ctk.CTkButton(fila, text="Abrir PDF", width=90, height=30, corner_radius=8,
                               fg_color=NAVY, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
-                              command=lambda p=it["pdf"]: self._abrir(p)).grid(row=0, column=3, padx=4)
+                              command=lambda p=it["pdf"]: self._abrir(p)).grid(
+                    row=0, column=col, padx=4); col += 1
+            elif it.get("snapshot"):
+                ctk.CTkButton(fila, text="Generar PDF", width=100, height=30, corner_radius=8,
+                              fg_color=NAVY, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
+                              command=lambda x=it: self._generar_pdf_de(x)).grid(
+                    row=0, column=col, padx=4); col += 1
             ctk.CTkButton(fila, text="🗑", width=34, height=30, corner_radius=8,
                           fg_color=CARD2, text_color=RED, hover_color=LINE,
                           font=("Segoe UI", 13),
-                          command=lambda x=it: self._eliminar(x)).grid(row=0, column=4, padx=(0, 6))
+                          command=lambda x=it: self._eliminar(x)).grid(row=0, column=col, padx=(0, 6))
         if not n:
             msg = ("Aun no hay cotizaciones guardadas.\nGenera un PDF y aparecera aqui."
                    if not self.data.get("items") else "Sin resultados.")
@@ -1486,6 +1499,20 @@ class VentanaCotizaciones(ctk.CTkToplevel):
             return
         app._cargar_cotizacion(it.get("snapshot"))
         self.destroy()
+
+    def _generar_pdf_de(self, it):
+        app = self.master
+        if not it.get("snapshot") or not hasattr(app, "_cargar_cotizacion"):
+            return
+        if not messagebox.askyesno(
+                "Generar PDF",
+                f"Se cargara {it.get('numero','')} ({it.get('cliente','')}) y se generara "
+                "el PDF.\n\n(Puedes revisarla/ajustarla en el cotizador antes de generar "
+                "si lo prefieres.)\n\n¿Continuar?", parent=self):
+            return
+        app._cargar_cotizacion(it.get("snapshot"))
+        self.destroy()
+        app.after(250, app._generar)
 
     def _detalle(self, it):
         VentanaCotizacionDetalle(self, it, self._on_guardado)

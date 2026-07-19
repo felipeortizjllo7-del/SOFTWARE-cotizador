@@ -1,18 +1,17 @@
-# Puente HTML → .exe (cotizaciones de clientes)
+# Puente HTML → .exe (cotizaciones de clientes) + PRIVACIDAD
 
-El **HTML** (clientes) envía cada cotización a una **Hoja de Google** mediante un
-pequeño servicio gratis (Apps Script). El **.exe** (INNOBA) las importa al historial.
+El **HTML** (clientes) envía cada cotización a una **Hoja de Google**; el **.exe**
+(INNOBA) las importa. Para que **los clientes NO puedan leer** lo que cotizan los
+demás, la lectura requiere una **clave** que solo tiene el .exe.
 
-Necesito que hagas esto **una sola vez** y me pases la URL:
+## Actualizar el código del Apps Script (para activar la privacidad)
 
-## Pasos
-
-1. Entra a https://sheets.google.com y crea una hoja nueva, ponle nombre
-   **"Cotizaciones INNOBA"**.
-2. Menú **Extensiones → Apps Script**.
-3. Borra lo que haya y **pega TODO este código**:
+1. Abre tu Hoja **"Cotizaciones INNOBA" → Extensiones → Apps Script**.
+2. **Borra todo** y **pega este código** (ya trae la clave):
 
 ```javascript
+var CLAVE = "inb_9f3Kx72Qp_seg2026";
+
 function doPost(e){
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName("Cotizaciones") || ss.insertSheet("Cotizaciones");
@@ -23,7 +22,13 @@ function doPost(e){
     d.fechas_viaje||"", JSON.stringify(d) ]);
   return ContentService.createTextOutput("ok");
 }
+
 function doGet(e){
+  // Solo el .exe (que tiene la clave) puede LEER. Sin clave -> nada.
+  if (!e || !e.parameter || e.parameter.key !== CLAVE) {
+    return ContentService.createTextOutput("[]")
+      .setMimeType(ContentService.MimeType.JSON);
+  }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName("Cotizaciones");
   const out = [];
@@ -38,17 +43,16 @@ function doGet(e){
 }
 ```
 
-4. Clic en **Implementar → Nueva implementación**.
-5. En "Tipo", elige **Aplicación web**.
-6. Configura:
-   - **Ejecutar como:** Yo (tu cuenta)
-   - **Quién tiene acceso:** **Cualquier persona**
-7. Clic **Implementar** y **Autoriza** los permisos (te pedirá permiso una vez).
-8. Copia la **URL de la aplicación web** (termina en **/exec**).
-9. **Pásame esa URL** por el chat.
+3. Guarda (💾).
+4. **Implementar → Administrar implementaciones → ✏ Editar → Versión: "Nueva versión" → Implementar.**
+   (La **URL no cambia**; solo se actualiza el código.)
 
-Con esa URL yo la configuro en el HTML (para que envíe) y en el .exe (para que
-importe), y publico la nueva versión. A partir de ahí:
-- Cuando un cliente genera una cotización en el HTML, se envía a esa hoja.
-- Tu .exe, al abrir "Cotizaciones", importa las nuevas automáticamente para darles
-  seguimiento.
+Listo. A partir de ahí:
+- El **HTML** solo **envía** (POST), nunca lee.
+- Aunque un cliente vea el código del HTML y encuentre la URL, un GET **sin la clave**
+  devuelve vacío → **no puede ver** las cotizaciones de nadie.
+- El **.exe** sí lee (tiene la clave embebida) e importa todo para darle seguimiento,
+  **editar** y **generar el PDF** de cada cotización, incluidas las hechas en el HTML.
+
+> Nota: el .exe ya funciona aunque no actualices el código todavía; pero la
+> privacidad de lectura queda activa solo cuando pegues este código y reimplementes.

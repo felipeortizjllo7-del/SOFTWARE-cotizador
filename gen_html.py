@@ -494,10 +494,25 @@ function generar(){
    email:document.getElementById("email").value.trim(),
    destinos:bloques.map(b=>b.destino),
    total:(totalReserva(bloques)!==null?totalReserva(bloques):total),
-   id:"WEB-"+Date.now()+"-"+Math.floor(Math.random()*10000)};
+   id:"WEB-"+Date.now()+"-"+Math.floor(Math.random()*10000),
+   snapshot:snapshotActual()};
  registrarCotiz(rec);
  enviarCotizWebhook(rec);
  window.print();
+}
+function snapshotActual(){
+ return {cliente:document.getElementById("cli").value.trim(),
+   email:document.getElementById("email").value.trim(),
+   asesor:document.getElementById("asesor").value.trim(),
+   asesor_tel:document.getElementById("asesorTel").value.trim(),
+   cotizador:(document.getElementById("cotizador")?document.getElementById("cotizador").value:""),
+   fecha_desde:document.getElementById("fdesde").value,
+   fecha_hasta:document.getElementById("fhasta").value,
+   adultos:st.adultos, ages:st.ages.slice(),
+   hab:{sencilla:st.hab.sencilla,doble:st.hab.doble,triple:st.hab.triple},
+   itinerario:st.itinerario||"",
+   tramos:st.tramos.map(t=>({destino:t.destino,temporada:t.temporada,noches:t.noches,
+     hoteles:[...t.hoteles],trans:[...t.trans].sort(),act:[...t.act].sort()}))};
 }
 function enviarCotizWebhook(rec){if(!WEBHOOK_URL)return;
  try{fetch(WEBHOOK_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(rec)});}catch(e){}}
