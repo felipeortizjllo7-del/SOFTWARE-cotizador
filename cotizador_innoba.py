@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "5.3"
+VERSION = "5.4"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -4359,21 +4359,17 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
             ctk.CTkLabel(b, text=l2, text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
             ctk.CTkEntry(b, textvariable=par(k2, l2), height=30).pack(fill="x", pady=(0, 5))
 
-        # Ciudad + Hotel como desplegables ligados al tarifario (precios_2026)
-        fch = ctk.CTkFrame(cont, fg_color="transparent"); fch.pack(fill="x")
-        ca = ctk.CTkFrame(fch, fg_color="transparent"); ca.pack(side="left", fill="x", expand=True, padx=(0, 6))
-        cb = ctk.CTkFrame(fch, fg_color="transparent"); cb.pack(side="left", fill="x", expand=True, padx=(6, 0))
-        ctk.CTkLabel(ca, text="Ciudad", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
-        v_ciudad = par("os_ciudad", "Ciudad")
-        ctk.CTkComboBox(ca, variable=v_ciudad, values=sorted(self.precios.keys()), height=30,
-                        command=lambda val: self._os_hotel_combo.configure(
-                            values=hoteles_por_destino(self.precios, val))).pack(fill="x", pady=(0, 5))
-        ctk.CTkLabel(cb, text="Hotel", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
-        v_hotel = par("os_hotel", "Hotel")
-        self._os_hotel_combo = ctk.CTkComboBox(
-            cb, variable=v_hotel, height=30,
-            values=hoteles_por_destino(self.precios, v_ciudad.get()))
-        self._os_hotel_combo.pack(fill="x", pady=(0, 5))
+        # Ciudades y hoteles del voucher: MULTIDESTINO (se toman de "Servicios por destino")
+        ctk.CTkLabel(cont, text="Ciudades y hoteles del voucher (multidestino)", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        self.lbl_os_hoteles = ctk.CTkLabel(cont, text="", text_color=NAVY, fg_color=CARD2,
+                                           corner_radius=8, anchor="w", justify="left",
+                                           font=("Segoe UI", 11))
+        self.lbl_os_hoteles.pack(fill="x", pady=(0, 4), ipady=6, ipadx=8)
+        ctk.CTkLabel(cont, text="La reserva puede tener varios destinos. Agregalos abajo en "
+                     "'SERVICIOS POR DESTINO' con '+ Agregar destino' (hasta 5); el voucher "
+                     "listara Ciudad + Hotel de cada uno.", text_color=MUTED,
+                     font=("Segoe UI", 10), wraplength=760, justify="left").pack(anchor="w", padx=2, pady=(0, 4))
         ctk.CTkLabel(cont, text="(Las fechas IN/OUT se toman de la llegada y salida de arriba)",
                      text_color=MUTED, font=("Segoe UI", 10)).pack(anchor="w", padx=2)
         pareja("os_habitaciones", "N. Habitaciones", "os_acomodacion", "Acomodacion")
@@ -4599,6 +4595,23 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         for di, dest in enumerate(dd):
             self._card_destino(di, dest)
         self._refrescar_resumen()
+        self._refrescar_os_hoteles()
+
+    def _refrescar_os_hoteles(self):
+        if not hasattr(self, "lbl_os_hoteles"):
+            return
+        try:
+            dd = destinos_detalle_de(self.res)
+            lineas = []
+            for d in dd:
+                nom = d.get("nombre", "") or "(destino sin nombre)"
+                hoteles = [h.get("servicio", "") for h in d.get("hotel", []) if h.get("servicio")]
+                lineas.append(f"•  {nom}:  " + (" / ".join(hoteles) if hoteles else "(sin hotel)"))
+            txt = ("\n".join(lineas) if lineas else
+                   "Aun no hay destinos. Agrega uno abajo en 'Servicios por destino'.")
+            self.lbl_os_hoteles.configure(text=txt)
+        except Exception:
+            pass
 
     def _abrir_panel_vouchers(self):
         self._sync()

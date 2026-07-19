@@ -1,5 +1,5 @@
 {
-  "version": "5.3",
+  "version": "5.4",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 5.3 - La ventana de la reserva ahora calcula la altura util real de la pantalla (sin la barra de tareas) para que la barra inferior con Voucher/Enviar/Guardar SIEMPRE quede visible."
+  "notas": "Version 5.4 - Reservas multidestino mas claras: la Orden de Servicio ya no tiene un solo Ciudad/Hotel; ahora muestra un resumen de todas las Ciudades+Hoteles del voucher (multidestino), que se toman de 'Servicios por destino' (+ Agregar destino, hasta 5). El voucher lista Ciudad+Hotel de cada destino."
 }
