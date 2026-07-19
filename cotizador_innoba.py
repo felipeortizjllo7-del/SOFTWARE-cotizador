@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "3.7"
+VERSION = "3.8"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -3560,26 +3560,21 @@ class DialogoAsesores(ctk.CTkToplevel):
                          font=("Segoe UI", 12, "bold")).grid(
                 row=0, column=0, columnspan=2, sticky="w", padx=8, pady=(6, 0))
             vn = tk.StringVar(value=a.get("nombre", ""))
-            vt = tk.StringVar(value=a.get("tel", ""))
             vm = tk.StringVar(value=a.get("email", ""))
             ctk.CTkEntry(f, textvariable=vn, placeholder_text="Nombre",
-                         width=250, height=30).grid(row=1, column=0, padx=8, pady=4)
-            ctk.CTkEntry(f, textvariable=vt, placeholder_text="Telefono",
-                         width=200, height=30).grid(row=1, column=1, padx=8, pady=4)
-            ctk.CTkEntry(f, textvariable=vm, placeholder_text="Correo",
-                         height=30).grid(row=2, column=0, columnspan=2, padx=8,
-                                         pady=(0, 8), sticky="we")
-            f.grid_columnconfigure(0, weight=1)
-            self.filas.append((vn, vm, vt))
+                         height=32).grid(row=1, column=0, padx=8, pady=(4, 8), sticky="we")
+            ctk.CTkEntry(f, textvariable=vm, placeholder_text="Correo electronico",
+                         height=32).grid(row=1, column=1, padx=8, pady=(4, 8), sticky="we")
+            f.grid_columnconfigure(0, weight=1); f.grid_columnconfigure(1, weight=1)
+            self.filas.append((vn, vm))
         ctk.CTkButton(self, text="Guardar asesores", fg_color=GREEN, hover_color=GREEN_H,
                       height=38, command=self._guardar).pack(pady=14)
 
     def _guardar(self):
         lst = []
-        for vn, vm, vt in self.filas:
+        for vn, vm in self.filas:
             if vn.get().strip():
-                lst.append({"nombre": vn.get().strip(), "email": vm.get().strip(),
-                            "tel": vt.get().strip()})
+                lst.append({"nombre": vn.get().strip(), "email": vm.get().strip()})
         self.cfg["asesores_reservas"] = lst
         guardar_config(self.cfg)
         if self.on_save:
@@ -3977,7 +3972,7 @@ class ModuloReservas(ctk.CTkToplevel):
         ctk.CTkButton(hb, text="⌂ Modulos", width=100, height=36, corner_radius=10,
                       fg_color=NAVY, hover_color=NAVY2, font=("Segoe UI", 12, "bold"),
                       command=self._volver_inicio).pack(side="left", padx=(0, 8))
-        ctk.CTkButton(hb, text="+ Nueva desde cotizacion", width=190, height=36, corner_radius=10,
+        ctk.CTkButton(hb, text="+ Nueva reserva", width=160, height=36, corner_radius=10,
                       fg_color=GREEN, hover_color=GREEN_H, font=("Segoe UI", 12, "bold"),
                       command=self._nueva_desde_cot).pack(side="left", padx=(0, 8))
         ctk.CTkButton(hb, text="Asesores", width=100, height=36, corner_radius=10,

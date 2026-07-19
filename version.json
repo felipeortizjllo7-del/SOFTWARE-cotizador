@@ -1,5 +1,5 @@
 {
-  "version": "3.7",
+  "version": "3.8",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 3.7 - Voucher de reserva ahora incluye ITINERARIO de viaje dia por dia (editable en la reserva). Nuevo diseno del selector de modulos (banda de marca, iconos en circulo, barras de acento, pastillas de estado). Logo mas grande en el PDF y en el inicio."
+  "notas": "Version 3.8 - Asesores de reservas: solo Nombre y Correo. Boton del modulo renombrado a 'Nueva reserva'."
 }
