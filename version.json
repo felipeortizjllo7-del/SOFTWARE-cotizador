@@ -1,5 +1,5 @@
 {
-  "version": "3.9",
+  "version": "4.0",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 3.9 - Reservas: ahora se puede crear una reserva EN BLANCO (manual) sin partir de una cotizacion. Los datos del cliente, destinos, fechas, pasajeros y alojamiento son editables en la reserva."
+  "notas": "Version 4.0 - El voucher al cliente ahora es una ORDEN DE SERVICIO con tablas (reserva hotelera, pasajeros con identificacion, itinerario de vuelo, actividades dia por dia, informacion adicional y contacto de emergencia), totalmente parametrizable desde la reserva. Se pueden ELIMINAR reservas desde el historial."
 }

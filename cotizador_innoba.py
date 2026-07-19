@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "3.9"
+VERSION = "4.0"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1226,7 +1226,10 @@ def reserva_desde_cotizacion(cot):
             renglones.append({"tipo": "Tour", "destino": dest, "servicio": a,
                               "proveedor": "", "correo": "", "enviado": False,
                               "fecha_envio": ""})
-    return {
+    ini, fin = _fechas_in_out(cot.get("fechas_viaje", ""))
+    ciudad = (cot.get("destinos", []) or [""])[0]
+    hotel0 = hoteles[0]["nombre"] if hoteles else ""
+    rec = {
         "cot_origen": cot.get("numero", ""),
         "cliente": cot.get("cliente", ""),
         "email": cot.get("email", "") or snap.get("email", ""),
@@ -1245,6 +1248,78 @@ def reserva_desde_cotizacion(cot):
         "voucher_cliente": "",
         "fecha_creacion": datetime.date.today().isoformat(),
     }
+    rec.update(_voucher_defaults(ciudad, hotel0, ini, fin, snap.get("hab", "")))
+    return rec
+
+
+def _fechas_in_out(fechas_viaje):
+    s = fechas_viaje or ""
+    if " al " in s:
+        a, b = s.split(" al ", 1)
+        return a.strip(), b.strip()
+    return s.strip(), ""
+
+
+def _voucher_defaults(ciudad="", hotel="", fecha_in="", fecha_out="", habitaciones=""):
+    """Campos de la Orden de Servicio (voucher al cliente), parametrizables."""
+    return {
+        "os_ciudad": ciudad, "os_hotel": hotel,
+        "os_fecha_in": fecha_in, "os_fecha_out": fecha_out,
+        "os_habitaciones": habitaciones, "os_acomodacion": "",
+        "os_alimentacion": "", "os_origen": "",
+        "os_contacto_principal": "", "os_contacto_secundario": "",
+        "os_vuelo_llegada": "", "os_vuelo_interno1": "",
+        "os_vuelo_interno2": "", "os_vuelo_salida": "",
+        "os_contacto_emergencia": "", "os_info_adicional": "",
+        "os_pasajeros": "", "os_actividades": "",
+    }
+
+
+def eliminar_reserva(numero):
+    data = cargar_reservas()
+    data["items"] = [it for it in data["items"] if it.get("numero") != numero]
+    guardar_reservas(data)
+
+
+def _parse_pasajeros(txt):
+    """Cada linea: 'Nombre, Documento' -> lista de (nombre, documento)."""
+    out = []
+    for ln in (txt or "").splitlines():
+        ln = ln.strip()
+        if not ln:
+            continue
+        if "," in ln:
+            n, doc = ln.split(",", 1)
+            out.append((n.strip(), doc.strip()))
+        else:
+            out.append((ln, ""))
+    return out
+
+
+def _parse_actividades(txt, itinerario=""):
+    """Cada linea: 'Fecha | Actividad | Observacion'. Si vacio, usa el itinerario
+       (lineas 'DIA N - texto') como (Dia, Actividad, '')."""
+    out = []
+    for ln in (txt or "").splitlines():
+        ln = ln.strip()
+        if not ln:
+            continue
+        partes = [p.strip() for p in ln.split("|")]
+        while len(partes) < 3:
+            partes.append("")
+        out.append((partes[0], partes[1], partes[2]))
+    if out:
+        return out
+    for ln in (itinerario or "").splitlines():
+        ln = ln.strip()
+        if not ln:
+            continue
+        if " - " in ln:
+            dia, resto = ln.split(" - ", 1)
+            out.append((dia.strip(), resto.strip(), ""))
+        else:
+            out.append(("", ln, ""))
+    return out
 
 
 def _monto_fmt(v, moneda="USD"):
@@ -1276,43 +1351,164 @@ def _voucher_fila(pdf, etq, val):
     pdf.multi_cell(134, 7, T(str(val)))
 
 
+class VoucherPDF(FPDF):
+    """PDF de la Orden de Servicio (voucher al cliente), estilo tabla."""
+    def __init__(self, cfg):
+        super().__init__(orientation="P", unit="mm", format="A4")
+        self.cfg = cfg
+        self.set_auto_page_break(auto=True, margin=12)
+        self.set_margins(12, 12, 12)
+
+    def footer(self):
+        self.set_y(-12); self.set_font("Helvetica", "I", 7)
+        self.set_text_color(140, 140, 140)
+        self.cell(0, 8, self._t(f"{self.cfg.get('empresa','')}  -  Pagina {self.page_no()}"),
+                  align="C")
+
+    def _t(self, texto):
+        if texto is None:
+            return ""
+        return str(texto).encode("latin-1", "replace").decode("latin-1")
+
+
+def _os_band(pdf, texto, w=186, h=7):
+    pdf.set_x(12)
+    pdf.set_font("Helvetica", "B", 9); pdf.set_fill_color(*PDF_PRIM)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(w, h, pdf._t(texto), border=1, ln=1, fill=True, align="C")
+
+
+def _os_row(pdf, label, value, wl=50, wv=136, h=6.5, val_align="L"):
+    pdf.set_x(12)
+    pdf.set_font("Helvetica", "B", 8.5); pdf.set_fill_color(*PDF_CLARO)
+    pdf.set_text_color(*PDF_PRIM)
+    pdf.cell(wl, h, pdf._t(" " + label), border=1, fill=True)
+    pdf.set_font("Helvetica", "", 8.5); pdf.set_text_color(*PDF_TXT)
+    pdf.cell(wv, h, pdf._t(" " + str(value)), border=1, ln=1, align=val_align)
+
+
 def generar_voucher_cliente(cfg, res, ruta):
-    """Voucher de confirmacion para el cliente: reserva, servicios y contacto."""
-    pdf = CotizacionPDF(cfg); pdf.add_page(); T = pdf._t
-    _voucher_encabezado(pdf, "VOUCHER DE CONFIRMACION  -  RESERVA N. " + res.get("numero", ""))
+    """Orden de Servicio (voucher de confirmacion) para el cliente, parametrizable."""
+    pdf = VoucherPDF(cfg); pdf.add_page(); T = pdf._t
     ase = res.get("asesor", {}) or {}
-    for etq, val in [("Reserva No.", res.get("numero", "")),
-                     ("Estado", res.get("estado", "")),
-                     ("Cliente / Agencia", res.get("cliente", "")),
-                     ("Destinos", ", ".join(res.get("destinos", []))),
-                     ("Fechas de viaje", res.get("fechas_viaje", "")),
-                     ("Pasajeros", res.get("pax_txt", "")),
-                     ("Alojamiento", res.get("hab", "")),
-                     ("Asesor", ase.get("nombre", "")),
-                     ("Contacto asesor",
-                      "  ".join(x for x in [ase.get("tel", ""), ase.get("email", "")] if x))]:
-        _voucher_fila(pdf, etq, val)
-    pdf.ln(2)
-    pdf.set_font("Helvetica", "B", 11); pdf.set_text_color(*PDF_BLUE)
-    pdf.cell(0, 7, T("SERVICIOS CONFIRMADOS"), ln=1)
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.set_fill_color(*PDF_PRIM); pdf.set_text_color(255, 255, 255)
-    pdf.cell(32, 7, T("  Tipo"), fill=True)
-    pdf.cell(48, 7, T("Destino"), fill=True)
-    pdf.cell(100, 7, T("Servicio"), fill=True, ln=1)
-    pdf.set_text_color(*PDF_TXT); fill = False
-    for r in res.get("renglones", []):
-        pdf.set_font("Helvetica", "", 9)
-        pdf.set_fill_color(*(PDF_CLARO if fill else (255, 255, 255)))
-        pdf.cell(32, 6, T("  " + r.get("tipo", "")), fill=True)
-        pdf.cell(48, 6, T(r.get("destino", "")), fill=True)
-        pdf.cell(100, 6, T(r.get("servicio", "")), fill=True, ln=1)
-        fill = not fill
-    _voucher_itinerario(pdf, res.get("itinerario", ""))
-    pdf.ln(4)
-    pdf.set_font("Helvetica", "I", 9); pdf.set_text_color(110, 110, 110)
-    pdf.multi_cell(0, 5, T("Este documento confirma la reserva de los servicios indicados. "
-                           "Para cualquier cambio, contacte a su asesor. " + cfg.get("empresa", "")))
+    numero = res.get("numero", "")
+
+    # --- Encabezado: titulo + asesor + bienvenida (izq) y logo (der) ---
+    logo = cfg.get("logo", "")
+    top_y = 12
+    if logo and os.path.exists(logo):
+        try:
+            pdf.image(logo, x=158, y=12, h=22)
+        except Exception:
+            pass
+    wtxt = 144
+    pdf.set_xy(12, 13)
+    pdf.set_font("Helvetica", "B", 12); pdf.set_fill_color(*PDF_PRIM)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(wtxt, 9, T("ORDEN DE SERVICIO N. " + numero), border=1, ln=2, fill=True, align="C")
+    pdf.set_x(12)
+    pdf.set_font("Helvetica", "B", 8.5); pdf.set_fill_color(*PDF_CLARO)
+    pdf.set_text_color(*PDF_PRIM)
+    pdf.cell(wtxt, 6, T(cfg.get("empresa", "") + "  -  Asesor: " + ase.get("nombre", "")),
+             border=1, ln=2, fill=True)
+    pdf.set_x(12)
+    pdf.set_font("Helvetica", "", 8); pdf.set_text_color(*PDF_TXT)
+    pdf.multi_cell(wtxt, 4.4, T("Para nosotros es un gusto poder contar con ustedes y su reserva. "
+                                "Su reserva esta confirmada. Por favor conserve este voucher para "
+                                "garantizar la estadia de los pasajeros en destino."), border=1)
+    if pdf.get_y() < top_y + 24:
+        pdf.set_y(top_y + 24)
+    pdf.ln(3)
+
+    # --- RESERVA HOTELERA ---
+    _os_band(pdf, "RESERVA HOTELERA")
+    _os_row(pdf, "CIUDAD", res.get("os_ciudad", "") or ", ".join(res.get("destinos", [])))
+    _os_row(pdf, "HOTEL", res.get("os_hotel", ""))
+    ini = res.get("os_fecha_in", ""); fin = res.get("os_fecha_out", "")
+    pdf.set_x(12)
+    pdf.set_font("Helvetica", "B", 8.5); pdf.set_fill_color(*PDF_CLARO); pdf.set_text_color(*PDF_PRIM)
+    pdf.cell(40, 6.5, T(" FECHA IN"), border=1, fill=True)
+    pdf.set_font("Helvetica", "", 8.5); pdf.set_text_color(*PDF_TXT)
+    pdf.cell(53, 6.5, T(" " + ini), border=1)
+    pdf.set_font("Helvetica", "B", 8.5); pdf.set_fill_color(*PDF_CLARO); pdf.set_text_color(*PDF_PRIM)
+    pdf.cell(40, 6.5, T(" FECHA OUT"), border=1, fill=True)
+    pdf.set_font("Helvetica", "", 8.5); pdf.set_text_color(*PDF_TXT)
+    pdf.cell(53, 6.5, T(" " + fin), border=1, ln=1)
+    hab = res.get("os_habitaciones", "") or res.get("hab", "")
+    acom = res.get("os_acomodacion", "")
+    _os_row(pdf, "N. HABITACIONES", hab)
+    _os_row(pdf, "ACOMODACION", acom)
+
+    # --- PASAJEROS / IDENTIFICACION ---
+    pdf.ln(1)
+    pdf.set_x(12); pdf.set_font("Helvetica", "B", 9); pdf.set_fill_color(*PDF_PRIM)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(124, 7, T("PASAJEROS"), border=1, fill=True, align="C")
+    pdf.cell(62, 7, T("IDENTIFICACION"), border=1, ln=1, fill=True, align="C")
+    pax = _parse_pasajeros(res.get("os_pasajeros", ""))
+    if not pax:
+        pax = [(res.get("pax_txt", "") or "-", "")]
+    pdf.set_text_color(*PDF_TXT)
+    for nom, doc in pax:
+        pdf.set_x(12); pdf.set_font("Helvetica", "", 8.5)
+        pdf.cell(124, 6, T(" " + nom), border=1)
+        pdf.cell(62, 6, T(" " + doc), border=1, ln=1, align="C")
+
+    # --- Datos generales ---
+    pdf.ln(1)
+    _os_row(pdf, "ALIMENTACION", res.get("os_alimentacion", ""))
+    _os_row(pdf, "ORIGEN", res.get("os_origen", ""))
+    _os_row(pdf, "CONTACTO PRINCIPAL", res.get("os_contacto_principal", ""))
+    _os_row(pdf, "SEGUNDO CONTACTO", res.get("os_contacto_secundario", ""))
+
+    # --- ITINERARIO DE VUELO ---
+    pdf.ln(1)
+    _os_band(pdf, "ITINERARIO DE VUELO")
+    _os_row(pdf, "VUELO DE LLEGADA", res.get("os_vuelo_llegada", ""))
+    _os_row(pdf, "VUELO INTERNO 1", res.get("os_vuelo_interno1", ""))
+    _os_row(pdf, "VUELO INTERNO 2", res.get("os_vuelo_interno2", ""))
+    _os_row(pdf, "VUELO DE SALIDA", res.get("os_vuelo_salida", ""))
+
+    # --- DESCRIPCION DE ACTIVIDADES ---
+    pdf.ln(1)
+    _os_band(pdf, "DESCRIPCION DE ACTIVIDADES")
+    pdf.set_x(12); pdf.set_font("Helvetica", "B", 8.5); pdf.set_fill_color(*PDF_CLARO)
+    pdf.set_text_color(*PDF_PRIM)
+    pdf.cell(40, 6.5, T(" FECHA"), border=1, fill=True, align="C")
+    pdf.cell(96, 6.5, T(" ACTIVIDADES"), border=1, fill=True, align="C")
+    pdf.cell(50, 6.5, T(" OBSERVACIONES"), border=1, ln=1, fill=True, align="C")
+    acts = _parse_actividades(res.get("os_actividades", ""), res.get("itinerario", ""))
+    pdf.set_text_color(*PDF_TXT)
+    if not acts:
+        acts = [("", "", "")]
+    for fecha, act, obs in acts:
+        pdf.set_x(12); pdf.set_font("Helvetica", "", 8.5)
+        y0 = pdf.get_y()
+        # altura dinamica segun la actividad
+        pdf.multi_cell(40, 5.2, T(" " + fecha), border=1)
+        h1 = pdf.get_y() - y0
+        pdf.set_xy(52, y0)
+        pdf.multi_cell(96, 5.2, T(" " + act), border=1)
+        h2 = pdf.get_y() - y0
+        pdf.set_xy(148, y0)
+        pdf.multi_cell(50, 5.2, T(" " + obs), border=1)
+        h3 = pdf.get_y() - y0
+        pdf.set_y(y0 + max(h1, h2, h3))
+
+    # --- INFORMACION ADICIONAL ---
+    info = res.get("os_info_adicional", "")
+    if info:
+        pdf.ln(1)
+        _os_band(pdf, "INFORMACION ADICIONAL")
+        pdf.set_x(12); pdf.set_font("Helvetica", "", 8.5); pdf.set_text_color(*PDF_TXT)
+        pdf.multi_cell(186, 5, T(info), border=1)
+
+    # --- CONTACTO DE EMERGENCIA ---
+    emerg = res.get("os_contacto_emergencia", "") or cfg.get("telefono", "")
+    if emerg:
+        pdf.ln(1)
+        _os_band(pdf, "CONTACTO DE EMERGENCIA:  " + emerg)
+
     pdf.output(ruta)
 
 
@@ -3716,11 +3912,63 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
                      font=("Segoe UI", 13, "bold")).pack(side="left")
         ctk.CTkLabel(ith, text="Aparece en el voucher del cliente", text_color=MUTED,
                      font=("Segoe UI", 10)).pack(side="left", padx=8)
-        self.txt_itin = ctk.CTkTextbox(cont, height=150, corner_radius=8,
+        self.txt_itin = ctk.CTkTextbox(cont, height=130, corner_radius=8,
                                        border_width=1, border_color=LINE, fg_color=CARD,
                                        font=("Segoe UI", 12))
         self.txt_itin.pack(fill="x", pady=(2, 8))
         self.txt_itin.insert("1.0", res.get("itinerario", "") or "")
+
+        # ---- Datos de la ORDEN DE SERVICIO (voucher al cliente) ----
+        ctk.CTkLabel(cont, text="ORDEN DE SERVICIO (datos del voucher al cliente)",
+                     text_color=NAVY, font=("Segoe UI", 13, "bold")).pack(anchor="w", pady=(6, 2))
+        self.os_vars = {}
+
+        def par(k, lbl):
+            v = tk.StringVar(value=res.get(k, ""))
+            self.os_vars[k] = v
+            return v
+
+        def pareja(k1, l1, k2, l2):
+            f = ctk.CTkFrame(cont, fg_color="transparent"); f.pack(fill="x")
+            a = ctk.CTkFrame(f, fg_color="transparent"); a.pack(side="left", fill="x", expand=True, padx=(0, 6))
+            b = ctk.CTkFrame(f, fg_color="transparent"); b.pack(side="left", fill="x", expand=True, padx=(6, 0))
+            ctk.CTkLabel(a, text=l1, text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+            ctk.CTkEntry(a, textvariable=par(k1, l1), height=30).pack(fill="x", pady=(0, 5))
+            ctk.CTkLabel(b, text=l2, text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+            ctk.CTkEntry(b, textvariable=par(k2, l2), height=30).pack(fill="x", pady=(0, 5))
+
+        pareja("os_ciudad", "Ciudad", "os_hotel", "Hotel")
+        pareja("os_fecha_in", "Fecha IN", "os_fecha_out", "Fecha OUT")
+        pareja("os_habitaciones", "N. Habitaciones", "os_acomodacion", "Acomodacion")
+        pareja("os_alimentacion", "Alimentacion", "os_origen", "Origen")
+        pareja("os_contacto_principal", "Contacto principal", "os_contacto_secundario", "Segundo contacto")
+        pareja("os_vuelo_llegada", "Vuelo de llegada", "os_vuelo_salida", "Vuelo de salida")
+        pareja("os_vuelo_interno1", "Vuelo interno 1", "os_vuelo_interno2", "Vuelo interno 2")
+        ctk.CTkLabel(cont, text="Contacto de emergencia", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        ctk.CTkEntry(cont, textvariable=par("os_contacto_emergencia", ""), height=30).pack(fill="x", pady=(0, 6))
+
+        ctk.CTkLabel(cont, text="Pasajeros  (una linea por pasajero:  Nombre, Documento)",
+                     text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        self.txt_pax = ctk.CTkTextbox(cont, height=80, corner_radius=8, border_width=1,
+                                      border_color=LINE, fg_color=CARD, font=("Segoe UI", 12))
+        self.txt_pax.pack(fill="x", pady=(0, 6))
+        self.txt_pax.insert("1.0", res.get("os_pasajeros", "") or "")
+
+        ctk.CTkLabel(cont, text="Actividades  (una linea:  Fecha | Actividad | Observacion. "
+                     "Si lo dejas vacio, usa el itinerario de arriba)",
+                     text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        self.txt_acts = ctk.CTkTextbox(cont, height=90, corner_radius=8, border_width=1,
+                                       border_color=LINE, fg_color=CARD, font=("Segoe UI", 12))
+        self.txt_acts.pack(fill="x", pady=(0, 6))
+        self.txt_acts.insert("1.0", res.get("os_actividades", "") or "")
+
+        ctk.CTkLabel(cont, text="Informacion adicional", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        self.txt_info = ctk.CTkTextbox(cont, height=60, corner_radius=8, border_width=1,
+                                       border_color=LINE, fg_color=CARD, font=("Segoe UI", 12))
+        self.txt_info.pack(fill="x", pady=(0, 8))
+        self.txt_info.insert("1.0", res.get("os_info_adicional", "") or "")
 
         # Proveedores / renglones
         hdr = ctk.CTkFrame(cont, fg_color="transparent"); hdr.pack(fill="x", pady=(6, 2))
@@ -3815,6 +4063,11 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self.res["notas"] = self.v_notas.get().strip()
         try:
             self.res["itinerario"] = self.txt_itin.get("1.0", "end").strip()
+            for k, v in self.os_vars.items():
+                self.res[k] = v.get().strip()
+            self.res["os_pasajeros"] = self.txt_pax.get("1.0", "end").strip()
+            self.res["os_actividades"] = self.txt_acts.get("1.0", "end").strip()
+            self.res["os_info_adicional"] = self.txt_info.get("1.0", "end").strip()
         except Exception:
             pass
 
@@ -3933,14 +4186,18 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
 
     def _guardar(self):
         self._sync()
-        actualizar_reserva(self.res.get("numero", ""), {
+        cambios = {
             "cliente": self.res.get("cliente", ""), "email": self.res.get("email", ""),
             "destinos": self.res.get("destinos", []),
             "fechas_viaje": self.res.get("fechas_viaje", ""),
             "pax_txt": self.res.get("pax_txt", ""), "hab": self.res.get("hab", ""),
             "estado": self.res["estado"], "monto": self.res.get("monto", 0),
             "notas": self.res.get("notas", ""), "itinerario": self.res.get("itinerario", ""),
-            "renglones": self.res.get("renglones", [])})
+            "renglones": self.res.get("renglones", [])}
+        for k in self.res:
+            if k.startswith("os_"):
+                cambios[k] = self.res[k]
+        actualizar_reserva(self.res.get("numero", ""), cambios)
         if self.on_save:
             self.on_save()
         messagebox.showinfo("Guardado", "Reserva actualizada.")
@@ -4073,13 +4330,23 @@ class ModuloReservas(ctk.CTkToplevel):
                              font=("Segoe UI", 11, "bold"))
         badge.grid(row=0, column=3, rowspan=2, padx=8, ipadx=8, ipady=3)
         btns = ctk.CTkFrame(fila, fg_color="transparent"); btns.grid(row=0, column=4, rowspan=2, padx=10)
-        ctk.CTkButton(btns, text="Abrir", width=90, height=32, fg_color=NAVY,
-                      hover_color=NAVY2, command=lambda x=it: self._abrir(x)).pack(pady=2)
-        ctk.CTkButton(btns, text="Voucher cliente", width=120, height=30, fg_color=CYAN,
+        f1 = ctk.CTkFrame(btns, fg_color="transparent"); f1.pack()
+        ctk.CTkButton(f1, text="Abrir", width=90, height=32, fg_color=NAVY,
+                      hover_color=NAVY2, command=lambda x=it: self._abrir(x)).pack(side="left", pady=2, padx=2)
+        ctk.CTkButton(f1, text="🗑", width=36, height=32, fg_color=RED,
+                      hover_color="#9B2C22", command=lambda x=it: self._eliminar(x)).pack(side="left", pady=2, padx=2)
+        ctk.CTkButton(btns, text="Voucher cliente", width=130, height=30, fg_color=CYAN,
                       hover_color=BLUE, command=lambda x=it: self._voucher_cli(x)).pack(pady=2)
 
     def _abrir(self, it):
         VentanaReservaDetalle(self, it, self.cfg, on_save=self._pintar)
+
+    def _eliminar(self, it):
+        if messagebox.askyesno("Eliminar reserva",
+                               f"Eliminar la reserva N. {it.get('numero','')} de "
+                               f"{it.get('cliente','')}?\n\nEsta accion no se puede deshacer."):
+            eliminar_reserva(it.get("numero", ""))
+            self._pintar()
 
     def _voucher_cli(self, it):
         fn = os.path.join(datos_dir(), "vouchers")
@@ -4148,6 +4415,7 @@ class ModuloReservas(ctk.CTkToplevel):
                "monto": 0.0, "moneda": "USD", "hoteles": [], "renglones": [],
                "itinerario": "", "notas": "", "voucher_cliente": "",
                "fecha_creacion": datetime.date.today().isoformat()}
+        rec.update(_voucher_defaults())
         numero, guardado = registrar_reserva(rec, self.cfg)
         self._pintar()
         ase = guardado.get("asesor", {}) or {}
