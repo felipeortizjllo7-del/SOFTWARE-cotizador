@@ -1,5 +1,5 @@
 {
-  "version": "4.2",
+  "version": "4.3",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 4.2 - Reservas: lista de PASAJEROS estructurada (varios nombres, cada uno con su pasaporte/documento) con agregar/quitar; alimenta la tabla PASAJEROS/IDENTIFICACION del voucher. Los varios destinos se gestionan por tarjetas de destino."
+  "notas": "Version 4.3 - Colores de estado de reserva: Confirmada en amarillo, Confirmada con pago en verde, Anulada (cancelada) en rojo, Aplazada en naranja."
 }

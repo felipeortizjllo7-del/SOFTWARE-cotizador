@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "4.2"
+VERSION = "4.3"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1127,10 +1127,10 @@ RESERVAS_PATH = os.path.join(datos_dir(), "reservas.json")
 RES_SEQ_INICIAL = 2951   # el proximo consecutivo asignado sera 2952
 
 ESTADOS_RES = ["Confirmada", "Confirmada con pago", "Aplazada", "Anulada"]
-ESTADO_RES_COLOR = {"Confirmada": BLUE, "Confirmada con pago": GREEN,
-                    "Aplazada": "#D9A400", "Anulada": RED}
-ESTADO_RES_FILA = {"Confirmada": "#EAF2FD", "Confirmada con pago": "#E3F5EA",
-                   "Aplazada": "#FFF3C4", "Anulada": "#FBE6E6"}
+ESTADO_RES_COLOR = {"Confirmada": "#D9A400", "Confirmada con pago": GREEN,
+                    "Aplazada": "#E67E22", "Anulada": RED}
+ESTADO_RES_FILA = {"Confirmada": "#FFF3C4", "Confirmada con pago": "#E3F5EA",
+                   "Aplazada": "#FDEBD0", "Anulada": "#FBE6E6"}
 
 
 def cargar_reservas():
