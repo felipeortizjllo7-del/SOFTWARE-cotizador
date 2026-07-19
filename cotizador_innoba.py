@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "4.3"
+VERSION = "4.4"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1213,17 +1213,17 @@ def reserva_desde_cotizacion(cot):
     hotel0 = ""
     for tr in snap.get("tramos", []):
         dest = tr.get("destino", "")
-        item = {"nombre": dest, "hoteles": [], "traslados": [], "tours": []}
+        item = {"nombre": dest, "hotel": [], "transporte": [], "guia": [], "actividad": []}
         for h in tr.get("hoteles", []):
-            item["hoteles"].append({"servicio": h, "proveedor": h, "correo": "",
-                                    "enviado": False, "fecha_envio": ""})
+            item["hotel"].append({"servicio": h, "proveedor": h, "correo": "",
+                                  "enviado": False, "fecha_envio": ""})
             hotel0 = hotel0 or h
         for t in tr.get("trans", []):
-            item["traslados"].append({"servicio": t, "proveedor": "", "correo": "",
-                                      "enviado": False, "fecha_envio": ""})
+            item["transporte"].append({"servicio": t, "proveedor": "", "correo": "",
+                                       "enviado": False, "fecha_envio": ""})
         for a in tr.get("act", []):
-            item["tours"].append({"servicio": a, "proveedor": "", "correo": "",
-                                  "enviado": False, "fecha_envio": ""})
+            item["actividad"].append({"servicio": a, "proveedor": "", "correo": "",
+                                      "enviado": False, "fecha_envio": ""})
         detalle.append(item)
     ini, fin = _fechas_in_out(cot.get("fechas_viaje", ""))
     ciudad = (cot.get("destinos", []) or [""])[0]
@@ -1250,10 +1250,14 @@ def reserva_desde_cotizacion(cot):
 
 
 # Categorias de servicio por destino (clave interna, etiqueta, tipo para el voucher)
-CATEGORIAS_SERV = [("hoteles", "Hotel", "Hotel"),
-                   ("traslados", "Traslados (aeropuerto)", "Traslado"),
-                   ("tours", "Tours (guia / transporte)", "Tour")]
+CATEGORIAS_SERV = [("hotel", "Hotel", "Hotel"),
+                   ("transporte", "Transporte / Traslados", "Transporte"),
+                   ("guia", "Guia", "Guia"),
+                   ("actividad", "Actividades / Tours", "Actividad")]
+CAT_KEYS = [c[0] for c in CATEGORIAS_SERV]
 MAX_DESTINOS_RES = 5
+# Migracion de claves antiguas -> nuevas
+_CAT_MIGRA = {"hoteles": "hotel", "traslados": "transporte", "tours": "actividad"}
 
 
 def _servicio_vacio():
@@ -1261,7 +1265,10 @@ def _servicio_vacio():
 
 
 def _destino_vacio(nombre=""):
-    return {"nombre": nombre, "hoteles": [], "traslados": [], "tours": []}
+    d = {"nombre": nombre}
+    for k in CAT_KEYS:
+        d[k] = []
+    return d
 
 
 def destinos_detalle_de(res):
@@ -1271,7 +1278,12 @@ def destinos_detalle_de(res):
     if isinstance(dd, list) and dd:
         for d in dd:
             d.setdefault("nombre", "")
-            for k in ("hoteles", "traslados", "tours"):
+            # migrar claves antiguas (hoteles/traslados/tours) a las nuevas
+            for viejo, nuevo in _CAT_MIGRA.items():
+                if viejo in d:
+                    d.setdefault(nuevo, [])
+                    d[nuevo] = d[nuevo] + d.pop(viejo)
+            for k in CAT_KEYS:
                 d.setdefault(k, [])
         return dd
     # Migrar desde renglones + destinos
@@ -1282,6 +1294,7 @@ def destinos_detalle_de(res):
             nombres.append(d)
     dd = [_destino_vacio(n) for n in nombres]
     idx = {n: i for i, n in enumerate(nombres)}
+    tipomap = {"Hotel": "hotel", "Traslado": "transporte", "Tour": "actividad"}
     for r in res.get("renglones", []):
         n = r.get("destino", "")
         if n not in idx:
@@ -1289,8 +1302,7 @@ def destinos_detalle_de(res):
         s = {"servicio": r.get("servicio", ""), "proveedor": r.get("proveedor", ""),
              "correo": r.get("correo", ""), "enviado": r.get("enviado", False),
              "fecha_envio": r.get("fecha_envio", "")}
-        t = r.get("tipo", "")
-        clave = "hoteles" if t == "Hotel" else ("traslados" if t == "Traslado" else "tours")
+        clave = tipomap.get(r.get("tipo", ""), "actividad")
         dd[idx[n]][clave].append(s)
     res["destinos_detalle"] = dd
     return dd
@@ -1479,7 +1491,7 @@ def generar_voucher_cliente(cfg, res, ruta):
     dd = destinos_detalle_de(res)
     filas_hotel = []
     for d in dd:
-        hoteles = [h.get("servicio", "") for h in d.get("hoteles", []) if h.get("servicio")]
+        hoteles = [h.get("servicio", "") for h in d.get("hotel", []) if h.get("servicio")]
         if d.get("nombre") or hoteles:
             filas_hotel.append((d.get("nombre", ""), " / ".join(hoteles)))
     if not filas_hotel:
@@ -4260,7 +4272,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         return ruta
 
     def _reng_de(self, di, cat, si):
-        tipo = {"hoteles": "Hotel", "traslados": "Traslado", "tours": "Tour"}[cat]
+        tipo = next((t for k, _l, t in CATEGORIAS_SERV if k == cat), cat)
         dest = self.res["destinos_detalle"][di]
         s = dest[cat][si]
         reng = {"tipo": tipo, "destino": dest.get("nombre", ""),
@@ -4592,7 +4604,7 @@ class ModuloReservas(ctk.CTkToplevel):
     def _crear_blanco(self):
         rec = {"cot_origen": "", "cliente": "", "email": "", "destinos": [],
                "fechas_viaje": "", "pax_txt": "", "hab": "", "estado": "Confirmada",
-               "monto": 0.0, "moneda": "USD", "hoteles": [], "renglones": [],
+               "monto": 0.0, "moneda": "USD", "destinos_detalle": [],
                "itinerario": "", "notas": "", "voucher_cliente": "",
                "fecha_creacion": datetime.date.today().isoformat()}
         rec.update(_voucher_defaults())

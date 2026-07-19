@@ -1,5 +1,5 @@
 {
-  "version": "4.3",
+  "version": "4.4",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 4.3 - Colores de estado de reserva: Confirmada en amarillo, Confirmada con pago en verde, Anulada (cancelada) en rojo, Aplazada en naranja."
+  "notas": "Version 4.4 - Reservas: en cada destino los servicios se organizan en 4 tipos de proveedor (Hotel, Transporte/Traslados, Guia, Actividades/Tours), cada uno con su boton para generar y enviar el voucher directamente al proveedor por correo. Migracion automatica de reservas anteriores."
 }
