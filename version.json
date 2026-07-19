@@ -1,5 +1,5 @@
 {
-  "version": "4.7",
+  "version": "4.8",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 4.7 - Reservas: la fecha de viaje ahora se elige con calendario, separada en Fecha de llegada y Fecha de salida; ambas alimentan el voucher (Fecha IN / Fecha OUT)."
+  "notas": "Version 4.8 - Reservas: en cada destino, el campo Hotel es un desplegable con las opciones de hoteles que maneja INNOBA para ese destino (segun el archivo precios_2026 extraido del Excel FINAL). Se puede elegir de la lista o escribir uno distinto."
 }

@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "4.7"
+VERSION = "4.8"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -617,6 +617,31 @@ def cargar_precios():
             with open(ruta, "r", encoding="utf-8") as f:
                 return json.load(f)
     raise FileNotFoundError("No se encontro 'precios_2026.json'.")
+
+def cargar_precios_seguro():
+    """Como cargar_precios pero devuelve {} si falla (para el modulo Reservas)."""
+    try:
+        return cargar_precios()
+    except Exception:
+        return {}
+
+def hoteles_por_destino(precios, destino):
+    """Nombres de hoteles que maneja INNOBA para ese destino (desde precios_2026)."""
+    if not precios or not destino:
+        return []
+    clave = None
+    for k in precios:
+        if k.strip().lower() == destino.strip().lower():
+            clave = k
+            break
+    if clave is None:
+        return []
+    nombres = []
+    for h in ((precios.get(clave, {}) or {}).get("hoteles", {}) or {}).get("hoteles", []):
+        n = (h.get("nombre", "") or "").strip()
+        if n and n not in nombres:
+            nombres.append(n)
+    return sorted(nombres)
 
 def es_transporte(nombre):
     n = nombre.lower()
@@ -4114,6 +4139,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
     def __init__(self, master, res, cfg, on_save=None):
         super().__init__(master)
         self.res = res; self.cfg = cfg; self.on_save = on_save
+        self.precios = cargar_precios_seguro()   # para desplegar hoteles por destino
         self.title("Reserva " + res.get("numero", ""))
         self.geometry("800x780"); self.configure(fg_color=BG)
         self.transient(master); self.grab_set()
@@ -4524,8 +4550,22 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
              "observacion": tk.StringVar(value=s.get("observacion", ""))}
         # Linea 1: servicio + estado de la reserva con el proveedor (seguimiento)
         l1 = ctk.CTkFrame(row, fg_color="transparent"); l1.pack(fill="x", padx=6, pady=(5, 2))
-        ctk.CTkEntry(l1, textvariable=v["servicio"], height=28,
-                     placeholder_text="Servicio").pack(side="left", fill="x", expand=True)
+        if cat == "hotel":
+            nombre_dest = ""
+            try:
+                nombre_dest = self.res["destinos_detalle"][di].get("nombre", "")
+            except Exception:
+                pass
+            opciones = hoteles_por_destino(self.precios, nombre_dest)
+            if opciones:
+                ctk.CTkComboBox(l1, variable=v["servicio"], values=opciones, height=28,
+                                dropdown_font=("Segoe UI", 11)).pack(side="left", fill="x", expand=True)
+            else:
+                ctk.CTkEntry(l1, textvariable=v["servicio"], height=28,
+                             placeholder_text="Hotel").pack(side="left", fill="x", expand=True)
+        else:
+            ctk.CTkEntry(l1, textvariable=v["servicio"], height=28,
+                         placeholder_text="Servicio").pack(side="left", fill="x", expand=True)
         om = ctk.CTkOptionMenu(l1, variable=v["estado_prov"], values=ESTADOS_PROV, width=190, height=28,
                                fg_color=ESTADO_PROV_COLOR.get(s.get("estado_prov", "Pendiente"), MUTED),
                                button_color=NAVY2)
