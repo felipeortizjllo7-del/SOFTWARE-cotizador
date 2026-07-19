@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "4.1"
+VERSION = "4.2"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1340,6 +1340,16 @@ def _parse_pasajeros(txt):
     return out
 
 
+def pasajeros_de(res):
+    """Lista de (nombre, documento) de la reserva. Usa la lista estructurada
+       'pasajeros_list'; si no existe, migra del texto 'os_pasajeros'."""
+    lst = res.get("pasajeros_list")
+    if isinstance(lst, list) and lst:
+        return [(p.get("nombre", ""), p.get("documento", "")) for p in lst
+                if (p.get("nombre", "") or p.get("documento", ""))]
+    return _parse_pasajeros(res.get("os_pasajeros", ""))
+
+
 def _parse_actividades(txt, itinerario=""):
     """Cada linea: 'Fecha | Actividad | Observacion'. Si vacio, usa el itinerario
        (lineas 'DIA N - texto') como (Dia, Actividad, '')."""
@@ -1499,7 +1509,7 @@ def generar_voucher_cliente(cfg, res, ruta):
     pdf.set_text_color(255, 255, 255)
     pdf.cell(124, 7, T("PASAJEROS"), border=1, fill=True, align="C")
     pdf.cell(62, 7, T("IDENTIFICACION"), border=1, ln=1, fill=True, align="C")
-    pax = _parse_pasajeros(res.get("os_pasajeros", ""))
+    pax = pasajeros_de(res)
     if not pax:
         pax = [(res.get("pax_txt", "") or "-", "")]
     pdf.set_text_color(*PDF_TXT)
@@ -3925,10 +3935,20 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
                      font=("Segoe UI", 11)).pack(anchor="w", padx=2)
         self.v_fechas = tk.StringVar(value=res.get("fechas_viaje", ""))
         ctk.CTkEntry(c1, textvariable=self.v_fechas, height=32).pack(fill="x", pady=(0, 6))
-        ctk.CTkLabel(c2, text="Pasajeros", text_color=MUTED,
+        ctk.CTkLabel(c2, text="Pasajeros (resumen, ej. 3 adultos)", text_color=MUTED,
                      font=("Segoe UI", 11)).pack(anchor="w", padx=2)
         self.v_pax = tk.StringVar(value=res.get("pax_txt", ""))
         ctk.CTkEntry(c2, textvariable=self.v_pax, height=32).pack(fill="x", pady=(0, 6))
+
+        # Pasajeros (lista: nombre + pasaporte/documento) -> tabla del voucher
+        ph = ctk.CTkFrame(cont, fg_color="transparent"); ph.pack(fill="x", pady=(2, 0))
+        ctk.CTkLabel(ph, text="PASAJEROS  (nombre y pasaporte / documento)", text_color=NAVY,
+                     font=("Segoe UI", 12, "bold")).pack(side="left")
+        ctk.CTkButton(ph, text="+ Agregar pasajero", width=150, height=28, fg_color=BLUE,
+                      hover_color=BLUE_H, command=self._agregar_pasajero).pack(side="right")
+        self.pax_box = ctk.CTkFrame(cont, fg_color="transparent"); self.pax_box.pack(fill="x", pady=(2, 6))
+        self._pintar_pasajeros()
+
         ctk.CTkLabel(cont, text="Alojamiento / habitaciones (general)", text_color=MUTED,
                      font=("Segoe UI", 11)).pack(anchor="w", padx=2)
         self.v_hab = tk.StringVar(value=res.get("hab", ""))
@@ -3995,13 +4015,6 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
                      font=("Segoe UI", 11)).pack(anchor="w", padx=2)
         ctk.CTkEntry(cont, textvariable=par("os_contacto_emergencia", ""), height=30).pack(fill="x", pady=(0, 6))
 
-        ctk.CTkLabel(cont, text="Pasajeros  (una linea por pasajero:  Nombre, Documento)",
-                     text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
-        self.txt_pax = ctk.CTkTextbox(cont, height=80, corner_radius=8, border_width=1,
-                                      border_color=LINE, fg_color=CARD, font=("Segoe UI", 12))
-        self.txt_pax.pack(fill="x", pady=(0, 6))
-        self.txt_pax.insert("1.0", res.get("os_pasajeros", "") or "")
-
         ctk.CTkLabel(cont, text="Actividades  (una linea:  Fecha | Actividad | Observacion. "
                      "Si lo dejas vacio, usa el itinerario de arriba)",
                      text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
@@ -4038,6 +4051,56 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
                       hover_color=BLUE, command=self._enviar_cliente).pack(side="left")
         ctk.CTkButton(pie, text="Guardar reserva", height=40, fg_color=GREEN,
                       hover_color=GREEN_H, command=self._guardar).pack(side="right")
+
+    def _pintar_pasajeros(self):
+        for w in self.pax_box.winfo_children():
+            w.destroy()
+        self.pax_widgets = []
+        lst = self.res.get("pasajeros_list")
+        if not isinstance(lst, list) or not lst:
+            # migrar desde texto os_pasajeros si existiera
+            lst = [{"nombre": n, "documento": d}
+                   for n, d in _parse_pasajeros(self.res.get("os_pasajeros", ""))]
+            self.res["pasajeros_list"] = lst
+        if not lst:
+            ctk.CTkLabel(self.pax_box, text="Sin pasajeros. Usa '+ Agregar pasajero' para "
+                         "anadir nombre y pasaporte.", text_color=MUTED,
+                         font=("Segoe UI", 10)).pack(pady=4)
+        for i, p in enumerate(lst):
+            self._fila_pasajero(i, p)
+
+    def _fila_pasajero(self, i, p):
+        row = ctk.CTkFrame(self.pax_box, fg_color="transparent"); row.pack(fill="x", pady=2)
+        v_nom = tk.StringVar(value=p.get("nombre", ""))
+        v_doc = tk.StringVar(value=p.get("documento", ""))
+        ctk.CTkEntry(row, textvariable=v_nom, height=30,
+                     placeholder_text="Nombre completo del pasajero").pack(
+            side="left", fill="x", expand=True, padx=(0, 6))
+        ctk.CTkEntry(row, textvariable=v_doc, width=200, height=30,
+                     placeholder_text="Pasaporte / documento").pack(side="left")
+        ctk.CTkButton(row, text="✕", width=32, height=30, fg_color=RED, hover_color="#9B2C22",
+                      command=lambda idx=i: self._quitar_pasajero(idx)).pack(side="left", padx=(6, 0))
+        self.pax_widgets.append({"nombre": v_nom, "documento": v_doc})
+
+    def _sync_pax(self):
+        # Conserva todas las filas (aunque esten vacias) para no perder pasajeros
+        # recien agregados; el filtrado de vacios se hace al generar el voucher.
+        self.res["pasajeros_list"] = [
+            {"nombre": w["nombre"].get().strip(), "documento": w["documento"].get().strip()}
+            for w in self.pax_widgets]
+
+    def _agregar_pasajero(self):
+        self._sync_pax()
+        self.res.setdefault("pasajeros_list", []).append({"nombre": "", "documento": ""})
+        self._pintar_pasajeros()
+
+    def _quitar_pasajero(self, i):
+        self._sync_pax()
+        try:
+            del self.res["pasajeros_list"][i]
+        except Exception:
+            pass
+        self._pintar_pasajeros()
 
     def _pintar_servicios(self):
         for w in self.serv_box.winfo_children():
@@ -4131,6 +4194,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
 
     def _sync(self):
         self._sync_serv()
+        self._sync_pax()
         self.res["cliente"] = self.v_cli.get().strip()
         self.res["email"] = self.v_email.get().strip()
         self.res["fechas_viaje"] = self.v_fechas.get().strip()
@@ -4146,7 +4210,6 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
             self.res["itinerario"] = self.txt_itin.get("1.0", "end").strip()
             for k, v in self.os_vars.items():
                 self.res[k] = v.get().strip()
-            self.res["os_pasajeros"] = self.txt_pax.get("1.0", "end").strip()
             self.res["os_actividades"] = self.txt_acts.get("1.0", "end").strip()
             self.res["os_info_adicional"] = self.txt_info.get("1.0", "end").strip()
         except Exception:
@@ -4309,7 +4372,8 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
             "pax_txt": self.res.get("pax_txt", ""), "hab": self.res.get("hab", ""),
             "estado": self.res["estado"], "monto": self.res.get("monto", 0),
             "notas": self.res.get("notas", ""), "itinerario": self.res.get("itinerario", ""),
-            "destinos_detalle": self.res.get("destinos_detalle", [])}
+            "destinos_detalle": self.res.get("destinos_detalle", []),
+            "pasajeros_list": self.res.get("pasajeros_list", [])}
         for k in self.res:
             if k.startswith("os_"):
                 cambios[k] = self.res[k]

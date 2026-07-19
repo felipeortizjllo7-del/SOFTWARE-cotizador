@@ -1,5 +1,5 @@
 {
-  "version": "4.1",
+  "version": "4.2",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 4.1 - Reservas por destino (hasta 5): en cada destino se selecciona Hotel, Traslados de aeropuerto y Tours (una fila por proveedor: guia y transporte, o guia-conductor), cada uno con su voucher al proveedor. El voucher al cliente lista Ciudad+Hotel por cada destino."
+  "notas": "Version 4.2 - Reservas: lista de PASAJEROS estructurada (varios nombres, cada uno con su pasaporte/documento) con agregar/quitar; alimenta la tabla PASAJEROS/IDENTIFICACION del voucher. Los varios destinos se gestionan por tarjetas de destino."
 }
