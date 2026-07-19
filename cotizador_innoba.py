@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "4.5"
+VERSION = "4.6"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -2159,6 +2159,10 @@ class VentanaCotizaciones(ctk.CTkToplevel):
                           fg_color=CYAN, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
                           command=lambda x=it: self._detalle(x)).grid(row=0, column=col, padx=4)
             col += 1
+            ctk.CTkButton(fila, text="➜ Reserva", width=100, height=30, corner_radius=8,
+                          fg_color=NAVY, hover_color=NAVY2, font=("Segoe UI", 11, "bold"),
+                          command=lambda x=it: self._enviar_a_reserva(x)).grid(row=0, column=col, padx=4)
+            col += 1
             if it.get("pdf"):
                 ctk.CTkButton(fila, text="Abrir PDF", width=90, height=30, corner_radius=8,
                               fg_color=NAVY, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
@@ -2187,6 +2191,34 @@ class VentanaCotizaciones(ctk.CTkToplevel):
         messagebox.showinfo("Importar del HTML",
                             (f"Se importaron {n} cotizacion(es) nueva(s) del HTML."
                              if n else "No hay cotizaciones nuevas del HTML."), parent=self)
+
+    def _enviar_a_reserva(self, it):
+        cfg = getattr(self.master, "cfg", None) or cargar_config()
+        if not asesores_reservas(cfg):
+            messagebox.showinfo(
+                "Configura los asesores",
+                "Primero configura los asesores de reservas en el modulo Reservas "
+                "(boton 'Asesores') para poder asignar la reserva.", parent=self)
+            return
+        if not messagebox.askyesno(
+                "Enviar a reserva",
+                f"Crear una reserva a partir de {it.get('numero','')} "
+                f"({it.get('cliente','')})?\n\nSe asignara automaticamente a una asesora "
+                "de reservas (rotacion). Podras verla y gestionarla en el modulo Reservas.",
+                parent=self):
+            return
+        try:
+            rec = reserva_desde_cotizacion(it)
+            numero, guardado = registrar_reserva(rec, cfg)
+        except Exception as e:
+            messagebox.showerror("No se pudo crear la reserva", str(e), parent=self)
+            return
+        ase = (guardado.get("asesor", {}) or {})
+        messagebox.showinfo(
+            "Reserva creada",
+            f"Reserva N. {numero} creada desde {it.get('numero','')}.\n"
+            f"Asignada a: {ase.get('nombre', '(sin asignar)')}\n\n"
+            "Abrela desde el modulo Reservas para gestionarla.", parent=self)
 
     def _editar_cotizacion(self, it):
         app = self.master
@@ -4123,6 +4155,15 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self.pax_box = ctk.CTkFrame(cont, fg_color="transparent"); self.pax_box.pack(fill="x", pady=(2, 6))
         self._pintar_pasajeros()
 
+        # Vuelos / tiquetes adjuntos
+        vh = ctk.CTkFrame(cont, fg_color="transparent"); vh.pack(fill="x", pady=(2, 0))
+        ctk.CTkLabel(vh, text="VUELOS / TIQUETES  (adjuntos)", text_color=NAVY,
+                     font=("Segoe UI", 12, "bold")).pack(side="left")
+        ctk.CTkButton(vh, text="+ Adjuntar vuelo", width=150, height=28, fg_color=BLUE,
+                      hover_color=BLUE_H, command=self._adjuntar_vuelo).pack(side="right")
+        self.vuelos_box = ctk.CTkFrame(cont, fg_color="transparent"); self.vuelos_box.pack(fill="x", pady=(2, 6))
+        self._pintar_vuelos()
+
         ctk.CTkLabel(cont, text="Alojamiento / habitaciones (general)", text_color=MUTED,
                      font=("Segoe UI", 11)).pack(anchor="w", padx=2)
         self.v_hab = tk.StringVar(value=res.get("hab", ""))
@@ -4252,25 +4293,39 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         row = ctk.CTkFrame(self.pax_box, fg_color="transparent"); row.pack(fill="x", pady=2)
         v_nom = tk.StringVar(value=p.get("nombre", ""))
         v_doc = tk.StringVar(value=p.get("documento", ""))
+        adj = p.get("adjunto", "")
         ctk.CTkEntry(row, textvariable=v_nom, height=30,
                      placeholder_text="Nombre completo del pasajero").pack(
             side="left", fill="x", expand=True, padx=(0, 6))
-        ctk.CTkEntry(row, textvariable=v_doc, width=200, height=30,
+        ctk.CTkEntry(row, textvariable=v_doc, width=160, height=30,
                      placeholder_text="Pasaporte / documento").pack(side="left")
-        ctk.CTkButton(row, text="✕", width=32, height=30, fg_color=RED, hover_color="#9B2C22",
-                      command=lambda idx=i: self._quitar_pasajero(idx)).pack(side="left", padx=(6, 0))
-        self.pax_widgets.append({"nombre": v_nom, "documento": v_doc})
+        ctk.CTkButton(row, text="✕", width=30, height=30, fg_color=RED, hover_color="#9B2C22",
+                      command=lambda idx=i: self._quitar_pasajero(idx)).pack(side="right", padx=(6, 0))
+        if adj:
+            nombre_arch = os.path.basename(adj)
+            ctk.CTkButton(row, text="🗑", width=30, height=30, fg_color="#9B2C22",
+                          hover_color=RED,
+                          command=lambda idx=i: self._quitar_adjunto_pax(idx)).pack(side="right", padx=(4, 0))
+            ctk.CTkButton(row, text="📄 " + nombre_arch[:14], width=150, height=30, fg_color=GREEN,
+                          hover_color=GREEN_H, font=("Segoe UI", 10),
+                          command=lambda a=adj: self._abrir_archivo(a)).pack(side="right", padx=(6, 0))
+        else:
+            ctk.CTkButton(row, text="📎 Pasaporte", width=120, height=30, fg_color=BLUE,
+                          hover_color=BLUE_H,
+                          command=lambda idx=i: self._adjuntar_pasaporte(idx)).pack(side="right", padx=(6, 0))
+        self.pax_widgets.append({"nombre": v_nom, "documento": v_doc, "adjunto": adj})
 
     def _sync_pax(self):
         # Conserva todas las filas (aunque esten vacias) para no perder pasajeros
         # recien agregados; el filtrado de vacios se hace al generar el voucher.
         self.res["pasajeros_list"] = [
-            {"nombre": w["nombre"].get().strip(), "documento": w["documento"].get().strip()}
+            {"nombre": w["nombre"].get().strip(), "documento": w["documento"].get().strip(),
+             "adjunto": w.get("adjunto", "")}
             for w in self.pax_widgets]
 
     def _agregar_pasajero(self):
         self._sync_pax()
-        self.res.setdefault("pasajeros_list", []).append({"nombre": "", "documento": ""})
+        self.res.setdefault("pasajeros_list", []).append({"nombre": "", "documento": "", "adjunto": ""})
         self._pintar_pasajeros()
 
     def _quitar_pasajero(self, i):
@@ -4280,6 +4335,91 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         except Exception:
             pass
         self._pintar_pasajeros()
+
+    def _carpeta_adjuntos(self):
+        ruta = os.path.join(datos_dir(), "adjuntos", self.res.get("numero", "tmp"))
+        os.makedirs(ruta, exist_ok=True)
+        return ruta
+
+    def _copiar_adjunto(self, ruta, prefijo=""):
+        base = os.path.basename(ruta)
+        destino = os.path.join(self._carpeta_adjuntos(), (prefijo + "_" if prefijo else "") + base)
+        try:
+            shutil.copyfile(ruta, destino)
+        except Exception as e:
+            messagebox.showerror("No se pudo adjuntar", str(e)); return ""
+        return destino
+
+    def _abrir_archivo(self, ruta):
+        try:
+            os.startfile(ruta)
+        except Exception as e:
+            messagebox.showerror("No se pudo abrir", str(e))
+
+    def _adjuntar_pasaporte(self, i):
+        self._sync_pax()
+        ruta = filedialog.askopenfilename(
+            title="Adjuntar pasaporte del pasajero",
+            filetypes=[("Documentos", "*.pdf *.jpg *.jpeg *.png"), ("Todos", "*.*")])
+        if not ruta:
+            return
+        destino = self._copiar_adjunto(ruta, prefijo=f"pasaporte_{i+1}")
+        if not destino:
+            return
+        self.res["pasajeros_list"][i]["adjunto"] = destino
+        actualizar_reserva(self.res.get("numero", ""),
+                           {"pasajeros_list": self.res["pasajeros_list"]})
+        self._pintar_pasajeros()
+
+    def _quitar_adjunto_pax(self, i):
+        self._sync_pax()
+        try:
+            self.res["pasajeros_list"][i]["adjunto"] = ""
+        except Exception:
+            pass
+        actualizar_reserva(self.res.get("numero", ""),
+                           {"pasajeros_list": self.res["pasajeros_list"]})
+        self._pintar_pasajeros()
+
+    def _pintar_vuelos(self):
+        for w in self.vuelos_box.winfo_children():
+            w.destroy()
+        vuelos = self.res.setdefault("vuelos_adjuntos", [])
+        if not vuelos:
+            ctk.CTkLabel(self.vuelos_box, text="Sin vuelos adjuntos. Usa '+ Adjuntar vuelo' para "
+                         "subir tiquetes o itinerarios de vuelo.", text_color=MUTED,
+                         font=("Segoe UI", 10)).pack(pady=4)
+        for i, v in enumerate(vuelos):
+            row = ctk.CTkFrame(self.vuelos_box, fg_color="transparent"); row.pack(fill="x", pady=2)
+            ctk.CTkButton(row, text="✈ " + os.path.basename(v), height=30, fg_color=CARD2,
+                          text_color=NAVY, hover_color=LINE, anchor="w",
+                          command=lambda a=v: self._abrir_archivo(a)).pack(
+                side="left", fill="x", expand=True, padx=(0, 6))
+            ctk.CTkButton(row, text="🗑", width=32, height=30, fg_color=RED, hover_color="#9B2C22",
+                          command=lambda idx=i: self._quitar_vuelo(idx)).pack(side="left")
+
+    def _adjuntar_vuelo(self):
+        rutas = filedialog.askopenfilenames(
+            title="Adjuntar vuelo(s) / tiquete(s)",
+            filetypes=[("Documentos", "*.pdf *.jpg *.jpeg *.png"), ("Todos", "*.*")])
+        if not rutas:
+            return
+        vuelos = self.res.setdefault("vuelos_adjuntos", [])
+        for r in rutas:
+            destino = self._copiar_adjunto(r, prefijo="vuelo")
+            if destino:
+                vuelos.append(destino)
+        actualizar_reserva(self.res.get("numero", ""), {"vuelos_adjuntos": vuelos})
+        self._pintar_vuelos()
+
+    def _quitar_vuelo(self, i):
+        try:
+            del self.res["vuelos_adjuntos"][i]
+        except Exception:
+            pass
+        actualizar_reserva(self.res.get("numero", ""),
+                           {"vuelos_adjuntos": self.res.get("vuelos_adjuntos", [])})
+        self._pintar_vuelos()
 
     def _pintar_servicios(self):
         for w in self.serv_box.winfo_children():
@@ -4611,7 +4751,8 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
             "estado": self.res["estado"], "monto": self.res.get("monto", 0),
             "notas": self.res.get("notas", ""), "itinerario": self.res.get("itinerario", ""),
             "destinos_detalle": self.res.get("destinos_detalle", []),
-            "pasajeros_list": self.res.get("pasajeros_list", [])}
+            "pasajeros_list": self.res.get("pasajeros_list", []),
+            "vuelos_adjuntos": self.res.get("vuelos_adjuntos", [])}
         for k in self.res:
             if k.startswith("os_"):
                 cambios[k] = self.res[k]

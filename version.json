@@ -1,5 +1,5 @@
 {
-  "version": "4.5",
+  "version": "4.6",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 4.5 - Reservas: voucher a proveedor con modelo propio por tipo (Guia, Transporte con FECHA/ORIGEN/DESTINO/HORA/N.PAX/VEHICULO, Hotel y Actividad), enviable por correo. Seguimiento por proveedor: estado (Pendiente / Reservado sin pago / Reservado con pago), evidencia de voucher enviado y panel resumen de gestion dentro de la reserva."
+  "notas": "Version 4.6 - Reservas: adjuntar el PASAPORTE (archivo) de cada pasajero por nombre y adjuntar VUELOS/tiquetes; se abren desde la reserva y se guardan en %APPDATA%. Desde el modulo de Cotizacion, boton 'Enviar a reserva' que crea la reserva y la asigna automaticamente a una asesora (rotacion)."
 }
