@@ -1,5 +1,5 @@
 {
-  "version": "4.4",
+  "version": "4.5",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 4.4 - Reservas: en cada destino los servicios se organizan en 4 tipos de proveedor (Hotel, Transporte/Traslados, Guia, Actividades/Tours), cada uno con su boton para generar y enviar el voucher directamente al proveedor por correo. Migracion automatica de reservas anteriores."
+  "notas": "Version 4.5 - Reservas: voucher a proveedor con modelo propio por tipo (Guia, Transporte con FECHA/ORIGEN/DESTINO/HORA/N.PAX/VEHICULO, Hotel y Actividad), enviable por correo. Seguimiento por proveedor: estado (Pendiente / Reservado sin pago / Reservado con pago), evidencia de voucher enviado y panel resumen de gestion dentro de la reserva."
 }
