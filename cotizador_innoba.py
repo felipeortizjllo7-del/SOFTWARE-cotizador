@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "4.0"
+VERSION = "4.1"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1209,26 +1209,24 @@ def reserva_desde_cotizacion(cot):
        Extrae hoteles y servicios (traslados/tours) como renglones asignables a
        proveedor."""
     snap = cot.get("snapshot") or {}
-    renglones = []
-    hoteles = []
+    detalle = []
+    hotel0 = ""
     for tr in snap.get("tramos", []):
         dest = tr.get("destino", "")
+        item = {"nombre": dest, "hoteles": [], "traslados": [], "tours": []}
         for h in tr.get("hoteles", []):
-            renglones.append({"tipo": "Hotel", "destino": dest, "servicio": h,
-                              "proveedor": h, "correo": "", "enviado": False,
-                              "fecha_envio": ""})
-            hoteles.append({"destino": dest, "nombre": h})
+            item["hoteles"].append({"servicio": h, "proveedor": h, "correo": "",
+                                    "enviado": False, "fecha_envio": ""})
+            hotel0 = hotel0 or h
         for t in tr.get("trans", []):
-            renglones.append({"tipo": "Traslado", "destino": dest, "servicio": t,
-                              "proveedor": "", "correo": "", "enviado": False,
-                              "fecha_envio": ""})
+            item["traslados"].append({"servicio": t, "proveedor": "", "correo": "",
+                                      "enviado": False, "fecha_envio": ""})
         for a in tr.get("act", []):
-            renglones.append({"tipo": "Tour", "destino": dest, "servicio": a,
-                              "proveedor": "", "correo": "", "enviado": False,
-                              "fecha_envio": ""})
+            item["tours"].append({"servicio": a, "proveedor": "", "correo": "",
+                                  "enviado": False, "fecha_envio": ""})
+        detalle.append(item)
     ini, fin = _fechas_in_out(cot.get("fechas_viaje", ""))
     ciudad = (cot.get("destinos", []) or [""])[0]
-    hotel0 = hoteles[0]["nombre"] if hoteles else ""
     rec = {
         "cot_origen": cot.get("numero", ""),
         "cliente": cot.get("cliente", ""),
@@ -1240,8 +1238,7 @@ def reserva_desde_cotizacion(cot):
         "estado": "Confirmada",
         "monto": float(cot.get("total", 0) or 0),
         "moneda": "USD",
-        "hoteles": hoteles,
-        "renglones": renglones,
+        "destinos_detalle": detalle,
         "itinerario": snap.get("itinerario", ""),
         "notas": "",
         "snapshot": snap,
@@ -1250,6 +1247,53 @@ def reserva_desde_cotizacion(cot):
     }
     rec.update(_voucher_defaults(ciudad, hotel0, ini, fin, snap.get("hab", "")))
     return rec
+
+
+# Categorias de servicio por destino (clave interna, etiqueta, tipo para el voucher)
+CATEGORIAS_SERV = [("hoteles", "Hotel", "Hotel"),
+                   ("traslados", "Traslados (aeropuerto)", "Traslado"),
+                   ("tours", "Tours (guia / transporte)", "Tour")]
+MAX_DESTINOS_RES = 5
+
+
+def _servicio_vacio():
+    return {"servicio": "", "proveedor": "", "correo": "", "enviado": False, "fecha_envio": ""}
+
+
+def _destino_vacio(nombre=""):
+    return {"nombre": nombre, "hoteles": [], "traslados": [], "tours": []}
+
+
+def destinos_detalle_de(res):
+    """Devuelve la estructura de servicios por destino. Migra reservas antiguas que
+       guardaban 'renglones' plano a la nueva estructura anidada por destino."""
+    dd = res.get("destinos_detalle")
+    if isinstance(dd, list) and dd:
+        for d in dd:
+            d.setdefault("nombre", "")
+            for k in ("hoteles", "traslados", "tours"):
+                d.setdefault(k, [])
+        return dd
+    # Migrar desde renglones + destinos
+    nombres = list(res.get("destinos", []) or [])
+    for r in res.get("renglones", []):
+        d = r.get("destino", "")
+        if d and d not in nombres:
+            nombres.append(d)
+    dd = [_destino_vacio(n) for n in nombres]
+    idx = {n: i for i, n in enumerate(nombres)}
+    for r in res.get("renglones", []):
+        n = r.get("destino", "")
+        if n not in idx:
+            continue
+        s = {"servicio": r.get("servicio", ""), "proveedor": r.get("proveedor", ""),
+             "correo": r.get("correo", ""), "enviado": r.get("enviado", False),
+             "fecha_envio": r.get("fecha_envio", "")}
+        t = r.get("tipo", "")
+        clave = "hoteles" if t == "Hotel" else ("traslados" if t == "Traslado" else "tours")
+        dd[idx[n]][clave].append(s)
+    res["destinos_detalle"] = dd
+    return dd
 
 
 def _fechas_in_out(fechas_viaje):
@@ -1420,10 +1464,20 @@ def generar_voucher_cliente(cfg, res, ruta):
         pdf.set_y(top_y + 24)
     pdf.ln(3)
 
-    # --- RESERVA HOTELERA ---
+    # --- RESERVA HOTELERA (una fila Ciudad/Hotel por destino) ---
     _os_band(pdf, "RESERVA HOTELERA")
-    _os_row(pdf, "CIUDAD", res.get("os_ciudad", "") or ", ".join(res.get("destinos", [])))
-    _os_row(pdf, "HOTEL", res.get("os_hotel", ""))
+    dd = destinos_detalle_de(res)
+    filas_hotel = []
+    for d in dd:
+        hoteles = [h.get("servicio", "") for h in d.get("hoteles", []) if h.get("servicio")]
+        if d.get("nombre") or hoteles:
+            filas_hotel.append((d.get("nombre", ""), " / ".join(hoteles)))
+    if not filas_hotel:
+        filas_hotel = [(res.get("os_ciudad", "") or ", ".join(res.get("destinos", [])),
+                        res.get("os_hotel", ""))]
+    for ciudad_d, hotel_d in filas_hotel:
+        _os_row(pdf, "CIUDAD", ciudad_d)
+        _os_row(pdf, "HOTEL", hotel_d)
     ini = res.get("os_fecha_in", ""); fin = res.get("os_fecha_out", "")
     pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 8.5); pdf.set_fill_color(*PDF_CLARO); pdf.set_text_color(*PDF_PRIM)
@@ -3867,25 +3921,18 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         f2 = ctk.CTkFrame(cont, fg_color="transparent"); f2.pack(fill="x")
         c1 = ctk.CTkFrame(f2, fg_color="transparent"); c1.pack(side="left", fill="x", expand=True, padx=(0, 6))
         c2 = ctk.CTkFrame(f2, fg_color="transparent"); c2.pack(side="left", fill="x", expand=True, padx=(6, 0))
-        ctk.CTkLabel(c1, text="Destinos (separados por coma)", text_color=MUTED,
-                     font=("Segoe UI", 11)).pack(anchor="w", padx=2)
-        self.v_dest = tk.StringVar(value=", ".join(res.get("destinos", [])))
-        ctk.CTkEntry(c1, textvariable=self.v_dest, height=32).pack(fill="x", pady=(0, 6))
-        ctk.CTkLabel(c2, text="Fechas de viaje", text_color=MUTED,
+        ctk.CTkLabel(c1, text="Fechas de viaje", text_color=MUTED,
                      font=("Segoe UI", 11)).pack(anchor="w", padx=2)
         self.v_fechas = tk.StringVar(value=res.get("fechas_viaje", ""))
-        ctk.CTkEntry(c2, textvariable=self.v_fechas, height=32).pack(fill="x", pady=(0, 6))
-        f3 = ctk.CTkFrame(cont, fg_color="transparent"); f3.pack(fill="x")
-        c3 = ctk.CTkFrame(f3, fg_color="transparent"); c3.pack(side="left", fill="x", expand=True, padx=(0, 6))
-        c4 = ctk.CTkFrame(f3, fg_color="transparent"); c4.pack(side="left", fill="x", expand=True, padx=(6, 0))
-        ctk.CTkLabel(c3, text="Pasajeros", text_color=MUTED,
+        ctk.CTkEntry(c1, textvariable=self.v_fechas, height=32).pack(fill="x", pady=(0, 6))
+        ctk.CTkLabel(c2, text="Pasajeros", text_color=MUTED,
                      font=("Segoe UI", 11)).pack(anchor="w", padx=2)
         self.v_pax = tk.StringVar(value=res.get("pax_txt", ""))
-        ctk.CTkEntry(c3, textvariable=self.v_pax, height=32).pack(fill="x", pady=(0, 8))
-        ctk.CTkLabel(c4, text="Alojamiento / habitaciones", text_color=MUTED,
+        ctk.CTkEntry(c2, textvariable=self.v_pax, height=32).pack(fill="x", pady=(0, 6))
+        ctk.CTkLabel(cont, text="Alojamiento / habitaciones (general)", text_color=MUTED,
                      font=("Segoe UI", 11)).pack(anchor="w", padx=2)
         self.v_hab = tk.StringVar(value=res.get("hab", ""))
-        ctk.CTkEntry(c4, textvariable=self.v_hab, height=32).pack(fill="x", pady=(0, 8))
+        ctk.CTkEntry(cont, textvariable=self.v_hab, height=32).pack(fill="x", pady=(0, 8))
 
         # Estado + monto
         fila = ctk.CTkFrame(cont, fg_color="transparent"); fila.pack(fill="x", pady=(10, 4))
@@ -3970,14 +4017,18 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self.txt_info.pack(fill="x", pady=(0, 8))
         self.txt_info.insert("1.0", res.get("os_info_adicional", "") or "")
 
-        # Proveedores / renglones
+        # Servicios por destino (hasta 5): Hotel, Traslados, Tours
         hdr = ctk.CTkFrame(cont, fg_color="transparent"); hdr.pack(fill="x", pady=(6, 2))
-        ctk.CTkLabel(hdr, text="PROVEEDORES Y VOUCHERS", text_color=NAVY,
+        ctk.CTkLabel(hdr, text="SERVICIOS POR DESTINO (hasta 5)", text_color=NAVY,
                      font=("Segoe UI", 13, "bold")).pack(side="left")
-        ctk.CTkButton(hdr, text="+ Agregar servicio", width=140, height=30, fg_color=BLUE,
-                      hover_color=BLUE_H, command=self._agregar_renglon).pack(side="right")
-        self.reng_box = ctk.CTkFrame(cont, fg_color="transparent"); self.reng_box.pack(fill="x")
-        self._pintar_renglones()
+        ctk.CTkButton(hdr, text="+ Agregar destino", width=150, height=30, fg_color=BLUE,
+                      hover_color=BLUE_H, command=self._agregar_destino).pack(side="right")
+        ctk.CTkLabel(cont, text="En cada destino selecciona el hotel, los traslados de aeropuerto "
+                     "y los tours (agrega una fila por proveedor: guia y transporte, o guia-conductor).",
+                     text_color=MUTED, font=("Segoe UI", 10), wraplength=740,
+                     justify="left").pack(anchor="w", padx=2)
+        self.serv_box = ctk.CTkFrame(cont, fg_color="transparent"); self.serv_box.pack(fill="x")
+        self._pintar_servicios()
 
         # Voucher cliente + guardar
         pie = ctk.CTkFrame(cont, fg_color="transparent"); pie.pack(fill="x", pady=(14, 4))
@@ -3988,70 +4039,100 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         ctk.CTkButton(pie, text="Guardar reserva", height=40, fg_color=GREEN,
                       hover_color=GREEN_H, command=self._guardar).pack(side="right")
 
-    def _pintar_renglones(self):
-        for w in self.reng_box.winfo_children():
+    def _pintar_servicios(self):
+        for w in self.serv_box.winfo_children():
             w.destroy()
-        self.reng_widgets = []
-        rens = self.res.get("renglones", [])
-        if not rens:
-            ctk.CTkLabel(self.reng_box, text="Sin servicios. Usa '+ Agregar servicio' para "
-                         "anadir hoteles/servicios y su proveedor.", text_color=MUTED).pack(
-                pady=8)
-        for i, r in enumerate(rens):
-            self._fila_renglon(i, r)
+        self.serv_widgets = []      # (di, cat, si, {servicio, proveedor, correo})
+        self.dest_nom_vars = {}     # di -> StringVar del nombre del destino
+        dd = destinos_detalle_de(self.res)
+        if not dd:
+            ctk.CTkLabel(self.serv_box, text="Sin destinos. Usa '+ Agregar destino' para "
+                         "anadir un destino con su hotel, traslados y tours.",
+                         text_color=MUTED).pack(pady=8)
+        for di, dest in enumerate(dd):
+            self._card_destino(di, dest)
 
-    def _fila_renglon(self, i, r):
-        card = ctk.CTkFrame(self.reng_box, fg_color=CARD, corner_radius=8,
+    def _card_destino(self, di, dest):
+        card = ctk.CTkFrame(self.serv_box, fg_color=CARD2, corner_radius=12,
                             border_width=1, border_color=LINE)
-        card.pack(fill="x", pady=4)
-        v_tipo = tk.StringVar(value=r.get("tipo", "Servicio"))
-        v_dest = tk.StringVar(value=r.get("destino", ""))
-        v_serv = tk.StringVar(value=r.get("servicio", ""))
-        v_prov = tk.StringVar(value=r.get("proveedor", ""))
-        v_mail = tk.StringVar(value=r.get("correo", ""))
-        top = ctk.CTkFrame(card, fg_color="transparent"); top.pack(fill="x", padx=8, pady=(6, 2))
-        ctk.CTkOptionMenu(top, variable=v_tipo, values=["Hotel", "Traslado", "Tour", "Servicio"],
-                          width=110, height=28, fg_color=NAVY, button_color=NAVY2).pack(side="left")
-        ctk.CTkEntry(top, textvariable=v_dest, placeholder_text="Destino", width=130,
-                     height=28).pack(side="left", padx=6)
-        ctk.CTkEntry(top, textvariable=v_serv, placeholder_text="Servicio / hotel",
-                     height=28).pack(side="left", fill="x", expand=True)
-        mid = ctk.CTkFrame(card, fg_color="transparent"); mid.pack(fill="x", padx=8, pady=2)
-        ctk.CTkLabel(mid, text="Proveedor", text_color=MUTED, width=64).pack(side="left")
-        ctk.CTkEntry(mid, textvariable=v_prov, placeholder_text="Nombre del proveedor",
-                     width=210, height=28).pack(side="left", padx=4)
-        ctk.CTkLabel(mid, text="Correo", text_color=MUTED, width=48).pack(side="left")
-        ctk.CTkEntry(mid, textvariable=v_mail, placeholder_text="correo@proveedor.com",
+        card.pack(fill="x", pady=6)
+        head = ctk.CTkFrame(card, fg_color="transparent"); head.pack(fill="x", padx=8, pady=(8, 2))
+        ctk.CTkLabel(head, text=f"Destino {di+1}", text_color=NAVY,
+                     font=("Segoe UI", 13, "bold")).pack(side="left")
+        v_nom = tk.StringVar(value=dest.get("nombre", ""))
+        self.dest_nom_vars[di] = v_nom
+        ctk.CTkEntry(head, textvariable=v_nom, width=230, height=30,
+                     placeholder_text="Ciudad / destino").pack(side="left", padx=8)
+        ctk.CTkButton(head, text="Quitar destino", width=120, height=30, fg_color=RED,
+                      hover_color="#9B2C22",
+                      command=lambda i=di: self._quitar_destino(i)).pack(side="right")
+        for cat, etiqueta, _tipo in CATEGORIAS_SERV:
+            sec = ctk.CTkFrame(card, fg_color="transparent"); sec.pack(fill="x", padx=10, pady=(4, 0))
+            ctk.CTkLabel(sec, text=etiqueta, text_color=BLUE,
+                         font=("Segoe UI", 11, "bold")).pack(side="left")
+            ctk.CTkButton(sec, text="+ " + etiqueta.split(" ")[0], width=90, height=26,
+                          fg_color=BLUE, hover_color=BLUE_H,
+                          command=lambda i=di, c=cat: self._agregar_servicio(i, c)).pack(side="right")
+            for si, s in enumerate(dest.get(cat, [])):
+                self._fila_servicio(card, di, cat, si, s)
+        ctk.CTkFrame(card, fg_color="transparent", height=4).pack()
+
+    def _fila_servicio(self, parent, di, cat, si, s):
+        row = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=8,
+                           border_width=1, border_color=LINE)
+        row.pack(fill="x", padx=12, pady=3)
+        v_serv = tk.StringVar(value=s.get("servicio", ""))
+        v_prov = tk.StringVar(value=s.get("proveedor", ""))
+        v_mail = tk.StringVar(value=s.get("correo", ""))
+        l1 = ctk.CTkFrame(row, fg_color="transparent"); l1.pack(fill="x", padx=6, pady=(5, 2))
+        ctk.CTkEntry(l1, textvariable=v_serv, height=28,
+                     placeholder_text="Servicio (hotel / traslado / tour: guia, transporte...)").pack(
+            side="left", fill="x", expand=True)
+        l2 = ctk.CTkFrame(row, fg_color="transparent"); l2.pack(fill="x", padx=6, pady=(0, 2))
+        ctk.CTkLabel(l2, text="Proveedor", text_color=MUTED, width=62).pack(side="left")
+        ctk.CTkEntry(l2, textvariable=v_prov, placeholder_text="Nombre del proveedor",
+                     width=200, height=28).pack(side="left", padx=4)
+        ctk.CTkLabel(l2, text="Correo", text_color=MUTED, width=44).pack(side="left")
+        ctk.CTkEntry(l2, textvariable=v_mail, placeholder_text="correo@proveedor.com",
                      height=28).pack(side="left", padx=4, fill="x", expand=True)
-        bot = ctk.CTkFrame(card, fg_color="transparent"); bot.pack(fill="x", padx=8, pady=(2, 6))
-        est = ctk.CTkLabel(bot, text=("Voucher enviado " + r.get("fecha_envio", "")
-                                      if r.get("enviado") else "Sin enviar"),
-                           text_color=(GREEN if r.get("enviado") else MUTED),
+        l3 = ctk.CTkFrame(row, fg_color="transparent"); l3.pack(fill="x", padx=6, pady=(0, 5))
+        est = ctk.CTkLabel(l3, text=("Voucher enviado " + s.get("fecha_envio", "")
+                                     if s.get("enviado") else "Sin enviar"),
+                           text_color=(GREEN if s.get("enviado") else MUTED),
                            font=("Segoe UI", 10))
         est.pack(side="left")
-        ctk.CTkButton(bot, text="Quitar", width=60, height=28, fg_color=RED,
-                      hover_color="#9B2C22",
-                      command=lambda idx=i: self._quitar_renglon(idx)).pack(side="right", padx=3)
-        ctk.CTkButton(bot, text="Enviar al proveedor", width=150, height=28, fg_color=GREEN,
+        ctk.CTkButton(l3, text="Quitar", width=58, height=26, fg_color=RED, hover_color="#9B2C22",
+                      command=lambda: self._quitar_servicio(di, cat, si)).pack(side="right", padx=3)
+        ctk.CTkButton(l3, text="Enviar al proveedor", width=140, height=26, fg_color=GREEN,
                       hover_color=GREEN_H,
-                      command=lambda idx=i, l=est: self._enviar_prov(idx, l)).pack(side="right", padx=3)
-        ctk.CTkButton(bot, text="Generar voucher", width=130, height=28, fg_color=BLUE,
+                      command=lambda l=est: self._enviar_serv(di, cat, si, l)).pack(side="right", padx=3)
+        ctk.CTkButton(l3, text="Generar voucher", width=124, height=26, fg_color=BLUE,
                       hover_color=BLUE_H,
-                      command=lambda idx=i: self._voucher_prov(idx, abrir=True)).pack(side="right", padx=3)
-        self.reng_widgets.append({"tipo": v_tipo, "destino": v_dest, "servicio": v_serv,
-                                  "proveedor": v_prov, "correo": v_mail})
+                      command=lambda: self._voucher_serv(di, cat, si)).pack(side="right", padx=3)
+        self.serv_widgets.append((di, cat, si,
+                                  {"servicio": v_serv, "proveedor": v_prov, "correo": v_mail}))
+
+    def _sync_serv(self):
+        dd = self.res.setdefault("destinos_detalle", [])
+        for di, cat, si, w in self.serv_widgets:
+            try:
+                s = dd[di][cat][si]
+                s["servicio"] = w["servicio"].get().strip()
+                s["proveedor"] = w["proveedor"].get().strip()
+                s["correo"] = w["correo"].get().strip()
+            except Exception:
+                pass
+        for di, v in self.dest_nom_vars.items():
+            try:
+                dd[di]["nombre"] = v.get().strip()
+            except Exception:
+                pass
+        self.res["destinos"] = [d.get("nombre", "") for d in dd if d.get("nombre", "").strip()]
 
     def _sync(self):
-        rens = self.res.setdefault("renglones", [])
-        for i, w in enumerate(self.reng_widgets):
-            if i < len(rens):
-                rens[i].update({"tipo": w["tipo"].get(), "destino": w["destino"].get().strip(),
-                                "servicio": w["servicio"].get().strip(),
-                                "proveedor": w["proveedor"].get().strip(),
-                                "correo": w["correo"].get().strip()})
+        self._sync_serv()
         self.res["cliente"] = self.v_cli.get().strip()
         self.res["email"] = self.v_email.get().strip()
-        self.res["destinos"] = [d.strip() for d in self.v_dest.get().split(",") if d.strip()]
         self.res["fechas_viaje"] = self.v_fechas.get().strip()
         self.res["pax_txt"] = self.v_pax.get().strip()
         self.res["hab"] = self.v_hab.get().strip()
@@ -4071,40 +4152,73 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         except Exception:
             pass
 
-    def _agregar_renglon(self):
+    def _agregar_destino(self):
         self._sync()
-        self.res.setdefault("renglones", []).append(
-            {"tipo": "Servicio", "destino": "", "servicio": "", "proveedor": "",
-             "correo": "", "enviado": False, "fecha_envio": ""})
-        self._pintar_renglones()
+        dd = self.res.setdefault("destinos_detalle", [])
+        if len(dd) >= MAX_DESTINOS_RES:
+            messagebox.showinfo("Limite", f"Maximo {MAX_DESTINOS_RES} destinos por reserva.")
+            return
+        dd.append(_destino_vacio())
+        self._pintar_servicios()
 
-    def _quitar_renglon(self, i):
+    def _quitar_destino(self, di):
+        dd = self.res.get("destinos_detalle", [])
+        if di >= len(dd):
+            return
+        nom = dd[di].get("nombre", "") or f"Destino {di+1}"
+        if messagebox.askyesno("Quitar destino",
+                               f"Quitar '{nom}' y todos sus servicios de la reserva?"):
+            self._sync()
+            try:
+                del self.res["destinos_detalle"][di]
+            except Exception:
+                pass
+            self._pintar_servicios()
+
+    def _agregar_servicio(self, di, cat):
         self._sync()
         try:
-            del self.res["renglones"][i]
+            self.res["destinos_detalle"][di][cat].append(_servicio_vacio())
         except Exception:
             pass
-        self._pintar_renglones()
+        self._pintar_servicios()
+
+    def _quitar_servicio(self, di, cat, si):
+        self._sync()
+        try:
+            del self.res["destinos_detalle"][di][cat][si]
+        except Exception:
+            pass
+        self._pintar_servicios()
 
     def _carpeta_vouchers(self):
         ruta = os.path.join(datos_dir(), "vouchers")
         os.makedirs(ruta, exist_ok=True)
         return ruta
 
-    def _voucher_prov(self, i, abrir=False):
+    def _reng_de(self, di, cat, si):
+        tipo = {"hoteles": "Hotel", "traslados": "Traslado", "tours": "Tour"}[cat]
+        dest = self.res["destinos_detalle"][di]
+        s = dest[cat][si]
+        reng = {"tipo": tipo, "destino": dest.get("nombre", ""),
+                "servicio": s.get("servicio", ""), "proveedor": s.get("proveedor", ""),
+                "correo": s.get("correo", "")}
+        return reng, s
+
+    def _voucher_serv(self, di, cat, si, abrir=True):
         self._sync()
-        rens = self.res.get("renglones", [])
-        if i >= len(rens):
+        try:
+            reng, s = self._reng_de(di, cat, si)
+        except Exception:
             return None
-        r = rens[i]
-        if not (r.get("proveedor") or r.get("servicio")):
+        if not (reng["proveedor"] or reng["servicio"]):
             messagebox.showinfo("Datos incompletos",
                                 "Escribe al menos el proveedor o el servicio.")
             return None
         fn = os.path.join(self._carpeta_vouchers(),
-                          f"Voucher_prov_{self.res.get('numero','')}_{i+1}.pdf")
+                          f"Voucher_prov_{self.res.get('numero','')}_{di+1}_{cat}_{si+1}.pdf")
         try:
-            generar_voucher_proveedor(self.cfg, self.res, r, fn)
+            generar_voucher_proveedor(self.cfg, self.res, reng, fn)
         except Exception as e:
             messagebox.showerror("Error al generar el voucher", str(e))
             return None
@@ -4115,34 +4229,36 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
                 pass
         return fn
 
-    def _enviar_prov(self, i, lbl):
-        fn = self._voucher_prov(i, abrir=False)
+    def _enviar_serv(self, di, cat, si, lbl):
+        fn = self._voucher_serv(di, cat, si, abrir=False)
         if not fn:
             return
-        r = self.res["renglones"][i]
-        if not r.get("correo"):
+        reng, s = self._reng_de(di, cat, si)
+        if not reng["correo"]:
             messagebox.showinfo("Correo del proveedor",
                                 "Escribe el correo del proveedor para enviarle el voucher.")
             return
         try:
-            asunto = (f"Reserva {self.res.get('numero','')} - {r.get('servicio','')} - "
+            asunto = (f"Reserva {self.res.get('numero','')} - {reng['servicio']} - "
                       f"{self.cfg.get('empresa','')}")
-            cuerpo = (f"Estimado {r.get('proveedor','')}:\n\n"
+            cuerpo = (f"Estimado {reng['proveedor']}:\n\n"
                       f"Adjuntamos el voucher de la reserva {self.res.get('numero','')} "
                       f"para {self.res.get('cliente','')}.\n"
+                      f"Destino: {reng['destino']}\n"
                       f"Fechas de viaje: {self.res.get('fechas_viaje','')}\n"
                       f"Pasajeros: {self.res.get('pax_txt','')}\n\n"
                       f"Favor confirmar disponibilidad y remitir la facturacion a nombre de "
                       f"{self.cfg.get('empresa','')}.\n\nCordialmente,\n{self.cfg.get('empresa','')}")
-            enviar_correo(self.cfg, r["correo"], asunto, cuerpo, fn)
+            enviar_correo(self.cfg, reng["correo"], asunto, cuerpo, fn)
         except Exception as e:
             messagebox.showerror("No se pudo enviar", str(e))
             return
-        r["enviado"] = True
-        r["fecha_envio"] = datetime.date.today().strftime("%d/%m/%Y")
-        lbl.configure(text="Voucher enviado " + r["fecha_envio"], text_color=GREEN)
-        actualizar_reserva(self.res.get("numero", ""), {"renglones": self.res["renglones"]})
-        messagebox.showinfo("Enviado", f"Voucher enviado a {r['correo']}.")
+        s["enviado"] = True
+        s["fecha_envio"] = datetime.date.today().strftime("%d/%m/%Y")
+        lbl.configure(text="Voucher enviado " + s["fecha_envio"], text_color=GREEN)
+        actualizar_reserva(self.res.get("numero", ""),
+                           {"destinos_detalle": self.res["destinos_detalle"]})
+        messagebox.showinfo("Enviado", f"Voucher enviado a {reng['correo']}.")
 
     def _voucher_cliente(self, abrir=True):
         self._sync()
@@ -4193,7 +4309,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
             "pax_txt": self.res.get("pax_txt", ""), "hab": self.res.get("hab", ""),
             "estado": self.res["estado"], "monto": self.res.get("monto", 0),
             "notas": self.res.get("notas", ""), "itinerario": self.res.get("itinerario", ""),
-            "renglones": self.res.get("renglones", [])}
+            "destinos_detalle": self.res.get("destinos_detalle", [])}
         for k in self.res:
             if k.startswith("os_"):
                 cambios[k] = self.res[k]

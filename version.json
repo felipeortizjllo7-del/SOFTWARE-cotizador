@@ -1,5 +1,5 @@
 {
-  "version": "4.0",
+  "version": "4.1",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 4.0 - El voucher al cliente ahora es una ORDEN DE SERVICIO con tablas (reserva hotelera, pasajeros con identificacion, itinerario de vuelo, actividades dia por dia, informacion adicional y contacto de emergencia), totalmente parametrizable desde la reserva. Se pueden ELIMINAR reservas desde el historial."
+  "notas": "Version 4.1 - Reservas por destino (hasta 5): en cada destino se selecciona Hotel, Traslados de aeropuerto y Tours (una fila por proveedor: guia y transporte, o guia-conductor), cada uno con su voucher al proveedor. El voucher al cliente lista Ciudad+Hotel por cada destino."
 }
