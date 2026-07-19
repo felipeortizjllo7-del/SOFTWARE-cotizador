@@ -1,5 +1,5 @@
 {
-  "version": "4.9",
+  "version": "5.0",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 4.9 - Reservas: Ciudad y Hotel del voucher ahora son desplegables ligados al tarifario (hoteles por destino); telefono por pasajero (sale en el voucher); hora del vuelo de llegada y de salida; barra inferior fija con Voucher/Enviar/Guardar siempre visible y ventana ajustada a la pantalla."
+  "notas": "Version 5.0 - Historial de cotizaciones: el boton 'Editar' vuelve a estar siempre visible junto a 'Reserva' (si la cotizacion no tiene datos para editar, avisa)."
 }

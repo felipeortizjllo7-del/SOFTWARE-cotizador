@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "4.9"
+VERSION = "5.0"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -2127,7 +2127,7 @@ class VentanaCotizaciones(ctk.CTkToplevel):
     def __init__(self, master):
         super().__init__(master)
         self.title("Historial de cotizaciones")
-        self.geometry("920x620"); self.configure(fg_color=BG)
+        self.geometry("1000x620"); self.configure(fg_color=BG)
         self.transient(master); self.grab_set()
         # traer cotizaciones nuevas hechas por clientes en el HTML
         try:
@@ -2200,17 +2200,16 @@ class VentanaCotizaciones(ctk.CTkToplevel):
             ctk.CTkLabel(cel, text=linea2, text_color=MUTED, anchor="w",
                          font=("Segoe UI", 10)).pack(anchor="w")
             col = 1
-            if it.get("snapshot"):
-                ctk.CTkButton(fila, text="✎ Editar cotizacion", width=130, height=30,
-                              corner_radius=8, fg_color=GREEN, hover_color=GREEN_H,
-                              font=("Segoe UI", 11, "bold"),
-                              command=lambda x=it: self._editar_cotizacion(x)).grid(
-                    row=0, column=col, padx=4); col += 1
+            ctk.CTkButton(fila, text="✎ Editar", width=88, height=30,
+                          corner_radius=8, fg_color=GREEN, hover_color=GREEN_H,
+                          font=("Segoe UI", 11, "bold"),
+                          command=lambda x=it: self._editar_cotizacion(x)).grid(
+                row=0, column=col, padx=4); col += 1
             ctk.CTkButton(fila, text="Seguimiento", width=100, height=30, corner_radius=8,
                           fg_color=CYAN, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
                           command=lambda x=it: self._detalle(x)).grid(row=0, column=col, padx=4)
             col += 1
-            ctk.CTkButton(fila, text="➜ Reserva", width=100, height=30, corner_radius=8,
+            ctk.CTkButton(fila, text="➜ Reserva", width=98, height=30, corner_radius=8,
                           fg_color=NAVY, hover_color=NAVY2, font=("Segoe UI", 11, "bold"),
                           command=lambda x=it: self._enviar_a_reserva(x)).grid(row=0, column=col, padx=4)
             col += 1
@@ -2274,6 +2273,13 @@ class VentanaCotizaciones(ctk.CTkToplevel):
     def _editar_cotizacion(self, it):
         app = self.master
         if not hasattr(app, "_cargar_cotizacion"):
+            return
+        if not it.get("snapshot"):
+            messagebox.showinfo(
+                "Editar cotizacion",
+                f"La cotizacion {it.get('numero','')} no tiene datos guardados para editar "
+                "(se creo en una version anterior o llego desde el HTML sin detalle). "
+                "Puedes crear una nueva o enviarla a reserva.", parent=self)
             return
         if not messagebox.askyesno(
                 "Editar cotizacion",
