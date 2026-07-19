@@ -1,5 +1,5 @@
 {
-  "version": "4.8",
+  "version": "4.9",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 4.8 - Reservas: en cada destino, el campo Hotel es un desplegable con las opciones de hoteles que maneja INNOBA para ese destino (segun el archivo precios_2026 extraido del Excel FINAL). Se puede elegir de la lista o escribir uno distinto."
+  "notas": "Version 4.9 - Reservas: Ciudad y Hotel del voucher ahora son desplegables ligados al tarifario (hoteles por destino); telefono por pasajero (sale en el voucher); hora del vuelo de llegada y de salida; barra inferior fija con Voucher/Enviar/Guardar siempre visible y ventana ajustada a la pantalla."
 }
