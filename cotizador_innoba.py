@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "5.1"
+VERSION = "5.2"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -5166,7 +5166,10 @@ class ModuloReservas(ctk.CTkToplevel):
                       command=self._nueva_desde_cot).pack(side="left", padx=(0, 8))
         ctk.CTkButton(hb, text="Asesores", width=100, height=36, corner_radius=10,
                       fg_color=CYAN, hover_color=BLUE, font=("Segoe UI", 12, "bold"),
-                      command=self._config_asesores).pack(side="left")
+                      command=self._config_asesores).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(hb, text="Datos de mi empresa", width=170, height=36, corner_radius=10,
+                      fg_color=NAVY2, hover_color=NAVY, font=("Segoe UI", 12, "bold"),
+                      command=self._config_empresa).pack(side="left")
 
         bar = ctk.CTkFrame(self, fg_color="transparent"); bar.pack(fill="x", padx=18, pady=(12, 4))
         self.q = tk.StringVar()
@@ -5254,6 +5257,12 @@ class ModuloReservas(ctk.CTkToplevel):
 
     def _config_asesores(self):
         DialogoAsesores(self, self.cfg, on_save=self._recargar_cfg)
+
+    def _config_empresa(self):
+        VentanaEmpresa(self, self.cfg, self._on_cfg_empresa)
+
+    def _on_cfg_empresa(self, cfg):
+        self.cfg = cfg
 
     def _recargar_cfg(self):
         self.cfg = cargar_config()
