@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "3.6"
+VERSION = "3.7"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -111,6 +111,16 @@ NAVY = "#013984"; NAVY2 = "#00285F"; BLUE = "#1466C7"; BLUE_H = "#0F4FA0"
 CYAN = "#2E8BE6"; BG = "#EEF3FA"; CARD = "#FFFFFF"; CARD2 = "#F4F8FD"
 TEXT = "#16233D"; MUTED = "#64748B"; GREEN = "#1E9E5A"; GREEN_H = "#178049"
 LINE = "#D7E1EF"; RED = "#C0392B"
+
+def aclarar(hexc, f=0.86):
+    """Mezcla un color hacia el blanco (f=0..1) para obtener un tinte suave."""
+    try:
+        h = hexc.lstrip("#")
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        r = int(r + (255 - r) * f); g = int(g + (255 - g) * f); b = int(b + (255 - b) * f)
+        return f"#{r:02x}{g:02x}{b:02x}"
+    except Exception:
+        return "#EEF3FA"
 
 
 # ============================================================================
@@ -759,13 +769,13 @@ class CotizacionPDF(FPDF):
             try:
                 with Image.open(logo) as im:
                     w_px, h_px = im.size
-                max_w, max_h = 42, 24
+                max_w, max_h = 54, 30
                 ratio = min(max_w / w_px, max_h / h_px)
                 w_mm = w_px * ratio * 0.2645833; h_mm = h_px * ratio * 0.2645833
                 if h_mm > max_h:
                     s = max_h / h_mm; w_mm *= s; h_mm *= s
                 self.image(logo, x=15, y=y0, h=h_mm)
-                text_x = 15 + w_mm + 6
+                text_x = 15 + w_mm + 8
             except Exception:
                 text_x = 15
         self.set_xy(text_x, y0)
@@ -784,7 +794,7 @@ class CotizacionPDF(FPDF):
         if l3:
             self.set_x(text_x); self.cell(0, 5, self._t("  |  ".join(l3)), ln=1)
         self.set_draw_color(*PDF_PRIM); self.set_line_width(0.6)
-        self.line(15, 40, 195, 40); self.set_y(45)
+        self.line(15, 44, 195, 44); self.set_y(48)
 
     def footer(self):
         self.set_y(-14); self.set_font("Helvetica", "I", 8)
@@ -1229,6 +1239,7 @@ def reserva_desde_cotizacion(cot):
         "moneda": "USD",
         "hoteles": hoteles,
         "renglones": renglones,
+        "itinerario": snap.get("itinerario", ""),
         "notas": "",
         "snapshot": snap,
         "voucher_cliente": "",
@@ -1297,11 +1308,38 @@ def generar_voucher_cliente(cfg, res, ruta):
         pdf.cell(48, 6, T(r.get("destino", "")), fill=True)
         pdf.cell(100, 6, T(r.get("servicio", "")), fill=True, ln=1)
         fill = not fill
+    _voucher_itinerario(pdf, res.get("itinerario", ""))
     pdf.ln(4)
     pdf.set_font("Helvetica", "I", 9); pdf.set_text_color(110, 110, 110)
     pdf.multi_cell(0, 5, T("Este documento confirma la reserva de los servicios indicados. "
                            "Para cualquier cambio, contacte a su asesor. " + cfg.get("empresa", "")))
     pdf.output(ruta)
+
+
+def _voucher_itinerario(pdf, texto):
+    """Renderiza el itinerario dia por dia en el voucher (lineas 'DIA ...' en azul)."""
+    texto = (texto or "").strip()
+    if not texto:
+        return
+    T = pdf._t
+    if pdf.get_y() > 245:
+        pdf.add_page()
+    pdf.ln(4)
+    pdf.set_font("Helvetica", "B", 11); pdf.set_text_color(*PDF_BLUE)
+    pdf.cell(0, 7, T("ITINERARIO DE VIAJE"), ln=1)
+    for linea in texto.splitlines():
+        ln = linea.rstrip()
+        if not ln.strip():
+            pdf.ln(1); continue
+        if pdf.get_y() > 268:
+            pdf.add_page()
+        es_dia = ln.strip().upper().startswith(("DIA", "DÍA"))
+        pdf.set_x(15)
+        if es_dia:
+            pdf.set_font("Helvetica", "B", 10); pdf.set_text_color(*PDF_PRIM)
+        else:
+            pdf.set_font("Helvetica", "", 9); pdf.set_text_color(*PDF_TXT)
+        pdf.multi_cell(180, 5.5, T(ln))
 
 
 def generar_voucher_proveedor(cfg, res, renglon, ruta):
@@ -3649,6 +3687,18 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self.v_notas = tk.StringVar(value=res.get("notas", ""))
         ctk.CTkEntry(cont, textvariable=self.v_notas, height=32).pack(fill="x", pady=(0, 8))
 
+        # Itinerario de viaje (dia por dia) - editable, sale en el voucher del cliente
+        ith = ctk.CTkFrame(cont, fg_color="transparent"); ith.pack(fill="x", pady=(4, 0))
+        ctk.CTkLabel(ith, text="ITINERARIO DE VIAJE (dia por dia)", text_color=NAVY,
+                     font=("Segoe UI", 13, "bold")).pack(side="left")
+        ctk.CTkLabel(ith, text="Aparece en el voucher del cliente", text_color=MUTED,
+                     font=("Segoe UI", 10)).pack(side="left", padx=8)
+        self.txt_itin = ctk.CTkTextbox(cont, height=150, corner_radius=8,
+                                       border_width=1, border_color=LINE, fg_color=CARD,
+                                       font=("Segoe UI", 12))
+        self.txt_itin.pack(fill="x", pady=(2, 8))
+        self.txt_itin.insert("1.0", res.get("itinerario", "") or "")
+
         # Proveedores / renglones
         hdr = ctk.CTkFrame(cont, fg_color="transparent"); hdr.pack(fill="x", pady=(6, 2))
         ctk.CTkLabel(hdr, text="PROVEEDORES Y VOUCHERS", text_color=NAVY,
@@ -3734,6 +3784,10 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         except Exception:
             pass
         self.res["notas"] = self.v_notas.get().strip()
+        try:
+            self.res["itinerario"] = self.txt_itin.get("1.0", "end").strip()
+        except Exception:
+            pass
 
     def _agregar_renglon(self):
         self._sync()
@@ -3852,7 +3906,8 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self._sync()
         actualizar_reserva(self.res.get("numero", ""), {
             "estado": self.res["estado"], "monto": self.res.get("monto", 0),
-            "notas": self.res.get("notas", ""), "renglones": self.res.get("renglones", [])})
+            "notas": self.res.get("notas", ""), "itinerario": self.res.get("itinerario", ""),
+            "renglones": self.res.get("renglones", [])})
         if self.on_save:
             self.on_save()
         messagebox.showinfo("Guardado", "Reserva actualizada.")
@@ -4077,29 +4132,34 @@ class Launcher(ctk.CTk):
             pass
 
     def _construir(self):
-        # Encabezado
-        head = ctk.CTkFrame(self, fg_color=CARD, corner_radius=0, height=76)
+        # Encabezado con banda de marca (navy) + logo grande
+        head = ctk.CTkFrame(self, fg_color=NAVY, corner_radius=0, height=104)
         head.pack(fill="x"); head.pack_propagate(False)
-        izq = ctk.CTkFrame(head, fg_color="transparent"); izq.pack(side="left", padx=24)
+        izq = ctk.CTkFrame(head, fg_color="transparent"); izq.pack(side="left", padx=30)
         try:
-            img = Image.open(recurso("logo_innoba.png")); w, h = img.size; hh = 44
+            img = Image.open(recurso("logo_innoba.png")); w, h = img.size; hh = 68
             self.logo_img = ctk.CTkImage(light_image=img, size=(int(w * hh / h), hh))
-            ctk.CTkLabel(izq, image=self.logo_img, text="").pack(side="left", pady=8)
+            chip = ctk.CTkFrame(izq, fg_color="#FFFFFF", corner_radius=12)
+            chip.pack(side="left", pady=18)
+            ctk.CTkLabel(chip, image=self.logo_img, text="").pack(padx=14, pady=8)
         except Exception:
-            ctk.CTkLabel(izq, text="INNOBA", font=("Segoe UI", 24, "bold"),
-                         text_color=NAVY).pack(side="left", pady=8)
-        ctk.CTkLabel(head, text=f"v{VERSION}", text_color=MUTED,
-                     font=("Segoe UI", 12)).pack(side="right", padx=24)
+            ctk.CTkLabel(izq, text="INNOBA", font=("Segoe UI", 30, "bold"),
+                         text_color="#FFFFFF").pack(side="left", pady=18)
+        der = ctk.CTkFrame(head, fg_color="transparent"); der.pack(side="right", padx=30)
+        ctk.CTkLabel(der, text="Sistema de Gestion", text_color="#FFFFFF",
+                     font=("Segoe UI", 16, "bold")).pack(anchor="e", pady=(30, 0))
+        ctk.CTkLabel(der, text=f"INNOBA Colombia DMC  ·  v{VERSION}", text_color="#BBD0EC",
+                     font=("Segoe UI", 12)).pack(anchor="e")
 
         # Titulo central
         ctk.CTkLabel(self, text="Bienvenido", text_color=NAVY,
-                     font=("Segoe UI", 26, "bold")).pack(pady=(28, 2))
+                     font=("Segoe UI", 30, "bold")).pack(pady=(30, 2))
         ctk.CTkLabel(self, text="Elige el modulo con el que quieres trabajar",
-                     text_color=MUTED, font=("Segoe UI", 14)).pack(pady=(0, 24))
+                     text_color=MUTED, font=("Segoe UI", 15)).pack(pady=(0, 26))
 
         # Tarjetas de modulo
         cont = ctk.CTkFrame(self, fg_color="transparent")
-        cont.pack(fill="both", expand=True, padx=30, pady=(0, 20))
+        cont.pack(fill="both", expand=True, padx=40, pady=(0, 18))
         for i in range(3):
             cont.grid_columnconfigure(i, weight=1, uniform="mod")
         cont.grid_rowconfigure(0, weight=1)
@@ -4108,40 +4168,59 @@ class Launcher(ctk.CTk):
 
         # Pie
         ctk.CTkLabel(self, text="INNOBA Colombia DMC   ·   Sistema interno",
-                     text_color=MUTED, font=("Segoe UI", 11)).pack(pady=(0, 12))
+                     text_color=MUTED, font=("Segoe UI", 11)).pack(pady=(0, 14))
 
     def _tarjeta(self, parent, col, nombre, icono, desc, color, colorh, activo):
-        card = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=16,
+        card = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=20,
                             border_width=1, border_color=LINE)
-        card.grid(row=0, column=col, padx=12, sticky="nsew")
-        card.grid_rowconfigure(3, weight=1)
+        card.grid(row=0, column=col, padx=16, sticky="nsew")
+        card.grid_rowconfigure(5, weight=1)
         card.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(card, text=icono, font=("Segoe UI Emoji", 46)).grid(
-            row=0, column=0, pady=(26, 4))
-        ctk.CTkLabel(card, text=nombre, text_color=NAVY,
-                     font=("Segoe UI", 19, "bold")).grid(row=1, column=0, pady=(0, 2))
-        if not activo:
-            ctk.CTkLabel(card, text="EN DESARROLLO", text_color="#B7791F",
-                         fg_color="#FFF3C4", corner_radius=8,
-                         font=("Segoe UI", 10, "bold")).grid(row=2, column=0, pady=(0, 6),
-                                                             ipadx=8, ipady=2)
-        else:
-            ctk.CTkLabel(card, text="DISPONIBLE", text_color=GREEN_H,
-                         fg_color="#E3F5EA", corner_radius=8,
-                         font=("Segoe UI", 10, "bold")).grid(row=2, column=0, pady=(0, 6),
-                                                            ipadx=8, ipady=2)
-        ctk.CTkLabel(card, text=desc, text_color=MUTED, justify="center",
-                     font=("Segoe UI", 12)).grid(row=3, column=0, padx=18, sticky="n")
+        # Franja de color superior (barra de acento)
+        acento = ctk.CTkFrame(card, fg_color=color, height=6, corner_radius=20)
+        acento.grid(row=0, column=0, sticky="new", padx=26, pady=(0, 0))
 
-        txt = "Abrir modulo" if activo else "Proximamente"
-        cmd = (lambda n=nombre: self._abrir(n))
-        btn = ctk.CTkButton(card, text=txt, height=42, corner_radius=10,
+        # Badge circular con el icono sobre tinte del color del modulo
+        badge = ctk.CTkFrame(card, width=104, height=104, corner_radius=52,
+                             fg_color=aclarar(color, 0.85))
+        badge.grid(row=1, column=0, pady=(28, 8)); badge.grid_propagate(False)
+        ctk.CTkLabel(badge, text=icono, font=("Segoe UI Emoji", 50)).place(
+            relx=0.5, rely=0.5, anchor="center")
+
+        ctk.CTkLabel(card, text=nombre, text_color=NAVY,
+                     font=("Segoe UI", 22, "bold")).grid(row=2, column=0, pady=(0, 4))
+        if activo:
+            ctk.CTkLabel(card, text="  DISPONIBLE  ", text_color=GREEN_H,
+                         fg_color="#E3F5EA", corner_radius=10,
+                         font=("Segoe UI", 10, "bold")).grid(row=3, column=0, pady=(0, 8),
+                                                             ipady=3)
+        else:
+            ctk.CTkLabel(card, text="  EN DESARROLLO  ", text_color="#B7791F",
+                         fg_color="#FFF3C4", corner_radius=10,
+                         font=("Segoe UI", 10, "bold")).grid(row=3, column=0, pady=(0, 8),
+                                                             ipady=3)
+        ctk.CTkLabel(card, text=desc, text_color=MUTED, justify="center",
+                     wraplength=280, font=("Segoe UI", 12)).grid(row=4, column=0, padx=22, sticky="n")
+
+        txt = "Abrir modulo  →" if activo else "Proximamente"
+        btn = ctk.CTkButton(card, text=txt, height=46, corner_radius=12,
                             fg_color=color, hover_color=colorh,
-                            font=("Segoe UI", 13, "bold"), command=cmd)
-        btn.grid(row=4, column=0, padx=18, pady=(8, 22), sticky="ew")
+                            font=("Segoe UI", 14, "bold"),
+                            command=lambda n=nombre: self._abrir(n))
+        btn.grid(row=5, column=0, padx=22, pady=(10, 24), sticky="ews")
         if not activo:
             btn.configure(fg_color="#CBD5E1", hover_color="#B8C4D6", text_color="#4B5563")
+
+        # Efecto hover: resalta el borde de la tarjeta
+        def _enter(_e, c=card, col=color):
+            try: c.configure(border_color=col, border_width=2)
+            except Exception: pass
+        def _leave(_e, c=card):
+            try: c.configure(border_color=LINE, border_width=1)
+            except Exception: pass
+        for wdg in (card, badge):
+            wdg.bind("<Enter>", _enter); wdg.bind("<Leave>", _leave)
 
     def _abrir(self, nombre):
         if nombre == "Cotizacion":

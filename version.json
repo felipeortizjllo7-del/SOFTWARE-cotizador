@@ -1,5 +1,5 @@
 {
-  "version": "3.6",
+  "version": "3.7",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 3.6 - Nuevo MODULO DE RESERVAS (.exe): convierte una cotizacion en reserva con consecutivo (desde 2952), asignacion rotativa entre 3 asesores, seleccion de proveedor por servicio, emision y envio de voucher a cliente y a proveedor por correo, historial con estados (Confirmada, Confirmada con pago, Aplazada, Anulada) y monto negociado."
+  "notas": "Version 3.7 - Voucher de reserva ahora incluye ITINERARIO de viaje dia por dia (editable en la reserva). Nuevo diseno del selector de modulos (banda de marca, iconos en circulo, barras de acento, pastillas de estado). Logo mas grande en el PDF y en el inicio."
 }
