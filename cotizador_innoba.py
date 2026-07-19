@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "5.2"
+VERSION = "5.3"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -111,6 +111,22 @@ NAVY = "#013984"; NAVY2 = "#00285F"; BLUE = "#1466C7"; BLUE_H = "#0F4FA0"
 CYAN = "#2E8BE6"; BG = "#EEF3FA"; CARD = "#FFFFFF"; CARD2 = "#F4F8FD"
 TEXT = "#16233D"; MUTED = "#64748B"; GREEN = "#1E9E5A"; GREEN_H = "#178049"
 LINE = "#D7E1EF"; RED = "#C0392B"
+
+def _alto_util_pantalla(fallback=760):
+    """Altura utilizable de la pantalla (sin la barra de tareas), en Windows."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        rect = wintypes.RECT()
+        # SPI_GETWORKAREA = 0x0030
+        ctypes.windll.user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(rect), 0)
+        alto = rect.bottom - rect.top
+        if alto > 200:
+            return alto
+    except Exception:
+        pass
+    return fallback
+
 
 def aclarar(hexc, f=0.86):
     """Mezcla un color hacia el blanco (f=0..1) para obtener un tinte suave."""
@@ -4212,12 +4228,10 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self.precios = cargar_precios_seguro()   # para desplegar hoteles por destino
         self.title("Reserva " + res.get("numero", ""))
         self.configure(fg_color=BG)
-        try:
-            sh = self.winfo_screenheight()
-        except Exception:
-            sh = 900
-        alto = max(560, min(820, sh - 100))
-        self.geometry(f"840x{alto}+120+20")
+        # Ajustar a la altura util (sin barra de tareas) para que el pie SIEMPRE se vea
+        wah = _alto_util_pantalla(fallback=(self.winfo_screenheight() - 60))
+        alto = max(500, min(860, wah - 60))   # 60 = barra de titulo + margen
+        self.geometry(f"860x{alto}+120+6")
         self.transient(master); self.grab_set()
         # Barra inferior FIJA (siempre visible) con las acciones
         self.footer = ctk.CTkFrame(self, fg_color=CARD, corner_radius=0, height=58)
