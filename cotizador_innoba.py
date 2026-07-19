@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "4.6"
+VERSION = "4.7"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1353,6 +1353,15 @@ def _fechas_in_out(fechas_viaje):
         a, b = s.split(" al ", 1)
         return a.strip(), b.strip()
     return s.strip(), ""
+
+
+def _parse_ddmmyyyy(s):
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
+        try:
+            return datetime.datetime.strptime((s or "").strip(), fmt).date()
+        except Exception:
+            continue
+    return None
 
 
 def _voucher_defaults(ciudad="", hotel="", fecha_in="", fecha_out="", habitaciones=""):
@@ -4137,14 +4146,26 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         f2 = ctk.CTkFrame(cont, fg_color="transparent"); f2.pack(fill="x")
         c1 = ctk.CTkFrame(f2, fg_color="transparent"); c1.pack(side="left", fill="x", expand=True, padx=(0, 6))
         c2 = ctk.CTkFrame(f2, fg_color="transparent"); c2.pack(side="left", fill="x", expand=True, padx=(6, 0))
-        ctk.CTkLabel(c1, text="Fechas de viaje", text_color=MUTED,
+        ctk.CTkLabel(c1, text="Fecha de llegada", text_color=MUTED,
                      font=("Segoe UI", 11)).pack(anchor="w", padx=2)
-        self.v_fechas = tk.StringVar(value=res.get("fechas_viaje", ""))
-        ctk.CTkEntry(c1, textvariable=self.v_fechas, height=32).pack(fill="x", pady=(0, 6))
-        ctk.CTkLabel(c2, text="Pasajeros (resumen, ej. 3 adultos)", text_color=MUTED,
+        self.sel_llegada = SelectorFecha(c1)
+        self.sel_llegada.pack(fill="x", pady=(0, 6))
+        ctk.CTkLabel(c2, text="Fecha de salida", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        self.sel_salida = SelectorFecha(c2)
+        self.sel_salida.pack(fill="x", pady=(0, 6))
+        # inicializar calendarios desde los datos guardados
+        _ll = res.get("os_fecha_in", "") or _fechas_in_out(res.get("fechas_viaje", ""))[0]
+        _sa = res.get("os_fecha_out", "") or _fechas_in_out(res.get("fechas_viaje", ""))[1]
+        dll = _parse_ddmmyyyy(_ll); dsa = _parse_ddmmyyyy(_sa)
+        if dll:
+            self.sel_llegada._set(dll)
+        if dsa:
+            self.sel_salida._set(dsa)
+        ctk.CTkLabel(cont, text="Pasajeros (resumen, ej. 3 adultos)", text_color=MUTED,
                      font=("Segoe UI", 11)).pack(anchor="w", padx=2)
         self.v_pax = tk.StringVar(value=res.get("pax_txt", ""))
-        ctk.CTkEntry(c2, textvariable=self.v_pax, height=32).pack(fill="x", pady=(0, 6))
+        ctk.CTkEntry(cont, textvariable=self.v_pax, height=32).pack(fill="x", pady=(0, 6))
 
         # Pasajeros (lista: nombre + pasaporte/documento) -> tabla del voucher
         ph = ctk.CTkFrame(cont, fg_color="transparent"); ph.pack(fill="x", pady=(2, 0))
@@ -4220,7 +4241,8 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
             ctk.CTkEntry(b, textvariable=par(k2, l2), height=30).pack(fill="x", pady=(0, 5))
 
         pareja("os_ciudad", "Ciudad", "os_hotel", "Hotel")
-        pareja("os_fecha_in", "Fecha IN", "os_fecha_out", "Fecha OUT")
+        ctk.CTkLabel(cont, text="(Las fechas IN/OUT se toman de la llegada y salida de arriba)",
+                     text_color=MUTED, font=("Segoe UI", 10)).pack(anchor="w", padx=2)
         pareja("os_habitaciones", "N. Habitaciones", "os_acomodacion", "Acomodacion")
         pareja("os_alimentacion", "Alimentacion", "os_origen", "Origen")
         pareja("os_contacto_principal", "Contacto principal", "os_contacto_secundario", "Segundo contacto")
@@ -4572,7 +4594,10 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self._sync_pax()
         self.res["cliente"] = self.v_cli.get().strip()
         self.res["email"] = self.v_email.get().strip()
-        self.res["fechas_viaje"] = self.v_fechas.get().strip()
+        ll = self.sel_llegada.get_str(); sa = self.sel_salida.get_str()
+        self.res["os_fecha_in"] = ll
+        self.res["os_fecha_out"] = sa
+        self.res["fechas_viaje"] = (ll + " al " + sa) if (ll and sa) else (ll or sa)
         self.res["pax_txt"] = self.v_pax.get().strip()
         self.res["hab"] = self.v_hab.get().strip()
         self.res["estado"] = self.v_estado.get()

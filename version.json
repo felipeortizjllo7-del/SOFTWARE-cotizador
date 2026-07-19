@@ -1,5 +1,5 @@
 {
-  "version": "4.6",
+  "version": "4.7",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 4.6 - Reservas: adjuntar el PASAPORTE (archivo) de cada pasajero por nombre y adjuntar VUELOS/tiquetes; se abren desde la reserva y se guardan en %APPDATA%. Desde el modulo de Cotizacion, boton 'Enviar a reserva' que crea la reserva y la asigna automaticamente a una asesora (rotacion)."
+  "notas": "Version 4.7 - Reservas: la fecha de viaje ahora se elige con calendario, separada en Fecha de llegada y Fecha de salida; ambas alimentan el voucher (Fecha IN / Fecha OUT)."
 }
