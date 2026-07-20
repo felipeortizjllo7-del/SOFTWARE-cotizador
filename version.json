@@ -1,5 +1,5 @@
 {
-  "version": "6.3",
+  "version": "6.4",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 6.3 - Nuevo MODULO COMERCIAL: seccion de tareas de gestion (con checklist, cliente/empresa, responsable, prioridad, fecha limite y estados Pendiente/En progreso/Completada/Vencida) e INDICADORES de gestion (tareas por estado, ventas del mes por Felipe y Carlos, conversion de cotizaciones y reservas del mes). Reporte de tareas en Excel. Los 3 modulos ya estan disponibles en el inicio."
+  "notas": "Version 6.4 - Indicadores de gestion tambien en Cotizaciones y Reservas. Historial de cotizaciones: cotizaciones totales, en seguimiento, ganadas, perdidas, % conversion, ganado USD, ticket promedio, del mes y seguimientos vencidos. Modulo Reservas: reservas por estado, negociado activo, cobrado con pago, del mes y vouchers enviados/total. Tarjetas KPI compactas y uniformes en los tres modulos."
 }

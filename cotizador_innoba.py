@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "6.3"
+VERSION = "6.4"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1764,6 +1764,72 @@ def indicadores_comerciales():
     return ind
 
 
+def indicadores_cotizaciones():
+    """KPIs del modulo de cotizaciones."""
+    data = cargar_cotizaciones().get("items", [])
+    hoy = datetime.date.today(); mes = hoy.strftime("%Y-%m")
+    ind = {"total": len(data)}
+    for e in ESTADOS_COT:
+        ind[e] = sum(1 for c in data if c.get("estado") == e)
+    ind["monto_total"] = round(sum(float(c.get("total", 0) or 0) for c in data), 2)
+    gan = [c for c in data if c.get("estado") == "Ganada"]
+    ind["monto_ganado"] = round(sum(float(c.get("total", 0) or 0) for c in gan), 2)
+    ind["conversion"] = round(100.0 * len(gan) / len(data), 1) if data else 0.0
+    ind["ticket"] = round(ind["monto_ganado"] / len(gan), 2) if gan else 0.0
+
+    def mesc(c):
+        f = parse_fecha(c.get("fecha", ""))
+        return f.strftime("%Y-%m") if f else ""
+
+    delmes = [c for c in data if mesc(c) == mes]
+    ind["mes_n"] = len(delmes)
+    ind["mes_usd"] = round(sum(float(c.get("total", 0) or 0) for c in delmes), 2)
+    try:
+        ind["seg_vencidos"] = len(seguimientos_pendientes())
+    except Exception:
+        ind["seg_vencidos"] = 0
+    return ind
+
+
+def indicadores_reservas():
+    """KPIs del modulo de reservas."""
+    data = cargar_reservas().get("items", [])
+    hoy = datetime.date.today(); mes = hoy.strftime("%Y-%m")
+    ind = {"total": len(data)}
+    for e in ESTADOS_RES:
+        ind[e] = sum(1 for r in data if r.get("estado") == e)
+    activos = [r for r in data if r.get("estado") != "Anulada"]
+    ind["monto_total"] = round(sum(float(r.get("monto", 0) or 0) for r in activos), 2)
+    conpago = [r for r in data if r.get("estado") == "Confirmada con pago"]
+    ind["con_pago_usd"] = round(sum(float(r.get("monto", 0) or 0) for r in conpago), 2)
+    delmes = [r for r in data if _mes_de_iso(r.get("fecha_creacion", "")) == mes]
+    ind["mes_n"] = len(delmes)
+    ind["mes_usd"] = round(sum(float(r.get("monto", 0) or 0) for r in delmes
+                               if r.get("estado") != "Anulada"), 2)
+    tot_serv = env = 0
+    for r in data:
+        try:
+            t, e, _pe = resumen_seguimiento(r)
+        except Exception:
+            t, e = 0, 0
+        tot_serv += t; env += e
+    ind["serv_total"] = tot_serv; ind["serv_enviados"] = env
+    ind["serv_pendientes"] = tot_serv - env
+    return ind
+
+
+def _kpi_card(parent, titulo, valor, color, ancho=140, alto=66):
+    """Tarjeta compacta de indicador (valor grande + titulo)."""
+    card = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=12, border_width=1,
+                        border_color=LINE, width=ancho, height=alto)
+    card.pack(side="left", padx=4, fill="y"); card.pack_propagate(False)
+    ctk.CTkLabel(card, text=str(valor), text_color=color,
+                 font=("Segoe UI", 18, "bold")).pack(pady=(9, 0), padx=8)
+    ctk.CTkLabel(card, text=titulo, text_color=MUTED, font=("Segoe UI", 10),
+                 wraplength=ancho - 14).pack(pady=(0, 8), padx=6)
+    return card
+
+
 def exportar_reporte_tareas(ruta, mes=None):
     """Reporte de tareas comerciales (Excel)."""
     import openpyxl
@@ -2644,7 +2710,7 @@ class VentanaCotizaciones(ctk.CTkToplevel):
     def __init__(self, master):
         super().__init__(master)
         self.title("Historial de cotizaciones")
-        self.geometry("1000x620"); self.configure(fg_color=BG)
+        self.geometry("1240x660"); self.configure(fg_color=BG)
         self.transient(master); self.grab_set()
         # traer cotizaciones nuevas hechas por clientes en el HTML
         try:
@@ -2652,7 +2718,7 @@ class VentanaCotizaciones(ctk.CTkToplevel):
         except Exception:
             pass
         self.data = cargar_cotizaciones()
-        self.grid_columnconfigure(0, weight=1); self.grid_rowconfigure(2, weight=1)
+        self.grid_columnconfigure(0, weight=1); self.grid_rowconfigure(3, weight=1)
         top = ctk.CTkFrame(self, fg_color="transparent")
         top.grid(row=0, column=0, sticky="ew", padx=16, pady=(14, 2))
         top.grid_columnconfigure(0, weight=1)
@@ -2670,15 +2736,34 @@ class VentanaCotizaciones(ctk.CTkToplevel):
         e = ctk.CTkEntry(self, textvariable=self.var_q, height=36, corner_radius=10,
                          border_color=BLUE, border_width=2, fg_color=CARD, font=("Segoe UI", 12),
                          placeholder_text="Buscar por consecutivo, agencia o asesor...")
-        e.grid(row=1, column=0, sticky="ew", padx=16, pady=(2, 8))
+        e.grid(row=1, column=0, sticky="ew", padx=16, pady=(2, 6))
         self.var_q.trace_add("write", lambda *a: self._pintar())
+        self.kpis = ctk.CTkFrame(self, fg_color="transparent")
+        self.kpis.grid(row=2, column=0, sticky="ew", padx=12, pady=(0, 4))
         self.lista = ctk.CTkScrollableFrame(self, fg_color=CARD, corner_radius=12)
-        self.lista.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 14))
+        self.lista.grid(row=3, column=0, sticky="nsew", padx=16, pady=(0, 14))
         self.after(120, e.focus_set)
         self.bind("<Escape>", lambda ev: self.destroy())
         self._pintar()
 
+    def _pintar_kpis(self):
+        for w in self.kpis.winfo_children():
+            w.destroy()
+        ind = indicadores_cotizaciones()
+        fila = ctk.CTkFrame(self.kpis, fg_color="transparent"); fila.pack(fill="x")
+        _kpi_card(fila, "Cotizaciones", ind["total"], NAVY)
+        _kpi_card(fila, "En seguimiento", ind.get("En seguimiento", 0), "#D9A400")
+        _kpi_card(fila, "Ganadas", ind.get("Ganada", 0), GREEN)
+        _kpi_card(fila, "Perdidas", ind.get("Perdida", 0), RED)
+        _kpi_card(fila, "Conversion", f"{ind['conversion']}%", "#7A5AB5")
+        _kpi_card(fila, "Ganado (USD)", usd(ind["monto_ganado"]), GREEN_H, ancho=170)
+        _kpi_card(fila, "Ticket prom.", usd(ind["ticket"]), NAVY, ancho=150)
+        _kpi_card(fila, f"Del mes ({ind['mes_n']})", usd(ind["mes_usd"]), BLUE, ancho=160)
+        _kpi_card(fila, "Seguim. vencidos", ind["seg_vencidos"],
+                  RED if ind["seg_vencidos"] else MUTED)
+
     def _pintar(self):
+        self._pintar_kpis()
         for w in self.lista.winfo_children():
             w.destroy()
         q = _nz(self.var_q.get())
@@ -6089,7 +6174,10 @@ class ModuloReservas(ctk.CTkToplevel):
                       fg_color=NAVY2, hover_color=NAVY, font=("Segoe UI", 12, "bold"),
                       command=self._config_empresa).pack(side="left")
 
-        bar = ctk.CTkFrame(self, fg_color="transparent"); bar.pack(fill="x", padx=18, pady=(12, 4))
+        # Indicadores
+        self.kpis = ctk.CTkFrame(self, fg_color="transparent"); self.kpis.pack(fill="x", padx=18, pady=(12, 2))
+
+        bar = ctk.CTkFrame(self, fg_color="transparent"); bar.pack(fill="x", padx=18, pady=(4, 4))
         self.q = tk.StringVar()
         e = ctk.CTkEntry(bar, textvariable=self.q, height=36, corner_radius=10,
                          placeholder_text="Buscar reserva por numero, cliente, asesor, estado...")
@@ -6102,7 +6190,24 @@ class ModuloReservas(ctk.CTkToplevel):
         self.lista.pack(fill="both", expand=True, padx=18, pady=(4, 14))
         self._pintar()
 
+    def _pintar_kpis(self):
+        for w in self.kpis.winfo_children():
+            w.destroy()
+        ind = indicadores_reservas()
+        fila = ctk.CTkFrame(self.kpis, fg_color="transparent"); fila.pack(fill="x")
+        _kpi_card(fila, "Reservas totales", ind["total"], NAVY)
+        _kpi_card(fila, "Confirmadas", ind.get("Confirmada", 0), "#D9A400")
+        _kpi_card(fila, "Con pago", ind.get("Confirmada con pago", 0), GREEN)
+        _kpi_card(fila, "Aplazadas", ind.get("Aplazada", 0), "#E67E22")
+        _kpi_card(fila, "Anuladas", ind.get("Anulada", 0), RED)
+        _kpi_card(fila, "Negociado (activo)", usd(ind["monto_total"]), NAVY, ancho=170)
+        _kpi_card(fila, "Cobrado (con pago)", usd(ind["con_pago_usd"]), GREEN_H, ancho=170)
+        _kpi_card(fila, f"Del mes ({ind['mes_n']})", usd(ind["mes_usd"]), BLUE, ancho=160)
+        _kpi_card(fila, "Vouchers enviados",
+                  f"{ind['serv_enviados']}/{ind['serv_total']}", "#7A5AB5", ancho=150)
+
     def _pintar(self):
+        self._pintar_kpis()
         for w in self.lista.winfo_children():
             w.destroy()
         items = list(reversed(cargar_reservas().get("items", [])))
@@ -6519,11 +6624,7 @@ class ModuloComercial(ctk.CTkToplevel):
         self._pintar()
 
     def _kpi(self, parent, titulo, valor, color, ancho=150):
-        card = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=12, border_width=1, border_color=LINE, width=ancho)
-        card.pack(side="left", padx=4, fill="y")
-        card.pack_propagate(False)
-        ctk.CTkLabel(card, text=str(valor), text_color=color, font=("Segoe UI", 22, "bold")).pack(pady=(10, 0), padx=12)
-        ctk.CTkLabel(card, text=titulo, text_color=MUTED, font=("Segoe UI", 10), wraplength=ancho - 16).pack(pady=(0, 10), padx=8)
+        return _kpi_card(parent, titulo, valor, color, ancho=ancho)
 
     def _pintar_kpis(self):
         for w in self.kpis.winfo_children():
