@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "5.4"
+VERSION = "5.5"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1736,7 +1736,98 @@ def generar_voucher_cliente(cfg, res, ruta):
         pdf.ln(1)
         _os_band(pdf, "CONTACTO DE EMERGENCIA:  " + emerg)
 
+    # --- CONDICIONES GENERALES Y DE PAGO (pagina propia) ---
+    _condiciones_cliente(pdf, cfg)
+
     pdf.output(ruta)
+
+
+def _condiciones_cliente(pdf, cfg):
+    """Pagina de Condiciones Generales y de Pago en el voucher del cliente."""
+    T = pdf._t
+    pdf.add_page()
+    _os_band(pdf, "CONDICIONES GENERALES Y DE PAGO")
+    pdf.ln(2)
+
+    def titulo(txt):
+        pdf.set_x(12); pdf.set_font("Helvetica", "B", 9); pdf.set_text_color(*PDF_PRIM)
+        pdf.multi_cell(186, 4.8, T(txt))
+
+    def cuerpo(txt):
+        pdf.set_x(12); pdf.set_font("Helvetica", "", 8.3); pdf.set_text_color(*PDF_TXT)
+        pdf.multi_cell(186, 4.4, T(txt)); pdf.ln(1.2)
+
+    def item(tit, cpo):
+        titulo(tit); cuerpo(cpo)
+
+    item("IVA:",
+         "Los precios NO incluyen IVA por ser servicio a extranjeros. En caso de que la venta "
+         "sea a un colombiano se debe aplicar la tarifa del 19% de IVA.")
+    item("Forma de pago:",
+         "1 mes antes de la llegada del grupo. Por link de pagos con sobrecargo del 3%, o "
+         "transferencia bancaria a la cuenta de ahorros BANISTMO PANAMA 0120179743.")
+    item("Validez de la oferta:", "30 dias.")
+    item("Pago:",
+         "El pago debe realizarse con 30 dias de antelacion a la llegada de los pasajeros. De no "
+         "presentarse el pago no se garantiza la reserva y queda sujeta a cambio de tarifas y "
+         "disponibilidad de los servicios.")
+    titulo("Cancelaciones:")
+    for b in ("Si la cancelacion se realiza con 30 dias de antelacion, se realiza la devolucion "
+              "del 100% del valor pagado.",
+              "Si la cancelacion se realiza con 20 dias a la llegada de los pasajeros, se devuelve "
+              "el 50% del valor pagado.",
+              "Si la cancelacion se realiza con 10 dias o menos a la llegada de los pasajeros, no "
+              "se realiza devolucion del dinero pagado."):
+        pdf.set_x(14); pdf.set_font("Helvetica", "", 8.3); pdf.set_text_color(*PDF_TXT)
+        pdf.multi_cell(184, 4.4, T("-  " + b))
+    pdf.ln(1.5)
+
+    cuerpo("La presente cotizacion no implica reserva ni bloqueo de lugares. Todas las tarifas "
+           "estan sujetas a disponibilidad al momento de realizar la reserva en firme. Precios "
+           "indicados en Dolares Americanos, de caracter informativo, y deben ser confirmados "
+           "para realizar la reservacion ya que estan sujetos a modificaciones sin previo aviso. "
+           "Precios de contado en dolares americanos; para transferencia electronica o link de "
+           "pagos aplica un sobrecargo del 3% adicional. Favor tener en cuenta que los pasaportes "
+           "para todo viaje internacional deben tener una vigencia minima de 6 meses al momento "
+           "de abordar; el pasajero es responsable de comunicarse con los consulados de los "
+           "paises que visitara para reconfirmar Visas y Vacunas requeridas para el ingreso. En "
+           "caso de no recibir copias de pasaportes en la fecha establecida, INNOBA DMC S.A.S, "
+           "Operadora Mayorista, no se hace responsable por la informacion recibida; cualquier "
+           "cambio o modificacion sera responsabilidad de la agencia y/o pasajero y estara sujeto "
+           "a las condiciones y cargos de la aerolinea. Este documento es INDISPENSABLE para la "
+           "emision de los boletos de avion y tren cuando corresponda.")
+    cuerpo("Los productos y/o servicios que se venden a los clientes finales de cada destino "
+           "estan sujetos a cambios por efectos tales como accidentes, huelgas, revueltas, "
+           "terremotos y otros acontecimientos de fuerza mayor que puedan ocurrir durante el "
+           "viaje, por lo que los organizadores se reservan el derecho de hacer los cambios "
+           "necesarios para asegurar el exito del producto turistico o servicio adquirido por el "
+           "cliente. Si por alguna razon de fuerza mayor el operador se ve obligado a cancelar los "
+           "servicios programados, se solicitara a los organizadores la devolucion del importe de "
+           "los servicios cancelados como parte de los terminos y condiciones de la reserva.")
+    cuerpo("La agencia o proveedor seleccionado tienen la autoridad para retirar de la gira a "
+           "cualquier persona que, por motivos graves de conducta moral o disciplinaria, pueda "
+           "danar o socavar el exito del tour o actividad; caso en el que el usuario tiene derecho "
+           "al reembolso del valor de los servicios turisticos no disfrutados dependiendo de las "
+           "politicas de los proveedores seleccionados para el plan adquirido. La agencia no "
+           "asume ninguna responsabilidad respecto a asuntos legales o cualquier otra cuestion "
+           "que pueda resultar en que el usuario se vea obligado a retirarse de la excursion, ni "
+           "sobre los costos personales que el pasajero pueda incurrir.")
+    item("AVISO DE CONFIDENCIALIDAD:",
+         "Con fundamento en la Ley de Proteccion de Datos Personales, INNOBA DMC S.A.S es "
+         "responsable de recabar sus datos personales, del uso que se les de y de su proteccion. "
+         "Usted tiene derecho al Acceso, Rectificacion y Cancelacion de sus datos personales, a "
+         "Oponerse a su tratamiento o a revocar el consentimiento otorgado. Para ello envie la "
+         "solicitud al correo felipe@innobadmc.com y comuniquese a nuestra oficina para confirmar "
+         "su correcta recepcion. Para consultar el Aviso de Privacidad completo o sus "
+         "modificaciones, visite www.innobadmc.com")
+    pdf.ln(2)
+    pdf.set_x(12); pdf.set_font("Helvetica", "", 8.3); pdf.set_text_color(*PDF_TXT)
+    pdf.multi_cell(186, 4.4, T("Cordialmente,"))
+    pdf.set_font("Helvetica", "B", 9); pdf.set_text_color(*PDF_PRIM)
+    pdf.set_x(12); pdf.multi_cell(186, 4.6, T("Felipe Ortiz Jaramillo"))
+    pdf.set_font("Helvetica", "", 8.3); pdf.set_text_color(*PDF_TXT)
+    pdf.set_x(12); pdf.multi_cell(186, 4.4, T("GERENTE GENERAL  -  INNOBA DMC\n"
+                                              "Cel: +57 313 595 2944   ·   Correo: felipe@innobadmc.com"))
 
 
 def _voucher_itinerario(pdf, texto):
