@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "6.4"
+VERSION = "6.5"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1081,32 +1081,36 @@ def generar_pdf(cfg, datos, bloques, total, ruta_salida):
     pdf.cell(0, 9, T(titulo), ln=1, fill=True)
     pdf.ln(2)
 
+    destinos_txt = datos.get("destinos_txt") or ", ".join(
+        b.get("destino", "") for b in bloques if b.get("destino"))
+
     pdf.set_text_color(*PDF_TXT)
     y_b = pdf.get_y()
     pdf.set_font("Helvetica", "B", 10); pdf.set_text_color(*PDF_PRIM)
-    pdf.cell(90, 6, T("CLIENTE"), ln=1)
+    pdf.cell(90, 6, T("AGENCIA / CLIENTE"), ln=1)
     pdf.set_text_color(*PDF_TXT)
-    for etq, clave in [("Nombre", "cliente"), ("Email", "cli_email"),
-                       ("Telefono", "cli_tel"), ("Asesor", "asesor"),
+    for etq, clave in [("Nombre agencia", "cliente"), ("Asesor", "asesor"),
+                       ("Email", "cli_email"), ("Telefono", "cli_tel"),
                        ("Tel. asesor", "asesor_tel")]:
         val = datos.get(clave, "")
         if val:
-            pdf.set_font("Helvetica", "B", 9); pdf.cell(22, 5, T(etq + ":"))
-            pdf.set_font("Helvetica", "", 9); pdf.cell(68, 5, T(val), ln=1)
+            pdf.set_font("Helvetica", "B", 9); pdf.cell(28, 5, T(etq + ":"))
+            pdf.set_font("Helvetica", "", 9); pdf.cell(62, 5, T(val), ln=1)
     y_izq = pdf.get_y()
     pdf.set_xy(110, y_b)
     pdf.set_font("Helvetica", "B", 10); pdf.set_text_color(*PDF_PRIM)
-    pdf.cell(85, 6, T("DETALLES"), ln=1)
+    pdf.cell(85, 6, T("DETALLES DE LA COTIZACION"), ln=1)
     pdf.set_text_color(*PDF_TXT)
     for etq, val in [("No. Cotizacion", datos.get("numero", "")),
-                     ("Fecha", datos.get("fecha", "")),
+                     ("Fecha de cotizacion", datos.get("fecha", "")),
+                     ("Destino", destinos_txt),
                      ("Valida hasta", datos.get("valida_hasta", "")),
-                     ("Fechas viaje", datos.get("fechas_viaje", "")),
+                     ("Fechas de viaje", datos.get("fechas_viaje", "")),
                      ("Pasajeros", datos.get("pax_txt", ""))]:
         if val:
             pdf.set_x(110)
-            pdf.set_font("Helvetica", "B", 9); pdf.cell(30, 5, T(etq + ":"))
-            pdf.set_font("Helvetica", "", 9); pdf.cell(55, 5, T(str(val)), ln=1)
+            pdf.set_font("Helvetica", "B", 9); pdf.cell(34, 5, T(etq + ":"))
+            pdf.set_font("Helvetica", "", 9); pdf.cell(51, 5, T(str(val)), ln=1)
     pdf.set_y(max(y_izq, pdf.get_y()) + 2)
 
     def edad_txt(a):

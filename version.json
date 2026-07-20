@@ -1,5 +1,5 @@
 {
-  "version": "6.4",
+  "version": "6.5",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 6.4 - Indicadores de gestion tambien en Cotizaciones y Reservas. Historial de cotizaciones: cotizaciones totales, en seguimiento, ganadas, perdidas, % conversion, ganado USD, ticket promedio, del mes y seguimientos vencidos. Modulo Reservas: reservas por estado, negociado activo, cobrado con pago, del mes y vouchers enviados/total. Tarjetas KPI compactas y uniformes en los tres modulos."
+  "notas": "Version 6.5 - PDF de cotizacion: el encabezado ahora muestra AGENCIA/CLIENTE (Nombre agencia, Asesor) y DETALLES DE LA COTIZACION (No. cotizacion, Fecha de cotizacion, Destino, Valida hasta, Fechas de viaje, Pasajeros)."
 }
