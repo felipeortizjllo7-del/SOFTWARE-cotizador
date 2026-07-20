@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "6.0"
+VERSION = "6.1"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1511,6 +1511,122 @@ def enviar_voucher_prov(cfg, res, di, cat, si):
     return fn
 
 
+def _mes_de_iso(s):
+    s = (s or "").strip()
+    return s[:7] if len(s) >= 7 else "?"
+
+
+def _estilo_encabezado_xlsx(ws):
+    from openpyxl.styles import Font, PatternFill, Alignment
+    for c in ws[1]:
+        c.fill = PatternFill("solid", fgColor="013984")
+        c.font = Font(color="FFFFFF", bold=True)
+        c.alignment = Alignment(horizontal="center", vertical="center")
+
+
+def _autoancho_xlsx(ws, minimo=10, maximo=48):
+    for col in ws.columns:
+        largo = max((len(str(c.value)) if c.value is not None else 0) for c in col)
+        ws.column_dimensions[col[0].column_letter].width = max(minimo, min(maximo, largo + 2))
+
+
+def exportar_reporte_reservas(ruta, mes=None):
+    """Reporte de reservas (Excel): detalle + resumen por mes."""
+    import openpyxl
+    data = cargar_reservas()
+    items = list(data.get("items", []))
+    if mes:
+        items = [it for it in items if _mes_de_iso(it.get("fecha_creacion", "")) == mes]
+    wb = openpyxl.Workbook()
+    ws = wb.active; ws.title = "Reservas"
+    ws.append(["N. Reserva", "Fecha creacion", "Mes", "Cliente", "Asesor", "Destinos",
+               "Fechas viaje", "Estado", "Monto USD", "Servicios", "Vouchers enviados"])
+    for it in items:
+        ase = it.get("asesor", {}) or {}
+        try:
+            tot_serv, env, _pe = resumen_seguimiento(it)
+        except Exception:
+            tot_serv, env = 0, 0
+        ws.append([it.get("numero", ""), it.get("fecha_creacion", ""),
+                   _mes_de_iso(it.get("fecha_creacion", "")), it.get("cliente", ""),
+                   ase.get("nombre", ""), ", ".join(it.get("destinos", [])),
+                   it.get("fechas_viaje", ""), it.get("estado", ""),
+                   round(float(it.get("monto", 0) or 0), 2), tot_serv, env])
+    _estilo_encabezado_xlsx(ws); _autoancho_xlsx(ws); ws.freeze_panes = "A2"
+
+    ws2 = wb.create_sheet("Resumen por mes")
+    ws2.append(["Mes", "# Reservas", "Monto total USD", "Confirmadas", "Con pago",
+                "Aplazadas", "Anuladas"])
+    resumen = {}
+    for it in items:
+        m = _mes_de_iso(it.get("fecha_creacion", ""))
+        r = resumen.setdefault(m, {"n": 0, "monto": 0.0, "Confirmada": 0,
+                                   "Confirmada con pago": 0, "Aplazada": 0, "Anulada": 0})
+        r["n"] += 1
+        r["monto"] += float(it.get("monto", 0) or 0)
+        e = it.get("estado", "Confirmada")
+        if e in r:
+            r[e] += 1
+    for m in sorted(resumen):
+        r = resumen[m]
+        ws2.append([m, r["n"], round(r["monto"], 2), r["Confirmada"],
+                    r["Confirmada con pago"], r["Aplazada"], r["Anulada"]])
+    _estilo_encabezado_xlsx(ws2); _autoancho_xlsx(ws2)
+    wb.save(ruta)
+    return len(items)
+
+
+def _quien_cerro(it):
+    c = (it.get("cotizado_por", "") or it.get("asesor", "") or "").strip()
+    cl = c.lower()
+    if "felipe" in cl:
+        return "Felipe"
+    if "carlos" in cl:
+        return "Carlos"
+    return c or "(sin asignar)"
+
+
+def exportar_reporte_ventas(ruta, mes=None):
+    """Reporte de ventas cerradas (cotizaciones Ganadas) por mes, separadas por
+       Felipe y Carlos (Excel)."""
+    import openpyxl
+    data = cargar_cotizaciones()
+    items = [it for it in data.get("items", []) if it.get("estado") == "Ganada"]
+
+    def mes_de(it):
+        f = parse_fecha(it.get("fecha", ""))
+        return f.strftime("%Y-%m") if f else "?"
+
+    if mes:
+        items = [it for it in items if mes_de(it) == mes]
+    wb = openpyxl.Workbook()
+    ws = wb.active; ws.title = "Ventas cerradas"
+    ws.append(["Cotizacion", "Fecha", "Mes", "Cerrada por", "Cliente / Agencia", "Asesor",
+               "Destinos", "Total USD"])
+    for it in items:
+        ws.append([it.get("numero", ""), it.get("fecha", ""), mes_de(it), _quien_cerro(it),
+                   it.get("cliente", ""), it.get("asesor", ""),
+                   ", ".join(it.get("destinos", [])), round(float(it.get("total", 0) or 0), 2)])
+    _estilo_encabezado_xlsx(ws); _autoancho_xlsx(ws); ws.freeze_panes = "A2"
+
+    ws2 = wb.create_sheet("Resumen por mes")
+    ws2.append(["Mes", "Felipe #", "Felipe USD", "Carlos #", "Carlos USD",
+                "Otros #", "Otros USD", "Total #", "Total USD"])
+    resumen = {}
+    for it in items:
+        m = mes_de(it); q = _quien_cerro(it); t = float(it.get("total", 0) or 0)
+        r = resumen.setdefault(m, {"Felipe": [0, 0.0], "Carlos": [0, 0.0], "Otros": [0, 0.0]})
+        key = q if q in ("Felipe", "Carlos") else "Otros"
+        r[key][0] += 1; r[key][1] += t
+    for m in sorted(resumen):
+        f, c, o = resumen[m]["Felipe"], resumen[m]["Carlos"], resumen[m]["Otros"]
+        ws2.append([m, f[0], round(f[1], 2), c[0], round(c[1], 2), o[0], round(o[1], 2),
+                    f[0] + c[0] + o[0], round(f[1] + c[1] + o[1], 2)])
+    _estilo_encabezado_xlsx(ws2); _autoancho_xlsx(ws2)
+    wb.save(ruta)
+    return len(items)
+
+
 def _fechas_in_out(fechas_viaje):
     s = fechas_viaje or ""
     if " al " in s:
@@ -2371,10 +2487,14 @@ class VentanaCotizaciones(ctk.CTkToplevel):
         top.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(top, text="Historial de cotizaciones", text_color=NAVY,
                      font=("Segoe UI", 16, "bold")).grid(row=0, column=0, sticky="w")
+        botones_top = ctk.CTkFrame(top, fg_color="transparent"); botones_top.grid(row=0, column=1, sticky="e")
+        ctk.CTkButton(botones_top, text="📊 Reporte de ventas", width=170, height=32, corner_radius=8,
+                      fg_color="#7A5AB5", hover_color="#63459A", font=("Segoe UI", 11, "bold"),
+                      command=self._reporte_ventas).pack(side="left", padx=(0, 6))
         if WEBHOOK_URL:
-            ctk.CTkButton(top, text="↻ Importar del HTML", width=160, height=32, corner_radius=8,
+            ctk.CTkButton(botones_top, text="↻ Importar del HTML", width=160, height=32, corner_radius=8,
                           fg_color=NAVY, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
-                          command=self._importar_html).grid(row=0, column=1, sticky="e")
+                          command=self._importar_html).pack(side="left")
         self.var_q = tk.StringVar()
         e = ctk.CTkEntry(self, textvariable=self.var_q, height=36, corner_radius=10,
                          border_color=BLUE, border_width=2, fg_color=CARD, font=("Segoe UI", 12),
@@ -2461,6 +2581,19 @@ class VentanaCotizaciones(ctk.CTkToplevel):
             msg = ("Aun no hay cotizaciones guardadas.\nGenera un PDF y aparecera aqui."
                    if not self.data.get("items") else "Sin resultados.")
             ctk.CTkLabel(self.lista, text=msg, text_color=MUTED).pack(pady=24)
+
+    def _reporte_ventas(self):
+        data = cargar_cotizaciones()
+        meses = set()
+        for it in data.get("items", []):
+            if it.get("estado") == "Ganada":
+                f = parse_fecha(it.get("fecha", ""))
+                if f:
+                    meses.add(f.strftime("%Y-%m"))
+        DialogoReporteMes(
+            self, "Reporte de ventas cerradas",
+            "Ventas cerradas (cotizaciones Ganadas) por mes, separadas por Felipe y Carlos.",
+            sorted(meses, reverse=True), exportar_reporte_ventas, "Reporte_ventas")
 
     def _importar_html(self):
         try:
@@ -5390,6 +5523,49 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self.destroy()
 
 
+class DialogoReporteMes(ctk.CTkToplevel):
+    """Elegir mes (o todos) y descargar un reporte en Excel."""
+    def __init__(self, master, titulo, subtitulo, meses, export_fn, base_nombre):
+        super().__init__(master)
+        self.export_fn = export_fn; self.base = base_nombre
+        self.title(titulo)
+        self.geometry("500x260"); self.configure(fg_color=BG)
+        self.transient(master); self.grab_set()
+        ctk.CTkLabel(self, text=titulo, font=("Segoe UI", 16, "bold"),
+                     text_color=NAVY).pack(pady=(18, 2))
+        ctk.CTkLabel(self, text=subtitulo, text_color=MUTED,
+                     font=("Segoe UI", 11), wraplength=440).pack(pady=(0, 12))
+        opciones = ["Todos los meses"] + list(meses)
+        self.v_mes = tk.StringVar(value=opciones[0])
+        ctk.CTkLabel(self, text="Mes", text_color=MUTED, font=("Segoe UI", 11)).pack()
+        ctk.CTkOptionMenu(self, variable=self.v_mes, values=opciones, width=240, height=34,
+                          fg_color=NAVY, button_color=NAVY2).pack(pady=(2, 16))
+        ctk.CTkButton(self, text="⬇  Descargar Excel", height=42, corner_radius=10, fg_color=GREEN,
+                      hover_color=GREEN_H, font=("Segoe UI", 13, "bold"),
+                      command=self._exportar).pack()
+
+    def _exportar(self):
+        mes = None if self.v_mes.get().startswith("Todos") else self.v_mes.get()
+        ruta = filedialog.asksaveasfilename(
+            title="Guardar reporte", defaultextension=".xlsx",
+            initialfile=f"{self.base}_{mes or 'todos'}.xlsx",
+            filetypes=[("Excel", "*.xlsx")])
+        if not ruta:
+            return
+        try:
+            n = self.export_fn(ruta, mes)
+        except Exception as e:
+            messagebox.showerror("Error al generar el reporte", str(e), parent=self)
+            return
+        try:
+            os.startfile(ruta)
+        except Exception:
+            pass
+        messagebox.showinfo("Reporte generado",
+                            f"Reporte generado con {n} registro(s).\n\n{ruta}", parent=self)
+        self.destroy()
+
+
 class SelectorTarifario(ctk.CTkToplevel):
     """Elegir hoteles y tours del tarifario (precios_2026) por destino y agregarlos
        como items de la reserva, con su precio en USD por persona."""
@@ -5732,6 +5908,9 @@ class ModuloReservas(ctk.CTkToplevel):
         ctk.CTkButton(hb, text="+ Nueva reserva", width=160, height=36, corner_radius=10,
                       fg_color=GREEN, hover_color=GREEN_H, font=("Segoe UI", 12, "bold"),
                       command=self._nueva_desde_cot).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(hb, text="📊 Reporte", width=110, height=36, corner_radius=10,
+                      fg_color="#7A5AB5", hover_color="#63459A", font=("Segoe UI", 12, "bold"),
+                      command=self._reporte).pack(side="left", padx=(0, 8))
         ctk.CTkButton(hb, text="Asesores", width=100, height=36, corner_radius=10,
                       fg_color=CYAN, hover_color=BLUE, font=("Segoe UI", 12, "bold"),
                       command=self._config_asesores).pack(side="left", padx=(0, 8))
@@ -5822,6 +6001,14 @@ class ModuloReservas(ctk.CTkToplevel):
             os.startfile(ruta)
         except Exception as e:
             messagebox.showerror("Error", str(e))
+
+    def _reporte(self):
+        data = cargar_reservas()
+        meses = sorted({_mes_de_iso(it.get("fecha_creacion", "")) for it in data.get("items", [])
+                        if it.get("fecha_creacion")}, reverse=True)
+        DialogoReporteMes(self, "Reporte de reservas por mes",
+                          "Descarga un Excel con el detalle de las reservas y un resumen por mes.",
+                          meses, exportar_reporte_reservas, "Reporte_reservas")
 
     def _config_asesores(self):
         DialogoAsesores(self, self.cfg, on_save=self._recargar_cfg)

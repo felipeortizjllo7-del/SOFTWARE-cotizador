@@ -1,5 +1,5 @@
 {
-  "version": "6.0",
+  "version": "6.1",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 6.0 - Reservas: nuevo boton 'Desde tarifario' en los items. Eliges destino, acomodacion, noches y grupo, y se listan los HOTELES y TOURS/servicios del mismo tarifario del cotizador (precios_2026) con su precio por persona en USD; con un clic los agregas como item y el total se recalcula solo. Sirve tanto para reservas desde cotizacion como manuales."
+  "notas": "Version 6.1 - Reportes en Excel: (1) Modulo Reservas: boton Reporte para descargar las reservas por mes (detalle + resumen por mes con montos y estados). (2) Modulo Cotizaciones: boton Reporte de ventas para descargar las ventas cerradas (Ganadas) por mes, separadas por Felipe y por Carlos (numero de ventas y montos)."
 }
