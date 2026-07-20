@@ -1,5 +1,5 @@
 {
-  "version": "6.2",
+  "version": "6.3",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 6.2 - Correccion: se elimina el error 'Not enough horizontal space to render a single character' al generar el PDF de cotizacion y los vouchers. Se blindaron los generadores de PDF para nunca dibujar una celda de ancho automatico con espacio ~0 (cursor pegado al margen)."
+  "notas": "Version 6.3 - Nuevo MODULO COMERCIAL: seccion de tareas de gestion (con checklist, cliente/empresa, responsable, prioridad, fecha limite y estados Pendiente/En progreso/Completada/Vencida) e INDICADORES de gestion (tareas por estado, ventas del mes por Felipe y Carlos, conversion de cotizaciones y reservas del mes). Reporte de tareas en Excel. Los 3 modulos ya estan disponibles en el inicio."
 }

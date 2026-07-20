@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "6.2"
+VERSION = "6.3"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -307,7 +307,7 @@ def respaldar_datos(cfg):
         cambio_version = cfg.get("ultima_version_vista", "") != VERSION
         hoy = datetime.date.today().strftime("%Y%m%d")
         for nombre in ("cotizaciones.json", "clientes.json", "config_empresa.json",
-                       "reservas.json"):
+                       "reservas.json", "tareas.json"):
             src = os.path.join(datos_dir(), nombre)
             if not os.path.exists(src):
                 continue
@@ -1640,6 +1640,146 @@ def exportar_reporte_ventas(ruta, mes=None):
         ws2.append([m, f[0], round(f[1], 2), c[0], round(c[1], 2), o[0], round(o[1], 2),
                     f[0] + c[0] + o[0], round(f[1] + c[1] + o[1], 2)])
     _estilo_encabezado_xlsx(ws2); _autoancho_xlsx(ws2)
+    wb.save(ruta)
+    return len(items)
+
+
+# ============================================================================
+# MODULO COMERCIAL: tareas de gestion + indicadores
+# ============================================================================
+TAREAS_PATH = os.path.join(datos_dir(), "tareas.json")
+ESTADOS_TAREA = ["Pendiente", "En progreso", "Completada"]
+ESTADO_TAREA_COLOR = {"Pendiente": MUTED, "En progreso": BLUE, "Completada": GREEN, "Vencida": RED}
+ESTADO_TAREA_FILA = {"Pendiente": "#F1F5FB", "En progreso": "#EAF2FD",
+                     "Completada": "#E3F5EA", "Vencida": "#FBE6E6"}
+PRIORIDADES_TAREA = ["Alta", "Media", "Baja"]
+PRIORIDAD_COLOR = {"Alta": RED, "Media": "#D9A400", "Baja": MUTED}
+
+
+def cargar_tareas():
+    if os.path.exists(TAREAS_PATH):
+        try:
+            with open(TAREAS_PATH, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            if isinstance(d, dict) and "items" in d:
+                d.setdefault("seq", 0)
+                return d
+        except Exception:
+            pass
+    return {"seq": 0, "items": []}
+
+
+def guardar_tareas(data):
+    with open(TAREAS_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def registrar_tarea(rec):
+    data = cargar_tareas()
+    data["seq"] = int(data.get("seq", 0)) + 1
+    rec = dict(rec)
+    rec["numero"] = f"TAR-{data['seq']:04d}"
+    rec.setdefault("fecha_creacion", datetime.date.today().isoformat())
+    data["items"].append(rec)
+    guardar_tareas(data)
+    return rec
+
+
+def actualizar_tarea(numero, cambios):
+    data = cargar_tareas()
+    for it in data["items"]:
+        if it.get("numero") == numero:
+            it.update(cambios)
+            break
+    guardar_tareas(data)
+
+
+def eliminar_tarea(numero):
+    data = cargar_tareas()
+    data["items"] = [it for it in data["items"] if it.get("numero") != numero]
+    guardar_tareas(data)
+
+
+def _parse_fecha_iso(s):
+    try:
+        return datetime.date.fromisoformat((s or "").strip())
+    except Exception:
+        return None
+
+
+def estado_tarea_efectivo(t):
+    """Estado real: 'Vencida' si no esta completada y su fecha limite ya paso."""
+    est = t.get("estado", "Pendiente")
+    if est != "Completada":
+        f = _parse_fecha_iso(t.get("fecha_limite", ""))
+        if f and f < datetime.date.today():
+            return "Vencida"
+    return est
+
+
+def _progreso_checklist(t):
+    ch = t.get("checklist", []) or []
+    hechas = sum(1 for c in ch if c.get("hecha"))
+    return hechas, len(ch)
+
+
+def indicadores_comerciales():
+    """KPIs de gestion comercial: tareas + ventas (cotizaciones) + reservas."""
+    hoy = datetime.date.today()
+    mes = hoy.strftime("%Y-%m")
+    tareas = cargar_tareas().get("items", [])
+    ind = {"tareas_total": len(tareas), "pendientes": 0, "en_progreso": 0,
+           "completadas": 0, "vencidas": 0}
+    for t in tareas:
+        e = estado_tarea_efectivo(t)
+        clave = {"Pendiente": "pendientes", "En progreso": "en_progreso",
+                 "Completada": "completadas", "Vencida": "vencidas"}.get(e)
+        if clave:
+            ind[clave] += 1
+
+    cots = cargar_cotizaciones().get("items", [])
+    ganadas = [c for c in cots if c.get("estado") == "Ganada"]
+
+    def mes_cot(c):
+        f = parse_fecha(c.get("fecha", ""))
+        return f.strftime("%Y-%m") if f else ""
+
+    gan_mes = [c for c in ganadas if mes_cot(c) == mes]
+    ind["cot_total"] = len(cots)
+    ind["cot_ganadas"] = len(ganadas)
+    ind["ventas_mes_n"] = len(gan_mes)
+    ind["ventas_mes_usd"] = round(sum(float(c.get("total", 0) or 0) for c in gan_mes), 2)
+    ind["conversion"] = round(100.0 * len(ganadas) / len(cots), 1) if cots else 0.0
+    # ventas por cotizador (Felipe / Carlos) del mes
+    ind["ventas_felipe"] = round(sum(float(c.get("total", 0) or 0) for c in gan_mes
+                                     if _quien_cerro(c) == "Felipe"), 2)
+    ind["ventas_carlos"] = round(sum(float(c.get("total", 0) or 0) for c in gan_mes
+                                     if _quien_cerro(c) == "Carlos"), 2)
+
+    resv = cargar_reservas().get("items", [])
+    res_mes = [r for r in resv if _mes_de_iso(r.get("fecha_creacion", "")) == mes]
+    ind["reservas_mes_n"] = len(res_mes)
+    ind["reservas_mes_usd"] = round(sum(float(r.get("monto", 0) or 0) for r in res_mes
+                                        if r.get("estado") != "Anulada"), 2)
+    return ind
+
+
+def exportar_reporte_tareas(ruta, mes=None):
+    """Reporte de tareas comerciales (Excel)."""
+    import openpyxl
+    items = cargar_tareas().get("items", [])
+    if mes:
+        items = [it for it in items if _mes_de_iso(it.get("fecha_creacion", "")) == mes]
+    wb = openpyxl.Workbook()
+    ws = wb.active; ws.title = "Tareas"
+    ws.append(["Tarea", "Titulo", "Cliente", "Responsable", "Prioridad", "Fecha limite",
+               "Estado", "Checklist", "Creada"])
+    for t in items:
+        h, n = _progreso_checklist(t)
+        ws.append([t.get("numero", ""), t.get("titulo", ""), t.get("cliente", ""),
+                   t.get("responsable", ""), t.get("prioridad", ""), t.get("fecha_limite", ""),
+                   estado_tarea_efectivo(t), f"{h}/{n}", t.get("fecha_creacion", "")])
+    _estilo_encabezado_xlsx(ws); _autoancho_xlsx(ws); ws.freeze_panes = "A2"
     wb.save(ruta)
     return len(items)
 
@@ -6115,6 +6255,367 @@ class ModuloReservas(ctk.CTkToplevel):
         VentanaReservaDetalle(self, guardado, self.cfg, on_save=self._pintar)
 
 
+# ============================================================================
+# MODULO COMERCIAL - Interfaz
+# ============================================================================
+class VentanaTareaDetalle(ctk.CTkToplevel):
+    """Crear/editar una tarea comercial con su gestion (checklist, estado, etc.)."""
+    def __init__(self, master, tarea, cfg, on_save=None):
+        super().__init__(master)
+        self.tarea = tarea; self.cfg = cfg; self.on_save = on_save
+        self.title("Tarea " + tarea.get("numero", "nueva"))
+        self.configure(fg_color=BG)
+        self.geometry("760x680+120+20")
+        self.transient(master); self.grab_set()
+        self.after(60, self._max)
+        self.footer = ctk.CTkFrame(self, fg_color=CARD, corner_radius=0, height=58)
+        self.footer.pack(side="bottom", fill="x"); self.footer.pack_propagate(False)
+        cont = ctk.CTkScrollableFrame(self, fg_color=BG)
+        cont.pack(fill="both", expand=True, padx=16, pady=16)
+
+        ctk.CTkLabel(cont, text="Tarea " + (tarea.get("numero", "") or "(nueva)"),
+                     font=("Segoe UI", 18, "bold"), text_color=NAVY).pack(anchor="w")
+
+        def campo(lbl, val):
+            ctk.CTkLabel(cont, text=lbl, text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2, pady=(8, 0))
+            v = tk.StringVar(value=val)
+            ctk.CTkEntry(cont, textvariable=v, height=34, corner_radius=8, border_color=LINE).pack(fill="x", padx=2)
+            return v
+
+        self.v_titulo = campo("Titulo de la tarea *", tarea.get("titulo", ""))
+
+        # cliente (empresas) + responsable
+        f2 = ctk.CTkFrame(cont, fg_color="transparent"); f2.pack(fill="x")
+        a = ctk.CTkFrame(f2, fg_color="transparent"); a.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        b = ctk.CTkFrame(f2, fg_color="transparent"); b.pack(side="left", fill="x", expand=True, padx=(6, 0))
+        ctk.CTkLabel(a, text="Cliente / empresa", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        try:
+            empresas = sorted([c.get("empresa", "") for c in cargar_clientes() if c.get("empresa")])
+        except Exception:
+            empresas = []
+        self.v_cliente = tk.StringVar(value=tarea.get("cliente", ""))
+        ctk.CTkComboBox(a, variable=self.v_cliente, values=empresas, height=32).pack(fill="x", padx=2)
+        ctk.CTkLabel(b, text="Responsable", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        resp = [x.get("nombre", "") for x in asesores_reservas(cfg)] + [c[0] for c in COTIZADORES]
+        resp = sorted(set([r for r in resp if r]))
+        self.v_resp = tk.StringVar(value=tarea.get("responsable", ""))
+        ctk.CTkComboBox(b, variable=self.v_resp, values=resp, height=32).pack(fill="x", padx=2)
+
+        # estado + prioridad + fecha limite
+        f3 = ctk.CTkFrame(cont, fg_color="transparent"); f3.pack(fill="x", pady=(8, 0))
+        c1 = ctk.CTkFrame(f3, fg_color="transparent"); c1.pack(side="left", padx=(0, 12))
+        ctk.CTkLabel(c1, text="Estado", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w")
+        self.v_estado = tk.StringVar(value=tarea.get("estado", "Pendiente"))
+        ctk.CTkOptionMenu(c1, variable=self.v_estado, values=ESTADOS_TAREA, width=160, height=32,
+                          fg_color=NAVY, button_color=NAVY2).pack()
+        c2 = ctk.CTkFrame(f3, fg_color="transparent"); c2.pack(side="left", padx=(0, 12))
+        ctk.CTkLabel(c2, text="Prioridad", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w")
+        self.v_prio = tk.StringVar(value=tarea.get("prioridad", "Media"))
+        ctk.CTkOptionMenu(c2, variable=self.v_prio, values=PRIORIDADES_TAREA, width=130, height=32,
+                          fg_color=NAVY, button_color=NAVY2).pack()
+        c3 = ctk.CTkFrame(f3, fg_color="transparent"); c3.pack(side="left")
+        ctk.CTkLabel(c3, text="Fecha limite", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w")
+        self.sel_fecha = SelectorFecha(c3)
+        self.sel_fecha.pack()
+        fl = _parse_fecha_iso(tarea.get("fecha_limite", ""))
+        if fl:
+            self.sel_fecha._set(fl)
+
+        ctk.CTkLabel(cont, text="Descripcion", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2, pady=(8, 0))
+        self.txt_desc = ctk.CTkTextbox(cont, height=80, corner_radius=8, border_width=1,
+                                       border_color=LINE, fg_color=CARD, font=("Segoe UI", 12))
+        self.txt_desc.pack(fill="x", padx=2, pady=(0, 6))
+        self.txt_desc.insert("1.0", tarea.get("descripcion", "") or "")
+
+        # checklist (gestion)
+        ch = ctk.CTkFrame(cont, fg_color="transparent"); ch.pack(fill="x", pady=(6, 0))
+        ctk.CTkLabel(ch, text="LISTA DE VERIFICACION (gestion)", text_color=NAVY,
+                     font=("Segoe UI", 13, "bold")).pack(side="left")
+        ctk.CTkButton(ch, text="+ Agregar elemento", width=160, height=28, fg_color=BLUE,
+                      hover_color=BLUE_H, command=self._agregar_check).pack(side="right")
+        self.check_box = ctk.CTkFrame(cont, fg_color="transparent"); self.check_box.pack(fill="x", pady=(4, 6))
+        self._pintar_checklist()
+
+        ctk.CTkLabel(cont, text="Notas de gestion", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2, pady=(6, 0))
+        self.txt_notas = ctk.CTkTextbox(cont, height=80, corner_radius=8, border_width=1,
+                                        border_color=LINE, fg_color=CARD, font=("Segoe UI", 12))
+        self.txt_notas.pack(fill="x", padx=2, pady=(0, 8))
+        self.txt_notas.insert("1.0", tarea.get("notas", "") or "")
+
+        ctk.CTkButton(self.footer, text="✓ Marcar completada", height=40, fg_color=GREEN,
+                      hover_color=GREEN_H, command=self._completar).pack(side="left", padx=(16, 8), pady=9)
+        ctk.CTkButton(self.footer, text="Guardar tarea", height=40, fg_color=NAVY, hover_color=NAVY2,
+                      command=self._guardar).pack(side="right", padx=(8, 16), pady=9)
+
+    def _max(self):
+        try:
+            self.state("zoomed")
+        except Exception:
+            pass
+
+    def _pintar_checklist(self):
+        for w in self.check_box.winfo_children():
+            w.destroy()
+        self.check_widgets = []
+        ch = self.tarea.setdefault("checklist", [])
+        if not ch:
+            ctk.CTkLabel(self.check_box, text="Sin elementos. Agrega pasos de gestion (ej. "
+                         "'Solicitar cita', 'Enviar propuesta', 'Hacer seguimiento').",
+                         text_color=MUTED, font=("Segoe UI", 10)).pack(pady=4)
+        for i, it in enumerate(ch):
+            row = ctk.CTkFrame(self.check_box, fg_color=CARD, corner_radius=8,
+                               border_width=1, border_color=LINE)
+            row.pack(fill="x", pady=2)
+            v_ok = tk.BooleanVar(value=bool(it.get("hecha")))
+            v_txt = tk.StringVar(value=it.get("texto", ""))
+            ctk.CTkCheckBox(row, text="", variable=v_ok, width=28,
+                            command=self._sync_checklist).pack(side="left", padx=(8, 2), pady=5)
+            ctk.CTkEntry(row, textvariable=v_txt, height=30, placeholder_text="Paso de gestion").pack(
+                side="left", fill="x", expand=True, padx=4)
+            ctk.CTkButton(row, text="✕", width=28, height=28, fg_color=RED, hover_color="#9B2C22",
+                          command=lambda idx=i: self._quitar_check(idx)).pack(side="left", padx=(2, 6))
+            self.check_widgets.append({"hecha": v_ok, "texto": v_txt})
+
+    def _sync_checklist(self):
+        self.tarea["checklist"] = [{"texto": w["texto"].get().strip(), "hecha": bool(w["hecha"].get())}
+                                   for w in self.check_widgets]
+
+    def _agregar_check(self):
+        self._sync_checklist()
+        self.tarea.setdefault("checklist", []).append({"texto": "", "hecha": False})
+        self._pintar_checklist()
+
+    def _quitar_check(self, i):
+        self._sync_checklist()
+        try:
+            del self.tarea["checklist"][i]
+        except Exception:
+            pass
+        self._pintar_checklist()
+
+    def _recoger(self):
+        self._sync_checklist()
+        return {
+            "titulo": self.v_titulo.get().strip(),
+            "cliente": self.v_cliente.get().strip(),
+            "responsable": self.v_resp.get().strip(),
+            "estado": self.v_estado.get(),
+            "prioridad": self.v_prio.get(),
+            "fecha_limite": (self.sel_fecha.get().isoformat() if self.sel_fecha.get() else ""),
+            "descripcion": self.txt_desc.get("1.0", "end").strip(),
+            "notas": self.txt_notas.get("1.0", "end").strip(),
+            "checklist": self.tarea.get("checklist", []),
+        }
+
+    def _guardar(self, estado=None):
+        datos = self._recoger()
+        if estado:
+            datos["estado"] = estado
+        if not datos["titulo"]:
+            messagebox.showwarning("Falta el titulo", "Escribe el titulo de la tarea.", parent=self)
+            return
+        if self.tarea.get("numero"):
+            actualizar_tarea(self.tarea["numero"], datos)
+        else:
+            self.tarea = registrar_tarea(datos)
+        if self.on_save:
+            self.on_save()
+        messagebox.showinfo("Guardado", "Tarea guardada.", parent=self)
+        self.destroy()
+
+    def _completar(self):
+        self._guardar(estado="Completada")
+
+
+class ModuloComercial(ctk.CTkToplevel):
+    """Modulo Comercial: tareas de gestion + indicadores."""
+    def __init__(self, master=None):
+        super().__init__(master)
+        ctk.set_appearance_mode("light")
+        try:
+            ctk.set_widget_scaling(0.85)
+        except Exception:
+            pass
+        self.cfg = cargar_config()
+        try:
+            self.iconbitmap(recurso("app.ico"))
+        except Exception:
+            pass
+        self.title(f"Comercial - INNOBA Colombia DMC   v{VERSION}")
+        self.configure(fg_color=BG)
+        self.geometry("1180x720")
+        self.filtro = tk.StringVar(value="Todas")
+        self._build()
+        self.after(60, self._max)
+
+    def _max(self):
+        try:
+            self.state("zoomed")
+        except Exception:
+            pass
+
+    def _volver_inicio(self):
+        lanz = self.master
+        try:
+            if lanz is not None and hasattr(lanz, "comercial"):
+                lanz.comercial = None
+        except Exception:
+            pass
+        try:
+            self.destroy()
+        except Exception:
+            pass
+        try:
+            if lanz is not None:
+                lanz.deiconify(); lanz.lift(); lanz.focus_force()
+        except Exception:
+            pass
+
+    def _build(self):
+        head = ctk.CTkFrame(self, fg_color=CARD, corner_radius=0, height=60)
+        head.pack(fill="x"); head.pack_propagate(False); head.grid_columnconfigure(1, weight=1)
+        try:
+            img = Image.open(recurso("logo_innoba.png")); w, h = img.size; hh = 38
+            self.logo_img = ctk.CTkImage(light_image=img, size=(int(w * hh / h), hh))
+            ctk.CTkLabel(head, image=self.logo_img, text="").grid(row=0, column=0, padx=(18, 12), pady=8)
+        except Exception:
+            ctk.CTkLabel(head, text="INNOBA", font=("Segoe UI", 20, "bold"), text_color=NAVY).grid(row=0, column=0, padx=18)
+        tit = ctk.CTkFrame(head, fg_color="transparent"); tit.grid(row=0, column=1, sticky="w")
+        ctk.CTkLabel(tit, text="Modulo Comercial", text_color=NAVY,
+                     font=("Segoe UI", 17, "bold"), height=20).pack(anchor="w")
+        ctk.CTkLabel(tit, text=f"INNOBA Colombia DMC  ·  v{VERSION}", text_color=MUTED,
+                     font=("Segoe UI", 11), height=15).pack(anchor="w")
+        hb = ctk.CTkFrame(head, fg_color="transparent"); hb.grid(row=0, column=2, padx=18)
+        ctk.CTkButton(hb, text="⌂ Modulos", width=100, height=36, corner_radius=10, fg_color=NAVY,
+                      hover_color=NAVY2, font=("Segoe UI", 12, "bold"),
+                      command=self._volver_inicio).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(hb, text="+ Nueva tarea", width=140, height=36, corner_radius=10, fg_color=GREEN,
+                      hover_color=GREEN_H, font=("Segoe UI", 12, "bold"),
+                      command=self._nueva_tarea).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(hb, text="📊 Reporte", width=110, height=36, corner_radius=10, fg_color="#7A5AB5",
+                      hover_color="#63459A", font=("Segoe UI", 12, "bold"),
+                      command=self._reporte).pack(side="left")
+
+        # Indicadores
+        self.kpis = ctk.CTkFrame(self, fg_color="transparent"); self.kpis.pack(fill="x", padx=18, pady=(12, 4))
+        # Barra de busqueda / filtro
+        bar = ctk.CTkFrame(self, fg_color="transparent"); bar.pack(fill="x", padx=18, pady=(4, 4))
+        self.q = tk.StringVar()
+        e = ctk.CTkEntry(bar, textvariable=self.q, height=36, corner_radius=10,
+                         placeholder_text="Buscar tarea por titulo, cliente o responsable...")
+        e.pack(side="left", fill="x", expand=True)
+        e.bind("<KeyRelease>", lambda ev: self._pintar())
+        ctk.CTkLabel(bar, text="Ver:", text_color=MUTED).pack(side="left", padx=(10, 4))
+        ctk.CTkOptionMenu(bar, variable=self.filtro,
+                          values=["Todas", "Pendiente", "En progreso", "Vencida", "Completada"],
+                          width=150, height=36, fg_color=NAVY, button_color=NAVY2,
+                          command=lambda _v=None: self._pintar()).pack(side="left")
+
+        self.lista = ctk.CTkScrollableFrame(self, fg_color=BG); self.lista.pack(fill="both", expand=True, padx=18, pady=(4, 14))
+        self._refrescar()
+
+    def _refrescar(self):
+        self._pintar_kpis()
+        self._pintar()
+
+    def _kpi(self, parent, titulo, valor, color, ancho=150):
+        card = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=12, border_width=1, border_color=LINE, width=ancho)
+        card.pack(side="left", padx=4, fill="y")
+        card.pack_propagate(False)
+        ctk.CTkLabel(card, text=str(valor), text_color=color, font=("Segoe UI", 22, "bold")).pack(pady=(10, 0), padx=12)
+        ctk.CTkLabel(card, text=titulo, text_color=MUTED, font=("Segoe UI", 10), wraplength=ancho - 16).pack(pady=(0, 10), padx=8)
+
+    def _pintar_kpis(self):
+        for w in self.kpis.winfo_children():
+            w.destroy()
+        ind = indicadores_comerciales()
+        fila1 = ctk.CTkFrame(self.kpis, fg_color="transparent"); fila1.pack(fill="x")
+        self._kpi(fila1, "Tareas totales", ind["tareas_total"], NAVY)
+        self._kpi(fila1, "Pendientes", ind["pendientes"], MUTED)
+        self._kpi(fila1, "En progreso", ind["en_progreso"], BLUE)
+        self._kpi(fila1, "Vencidas", ind["vencidas"], RED)
+        self._kpi(fila1, "Completadas", ind["completadas"], GREEN)
+        self._kpi(fila1, f"Ventas del mes ({ind['ventas_mes_n']})",
+                  usd(ind["ventas_mes_usd"]), GREEN_H, ancho=180)
+        self._kpi(fila1, "Conversion cotiz.", f"{ind['conversion']}%", "#7A5AB5")
+        self._kpi(fila1, f"Reservas del mes ({ind['reservas_mes_n']})",
+                  usd(ind["reservas_mes_usd"]), NAVY, ancho=180)
+
+    def _pintar(self):
+        for w in self.lista.winfo_children():
+            w.destroy()
+        items = list(reversed(cargar_tareas().get("items", [])))
+        q = self.q.get().lower().strip()
+        filt = self.filtro.get()
+        vistos = 0
+        for t in items:
+            est = estado_tarea_efectivo(t)
+            if filt != "Todas" and est != filt:
+                continue
+            if q and q not in json.dumps(t, ensure_ascii=False).lower():
+                continue
+            vistos += 1
+            self._fila(t, est)
+        if vistos == 0:
+            ctk.CTkLabel(self.lista, text="Sin tareas. Crea una con '+ Nueva tarea'.",
+                         text_color=MUTED).pack(pady=24)
+
+    def _fila(self, t, est):
+        fila = ctk.CTkFrame(self.lista, fg_color=ESTADO_TAREA_FILA.get(est, CARD2), corner_radius=10)
+        fila.pack(fill="x", pady=4, padx=2); fila.grid_columnconfigure(1, weight=1)
+        prio = t.get("prioridad", "Media")
+        ctk.CTkLabel(fila, text=prio.upper(), text_color="#FFFFFF",
+                     fg_color=PRIORIDAD_COLOR.get(prio, MUTED), corner_radius=6,
+                     font=("Segoe UI", 9, "bold"), width=60).grid(row=0, column=0, rowspan=2, padx=(12, 6), pady=8, ipady=4)
+        info = ctk.CTkFrame(fila, fg_color="transparent"); info.grid(row=0, column=1, rowspan=2, sticky="w")
+        ctk.CTkLabel(info, text=t.get("titulo", "(sin titulo)"), text_color=TEXT,
+                     font=("Segoe UI", 13, "bold")).pack(anchor="w")
+        h, n = _progreso_checklist(t)
+        sub = f"{t.get('cliente','') or '(sin cliente)'}   ·   Resp: {t.get('responsable','') or '-'}"
+        if n:
+            sub += f"   ·   Checklist {h}/{n}"
+        ctk.CTkLabel(info, text=sub, text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w")
+        fl = _parse_fecha_iso(t.get("fecha_limite", ""))
+        ftxt = ("Vence: " + fl.strftime("%d/%m/%Y")) if fl else "Sin fecha"
+        ctk.CTkLabel(fila, text=ftxt, text_color=(RED if est == "Vencida" else MUTED),
+                     font=("Segoe UI", 11, "bold" if est == "Vencida" else "normal")).grid(row=0, column=2, rowspan=2, padx=10)
+        ctk.CTkLabel(fila, text=est, fg_color=ESTADO_TAREA_COLOR.get(est, MUTED), text_color="#FFFFFF",
+                     corner_radius=6, font=("Segoe UI", 11, "bold")).grid(row=0, column=3, rowspan=2, padx=8, ipadx=8, ipady=3)
+        btns = ctk.CTkFrame(fila, fg_color="transparent"); btns.grid(row=0, column=4, rowspan=2, padx=10)
+        ctk.CTkButton(btns, text="Abrir", width=80, height=30, fg_color=NAVY, hover_color=NAVY2,
+                      command=lambda x=t: self._abrir(x)).pack(pady=2)
+        b2 = ctk.CTkFrame(btns, fg_color="transparent"); b2.pack()
+        if est != "Completada":
+            ctk.CTkButton(b2, text="✓", width=36, height=28, fg_color=GREEN, hover_color=GREEN_H,
+                          command=lambda x=t: self._completar(x)).pack(side="left", padx=2)
+        ctk.CTkButton(b2, text="🗑", width=36, height=28, fg_color=RED, hover_color="#9B2C22",
+                      command=lambda x=t: self._eliminar(x)).pack(side="left", padx=2)
+
+    def _abrir(self, t):
+        VentanaTareaDetalle(self, dict(t), self.cfg, on_save=self._refrescar)
+
+    def _completar(self, t):
+        actualizar_tarea(t.get("numero", ""), {"estado": "Completada"})
+        self._refrescar()
+
+    def _eliminar(self, t):
+        if messagebox.askyesno("Eliminar tarea", f"Eliminar la tarea '{t.get('titulo','')}'?"):
+            eliminar_tarea(t.get("numero", ""))
+            self._refrescar()
+
+    def _nueva_tarea(self):
+        VentanaTareaDetalle(self, {"estado": "Pendiente", "prioridad": "Media", "checklist": []},
+                            self.cfg, on_save=self._refrescar)
+
+    def _reporte(self):
+        data = cargar_tareas()
+        meses = sorted({_mes_de_iso(it.get("fecha_creacion", "")) for it in data.get("items", [])
+                        if it.get("fecha_creacion")}, reverse=True)
+        DialogoReporteMes(self, "Reporte de tareas comerciales",
+                          "Descarga un Excel con las tareas de gestion.",
+                          meses, exportar_reporte_tareas, "Reporte_tareas")
+
+
 class Launcher(ctk.CTk):
     """Pantalla de inicio del .exe: permite elegir uno de los tres modulos
     (Cotizacion, Reservas, Comercial). Solo Cotizacion esta desarrollado; los
@@ -6128,8 +6629,8 @@ class Launcher(ctk.CTk):
          "Convertir una cotizacion en reserva confirmada: proveedores, vouchers a\n"
          "cliente y proveedor, asignacion por asesor y control de estados.", NAVY, NAVY2, True),
         ("Comercial", "📊",
-         "Gestion comercial: clientes, embudo de ventas, tareas y metricas del\n"
-         "equipo de asesores. (En desarrollo)", CYAN, BLUE_H, False),
+         "Tareas de gestion comercial (con checklist, cliente y responsable) e\n"
+         "indicadores: ventas del mes, conversion y reservas.", CYAN, BLUE_H, True),
     ]
 
     def __init__(self):
@@ -6149,6 +6650,7 @@ class Launcher(ctk.CTk):
             pass
         self.cotizador = None
         self.reservas = None
+        self.comercial = None
         self._construir()
         self._centrar()
 
@@ -6258,6 +6760,8 @@ class Launcher(ctk.CTk):
             self._abrir_cotizacion()
         elif nombre == "Reservas":
             self._abrir_reservas()
+        elif nombre == "Comercial":
+            self._abrir_comercial()
         else:
             messagebox.showinfo(
                 nombre,
@@ -6313,6 +6817,33 @@ class Launcher(ctk.CTk):
         except Exception:
             pass
         self.reservas = None
+        try:
+            self.deiconify(); self.lift(); self.focus_force()
+        except Exception:
+            pass
+
+    def _abrir_comercial(self):
+        try:
+            if self.comercial is not None and self.comercial.winfo_exists():
+                self.comercial.deiconify(); self.comercial.lift(); return
+        except Exception:
+            self.comercial = None
+        self.withdraw()
+        try:
+            self.comercial = ModuloComercial(self)
+            self.comercial.protocol("WM_DELETE_WINDOW", self._cerrar_comercial)
+        except Exception as e:
+            self.comercial = None
+            self.deiconify()
+            messagebox.showerror("Error", f"No se pudo abrir Comercial:\n{e}")
+
+    def _cerrar_comercial(self):
+        try:
+            if self.comercial is not None:
+                self.comercial.destroy()
+        except Exception:
+            pass
+        self.comercial = None
         try:
             self.deiconify(); self.lift(); self.focus_force()
         except Exception:
