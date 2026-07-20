@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "5.7"
+VERSION = "5.8"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -2499,37 +2499,45 @@ class VentanaClientes(ctk.CTkToplevel):
         self.sel = None            # indice seleccionado (None = nuevo)
         self.vend_rows = []        # filas de vendedores (dicts de StringVars)
 
+        self.geometry("1080x680+60+10")
+        self.after(60, lambda: self._maximizar())
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(1, weight=1)
-        # ---- barra superior ----
-        top = ctk.CTkFrame(self, fg_color=CARD, corner_radius=0, height=52)
-        top.grid(row=0, column=0, columnspan=2, sticky="ew")
-        ctk.CTkLabel(top, text="Clientes / Empresas", text_color=NAVY,
-                     font=("Segoe UI", 16, "bold")).pack(side="left", padx=16, pady=10)
-        ctk.CTkButton(top, text="Importar Excel/CSV", width=150, height=32, corner_radius=8,
-                      fg_color=NAVY, hover_color=BLUE, font=("Segoe UI", 12, "bold"),
-                      command=self._importar).pack(side="right", padx=(4, 16))
-        ctk.CTkButton(top, text="Exportar Excel", width=130, height=32, corner_radius=8,
+        # ---- barra superior (navy) ----
+        top = ctk.CTkFrame(self, fg_color=NAVY, corner_radius=0, height=62)
+        top.grid(row=0, column=0, columnspan=2, sticky="ew"); top.grid_propagate(False)
+        ctk.CTkLabel(top, text="👥   Clientes / Empresas", text_color="#FFFFFF",
+                     font=("Segoe UI", 18, "bold")).pack(side="left", padx=22, pady=12)
+        ctk.CTkButton(top, text="Importar Excel/CSV", width=160, height=36, corner_radius=10,
+                      fg_color=NAVY2, hover_color=BLUE, font=("Segoe UI", 12, "bold"),
+                      command=self._importar).pack(side="right", padx=(4, 20))
+        ctk.CTkButton(top, text="Exportar Excel", width=140, height=36, corner_radius=10,
                       fg_color=GREEN, hover_color=GREEN_H, font=("Segoe UI", 12, "bold"),
                       command=self._exportar).pack(side="right", padx=4)
-        ctk.CTkButton(top, text="+ Nueva empresa", width=140, height=32, corner_radius=8,
-                      fg_color=CARD2, text_color=NAVY, hover_color=LINE, border_width=1,
-                      border_color=LINE, font=("Segoe UI", 12, "bold"),
+        ctk.CTkButton(top, text="+ Nueva empresa", width=150, height=36, corner_radius=10,
+                      fg_color="#FFFFFF", text_color=NAVY, hover_color="#E7EEF8",
+                      font=("Segoe UI", 12, "bold"),
                       command=self._nuevo).pack(side="right", padx=4)
         # ---- lista izquierda ----
-        izq = ctk.CTkFrame(self, fg_color=CARD, corner_radius=12); izq.grid(
-            row=1, column=0, sticky="nsew", padx=(12, 6), pady=12)
-        izq.grid_rowconfigure(1, weight=1); izq.grid_columnconfigure(0, weight=1)
+        izq = ctk.CTkFrame(self, fg_color=CARD, corner_radius=16); izq.grid(
+            row=1, column=0, sticky="nsew", padx=(14, 7), pady=14)
+        izq.grid_rowconfigure(2, weight=1); izq.grid_columnconfigure(0, weight=1)
+        cab = ctk.CTkFrame(izq, fg_color="transparent"); cab.grid(row=0, column=0, sticky="ew", padx=12, pady=(12, 2))
+        ctk.CTkLabel(cab, text="Empresas", text_color=NAVY,
+                     font=("Segoe UI", 14, "bold")).pack(side="left")
+        self.lbl_count = ctk.CTkLabel(cab, text="", text_color=MUTED, font=("Segoe UI", 11))
+        self.lbl_count.pack(side="right")
         self.var_busca = tk.StringVar()
-        eb = ctk.CTkEntry(izq, textvariable=self.var_busca, height=32, corner_radius=8,
-                          border_color=LINE, placeholder_text="Buscar empresa...", width=240)
-        eb.grid(row=0, column=0, sticky="ew", padx=8, pady=8)
+        eb = ctk.CTkEntry(izq, textvariable=self.var_busca, height=38, corner_radius=10,
+                          border_color=BLUE, border_width=2, fg_color=CARD2,
+                          placeholder_text="🔍  Buscar empresa...", width=280)
+        eb.grid(row=1, column=0, sticky="ew", padx=12, pady=(4, 8))
         self.var_busca.trace_add("write", lambda *a: self._rebuild_list())
-        self.lista = ctk.CTkScrollableFrame(izq, fg_color=CARD2, corner_radius=10, width=240)
-        self.lista.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 8))
+        self.lista = ctk.CTkScrollableFrame(izq, fg_color=BG, corner_radius=12, width=280)
+        self.lista.grid(row=2, column=0, sticky="nsew", padx=12, pady=(0, 12))
         # ---- form derecha ----
-        self.form = ctk.CTkScrollableFrame(self, fg_color=CARD, corner_radius=12)
-        self.form.grid(row=1, column=1, sticky="nsew", padx=(6, 12), pady=12)
+        self.form = ctk.CTkScrollableFrame(self, fg_color=CARD, corner_radius=16)
+        self.form.grid(row=1, column=1, sticky="nsew", padx=(7, 14), pady=14)
         self.form.grid_columnconfigure(0, weight=1)
         self._build_form()
         self._rebuild_list()
@@ -2541,51 +2549,84 @@ class VentanaClientes(ctk.CTkToplevel):
                 self.var_busca.set(preseleccion)
                 self._cargar(idx)
 
+    def _maximizar(self):
+        try:
+            self.state("zoomed")
+        except Exception:
+            pass
+
     def _build_form(self):
         self.vars = {}
-        def campo(clave, etq):
-            ctk.CTkLabel(self.form, text=etq, text_color=MUTED,
-                         font=("Segoe UI", 11)).pack(anchor="w", padx=12, pady=(6, 0))
+
+        def campo(parent, clave, etq):
+            ctk.CTkLabel(parent, text=etq, text_color=MUTED,
+                         font=("Segoe UI", 11)).pack(anchor="w", padx=2, pady=(6, 0))
             v = tk.StringVar(); self.vars[clave] = v
-            ctk.CTkEntry(self.form, textvariable=v, height=32, corner_radius=8,
-                         border_color=LINE).pack(fill="x", padx=12)
-        ctk.CTkLabel(self.form, text="Datos de la empresa", text_color=NAVY,
-                     font=("Segoe UI", 14, "bold")).pack(anchor="w", padx=12, pady=(10, 2))
-        campo("empresa", "Nombre de la empresa *")
-        campo("nit", "NIT / Documento fiscal")
-        campo("telefono", "Telefono")
-        campo("email", "Email")
-        campo("web", "Sitio web")
-        campo("pais", "Pais")
-        # vendedores
-        hdr = ctk.CTkFrame(self.form, fg_color="transparent"); hdr.pack(fill="x", padx=12, pady=(12, 0))
-        ctk.CTkLabel(hdr, text="Vendedores / contactos", text_color=NAVY,
-                     font=("Segoe UI", 14, "bold")).pack(side="left")
-        ctk.CTkButton(hdr, text="+ Agregar vendedor", width=150, height=28, corner_radius=8,
-                      fg_color=CARD2, text_color=NAVY, hover_color=LINE, border_width=1,
-                      border_color=LINE, font=("Segoe UI", 11, "bold"),
+            ctk.CTkEntry(parent, textvariable=v, height=34, corner_radius=8,
+                         border_color=LINE).pack(fill="x", padx=2, pady=(0, 2))
+            return v
+
+        def pareja(parent, k1, l1, k2, l2):
+            f = ctk.CTkFrame(parent, fg_color="transparent"); f.pack(fill="x")
+            a = ctk.CTkFrame(f, fg_color="transparent"); a.pack(side="left", fill="x", expand=True, padx=(0, 6))
+            b = ctk.CTkFrame(f, fg_color="transparent"); b.pack(side="left", fill="x", expand=True, padx=(6, 0))
+            campo(a, k1, l1); campo(b, k2, l2)
+
+        # ---- Tarjeta: datos de la empresa ----
+        card = ctk.CTkFrame(self.form, fg_color=CARD2, corner_radius=14,
+                            border_width=1, border_color=LINE)
+        card.pack(fill="x", padx=12, pady=(10, 8))
+        inn = ctk.CTkFrame(card, fg_color="transparent"); inn.pack(fill="x", padx=14, pady=12)
+        ctk.CTkLabel(inn, text="🏢  Datos de la empresa", text_color=NAVY,
+                     font=("Segoe UI", 15, "bold")).pack(anchor="w", pady=(0, 4))
+        campo(inn, "empresa", "Nombre de la empresa *")
+        pareja(inn, "nit", "NIT / Documento fiscal", "telefono", "Telefono")
+        pareja(inn, "email", "Email", "web", "Sitio web")
+        campo(inn, "pais", "Pais")
+
+        # ---- Tarjeta: vendedores / contactos ----
+        card2 = ctk.CTkFrame(self.form, fg_color=CARD2, corner_radius=14,
+                             border_width=1, border_color=LINE)
+        card2.pack(fill="x", padx=12, pady=(0, 8))
+        in2 = ctk.CTkFrame(card2, fg_color="transparent"); in2.pack(fill="x", padx=14, pady=12)
+        hdr = ctk.CTkFrame(in2, fg_color="transparent"); hdr.pack(fill="x")
+        ctk.CTkLabel(hdr, text="👤  Vendedores / contactos", text_color=NAVY,
+                     font=("Segoe UI", 15, "bold")).pack(side="left")
+        ctk.CTkButton(hdr, text="+ Agregar vendedor", width=150, height=30, corner_radius=8,
+                      fg_color=BLUE, hover_color=BLUE_H, font=("Segoe UI", 11, "bold"),
                       command=lambda: self._add_vend()).pack(side="right")
-        self.vends_frame = ctk.CTkFrame(self.form, fg_color="transparent")
-        self.vends_frame.pack(fill="x", padx=6, pady=4)
-        # botones
+        self.vends_frame = ctk.CTkFrame(in2, fg_color="transparent")
+        self.vends_frame.pack(fill="x", pady=(8, 2))
+
+        # ---- Botones (barra) ----
         bts = ctk.CTkFrame(self.form, fg_color="transparent"); bts.pack(fill="x", padx=12, pady=14)
-        ctk.CTkButton(bts, text="Guardar", fg_color=GREEN, hover_color=GREEN_H,
-                      font=("Segoe UI", 13, "bold"), command=self._guardar).pack(side="left")
-        ctk.CTkButton(bts, text="Eliminar", fg_color=CARD2, text_color=RED, hover_color=LINE,
-                      command=self._eliminar).pack(side="left", padx=8)
-        self.lbl_estado = ctk.CTkLabel(bts, text="", text_color=MUTED); self.lbl_estado.pack(side="left", padx=10)
+        ctk.CTkButton(bts, text="💾  Guardar", height=42, corner_radius=10, fg_color=GREEN,
+                      hover_color=GREEN_H, font=("Segoe UI", 13, "bold"),
+                      command=self._guardar).pack(side="left")
+        ctk.CTkButton(bts, text="Eliminar", height=42, width=110, corner_radius=10,
+                      fg_color="#FBE6E6", text_color=RED, hover_color="#F5CFCF",
+                      font=("Segoe UI", 12, "bold"), command=self._eliminar).pack(side="left", padx=8)
+        self.lbl_estado = ctk.CTkLabel(bts, text="", text_color=GREEN_H,
+                                       font=("Segoe UI", 12, "bold")); self.lbl_estado.pack(side="left", padx=10)
 
     def _add_vend(self, v=None):
-        row = ctk.CTkFrame(self.vends_frame, fg_color=CARD2, corner_radius=8)
-        row.pack(fill="x", padx=6, pady=3)
+        row = ctk.CTkFrame(self.vends_frame, fg_color=CARD, corner_radius=8,
+                           border_width=1, border_color=LINE)
+        row.pack(fill="x", padx=2, pady=3)
         vv = {k: tk.StringVar(value=(v or {}).get(k, "")) for k in ("nombre", "telefono", "email", "cargo")}
-        for clave, ph, w in (("nombre", "Nombre", 150), ("telefono", "Telefono", 110),
-                             ("email", "Email", 170), ("cargo", "Cargo", 110)):
-            ctk.CTkEntry(row, textvariable=vv[clave], height=28, width=w, corner_radius=6,
-                         border_color=LINE, placeholder_text=ph).pack(side="left", padx=3, pady=4)
-        ctk.CTkButton(row, text="✕", width=26, height=26, corner_radius=6, fg_color="transparent",
-                      text_color=RED, hover_color=LINE,
-                      command=lambda: (self.vend_rows.remove(entry), row.destroy())).pack(side="left", padx=2)
+        ctk.CTkEntry(row, textvariable=vv["nombre"], height=30, corner_radius=6,
+                     border_color=LINE, placeholder_text="Nombre").pack(
+            side="left", fill="x", expand=True, padx=(6, 3), pady=5)
+        ctk.CTkEntry(row, textvariable=vv["telefono"], height=30, width=120, corner_radius=6,
+                     border_color=LINE, placeholder_text="Telefono").pack(side="left", padx=3, pady=5)
+        ctk.CTkEntry(row, textvariable=vv["email"], height=30, width=180, corner_radius=6,
+                     border_color=LINE, placeholder_text="Email").pack(side="left", padx=3, pady=5)
+        ctk.CTkEntry(row, textvariable=vv["cargo"], height=30, width=110, corner_radius=6,
+                     border_color=LINE, placeholder_text="Cargo").pack(side="left", padx=3, pady=5)
+        ctk.CTkButton(row, text="✕", width=28, height=28, corner_radius=6, fg_color=RED,
+                      text_color="#FFFFFF", hover_color="#9B2C22",
+                      command=lambda: (self.vend_rows.remove(entry), row.destroy())).pack(
+            side="left", padx=(3, 6))
         entry = {"frame": row, "vars": vv}
         self.vend_rows.append(entry)
 
@@ -2598,19 +2639,47 @@ class VentanaClientes(ctk.CTkToplevel):
         for w in self.lista.winfo_children():
             w.destroy()
         q = self.var_busca.get().lower()
+        mostrados = 0
         for i, c in enumerate(self.clientes):
             if q and q not in c.get("empresa", "").lower():
                 continue
-            act = (i == self.sel)
-            b = ctk.CTkButton(self.lista, text=c.get("empresa", "(sin nombre)"),
-                              anchor="w", height=32, corner_radius=8,
-                              fg_color=NAVY if act else CARD, text_color="#FFFFFF" if act else NAVY,
-                              hover_color=BLUE, font=("Segoe UI", 12, "bold" if act else "normal"),
-                              command=lambda x=i: self._cargar(x))
-            b.pack(fill="x", padx=4, pady=2)
+            mostrados += 1
+            self._item_lista(i, c, i == self.sel)
+        try:
+            tot = len(self.clientes)
+            self.lbl_count.configure(text=(f"{mostrados}/{tot}" if q else f"{tot} empresas"))
+        except Exception:
+            pass
         if not self.clientes:
             ctk.CTkLabel(self.lista, text="Sin clientes.\nCrea uno o importa un Excel.",
                          text_color=MUTED).pack(pady=20)
+        elif mostrados == 0:
+            ctk.CTkLabel(self.lista, text="Sin resultados.", text_color=MUTED).pack(pady=16)
+
+    def _item_lista(self, i, c, act):
+        item = ctk.CTkFrame(self.lista, fg_color=(NAVY if act else CARD), corner_radius=10,
+                            border_width=(0 if act else 1), border_color=LINE)
+        item.pack(fill="x", padx=4, pady=3)
+        nom = c.get("empresa", "(sin nombre)")
+        vends = c.get("vendedores", []) or []
+        partes = []
+        if c.get("pais"):
+            partes.append(c["pais"])
+        partes.append(f"{len(vends)} contacto" + ("s" if len(vends) != 1 else ""))
+        tc = "#FFFFFF" if act else NAVY
+        sc = "#C7D7EE" if act else MUTED
+        l1 = ctk.CTkLabel(item, text=nom, anchor="w", text_color=tc, justify="left",
+                          font=("Segoe UI", 12, "bold"))
+        l1.pack(fill="x", padx=12, pady=(7, 0))
+        l2 = ctk.CTkLabel(item, text="   ·   ".join(partes), anchor="w", text_color=sc,
+                          font=("Segoe UI", 10))
+        l2.pack(fill="x", padx=12, pady=(0, 7))
+        for w in (item, l1, l2):
+            w.configure(cursor="hand2")
+            w.bind("<Button-1>", lambda e, x=i: self._cargar(x))
+            if not act:
+                w.bind("<Enter>", lambda e, it=item: it.configure(fg_color=CARD2))
+                w.bind("<Leave>", lambda e, it=item: it.configure(fg_color=CARD))
 
     def _cargar(self, idx):
         self.sel = idx

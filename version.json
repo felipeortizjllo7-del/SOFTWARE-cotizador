@@ -1,5 +1,5 @@
 {
-  "version": "5.7",
+  "version": "5.8",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 5.7 - Reservas: nuevo espacio SOPORTE DE PAGO para subir el comprobante de la reserva (hasta 3 archivos, se abren/quitan). La ventana de reserva abre maximizada con respaldo, para que los botones inferiores (Voucher/Enviar/Guardar) siempre se vean."
+  "notas": "Version 5.8 - Rediseno de la ventana Clientes/Empresas (modulo Cotizacion): barra superior navy, contador de empresas, lista con tarjetas (pais y numero de contactos) con hover y seleccion resaltada, formulario en tarjetas con campos en dos columnas, seccion de vendedores mas clara y botones estilizados. Abre maximizada."
 }
