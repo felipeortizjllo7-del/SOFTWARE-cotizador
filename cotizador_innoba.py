@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "5.6"
+VERSION = "5.7"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -4395,6 +4395,15 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self.vuelos_box = ctk.CTkFrame(cont, fg_color="transparent"); self.vuelos_box.pack(fill="x", pady=(2, 6))
         self._pintar_vuelos()
 
+        # Soporte de pago (hasta 3 archivos)
+        sh = ctk.CTkFrame(cont, fg_color="transparent"); sh.pack(fill="x", pady=(2, 0))
+        ctk.CTkLabel(sh, text="SOPORTE DE PAGO  (adjuntos, hasta 3)", text_color=NAVY,
+                     font=("Segoe UI", 12, "bold")).pack(side="left")
+        ctk.CTkButton(sh, text="+ Subir soporte", width=150, height=28, fg_color=GREEN,
+                      hover_color=GREEN_H, command=self._subir_soporte).pack(side="right")
+        self.soportes_box = ctk.CTkFrame(cont, fg_color="transparent"); self.soportes_box.pack(fill="x", pady=(2, 6))
+        self._pintar_soportes()
+
         ctk.CTkLabel(cont, text="Alojamiento / habitaciones (general)", text_color=MUTED,
                      font=("Segoe UI", 11)).pack(anchor="w", padx=2)
         self.v_hab = tk.StringVar(value=res.get("hab", ""))
@@ -4673,6 +4682,52 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
                            {"vuelos_adjuntos": self.res.get("vuelos_adjuntos", [])})
         self._pintar_vuelos()
 
+    def _pintar_soportes(self):
+        for w in self.soportes_box.winfo_children():
+            w.destroy()
+        soportes = self.res.setdefault("soportes_pago", [])
+        if not soportes:
+            ctk.CTkLabel(self.soportes_box, text="Sin soportes de pago. Usa '+ Subir soporte' "
+                         "para adjuntar el comprobante (hasta 3).", text_color=MUTED,
+                         font=("Segoe UI", 10)).pack(pady=4)
+        for i, v in enumerate(soportes):
+            row = ctk.CTkFrame(self.soportes_box, fg_color="transparent"); row.pack(fill="x", pady=2)
+            ctk.CTkButton(row, text="💳 " + os.path.basename(v), height=30, fg_color="#E3F5EA",
+                          text_color=GREEN_H, hover_color=LINE, anchor="w",
+                          command=lambda a=v: self._abrir_archivo(a)).pack(
+                side="left", fill="x", expand=True, padx=(0, 6))
+            ctk.CTkButton(row, text="🗑", width=32, height=30, fg_color=RED, hover_color="#9B2C22",
+                          command=lambda idx=i: self._quitar_soporte(idx)).pack(side="left")
+
+    def _subir_soporte(self):
+        soportes = self.res.setdefault("soportes_pago", [])
+        if len(soportes) >= 3:
+            messagebox.showinfo("Soporte de pago", "Ya hay 3 soportes. Quita alguno para subir otro.")
+            return
+        rutas = filedialog.askopenfilenames(
+            title="Subir soporte(s) de pago",
+            filetypes=[("Documentos", "*.pdf *.jpg *.jpeg *.png"), ("Todos", "*.*")])
+        if not rutas:
+            return
+        for r in rutas:
+            if len(soportes) >= 3:
+                messagebox.showinfo("Soporte de pago", "Solo se permiten 3 soportes; se omitieron los demas.")
+                break
+            destino = self._copiar_adjunto(r, prefijo="pago")
+            if destino:
+                soportes.append(destino)
+        actualizar_reserva(self.res.get("numero", ""), {"soportes_pago": soportes})
+        self._pintar_soportes()
+
+    def _quitar_soporte(self, i):
+        try:
+            del self.res["soportes_pago"][i]
+        except Exception:
+            pass
+        actualizar_reserva(self.res.get("numero", ""),
+                           {"soportes_pago": self.res.get("soportes_pago", [])})
+        self._pintar_soportes()
+
     def _pintar_servicios(self):
         for w in self.serv_box.winfo_children():
             w.destroy()
@@ -4689,10 +4744,21 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self._refrescar_os_hoteles()
 
     def _maximizar(self):
+        ok = False
         try:
             self.state("zoomed")
+            ok = self.state() == "zoomed"
         except Exception:
-            pass
+            ok = False
+        if not ok:
+            # Respaldo: ajustar al area util (sin barra de tareas)
+            try:
+                wah = _alto_util_pantalla(fallback=(self.winfo_screenheight() - 70))
+                alto = max(480, wah - 70)
+                sw = self.winfo_screenwidth()
+                self.geometry(f"{min(1200, sw - 60)}x{alto}+30+8")
+            except Exception:
+                pass
 
     def _refrescar_os_hoteles(self):
         if not hasattr(self, "lbl_os_hoteles"):
@@ -5048,7 +5114,8 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
             "notas": self.res.get("notas", ""), "itinerario": self.res.get("itinerario", ""),
             "destinos_detalle": self.res.get("destinos_detalle", []),
             "pasajeros_list": self.res.get("pasajeros_list", []),
-            "vuelos_adjuntos": self.res.get("vuelos_adjuntos", [])}
+            "vuelos_adjuntos": self.res.get("vuelos_adjuntos", []),
+            "soportes_pago": self.res.get("soportes_pago", [])}
         for k in self.res:
             if k.startswith("os_"):
                 cambios[k] = self.res[k]
