@@ -1,5 +1,5 @@
 {
-  "version": "5.9",
+  "version": "6.0",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 5.9 - Reservas: la reserva ahora lleva un listado de ITEMS/servicios cobrados (descripcion + valor); se agregan/eliminan y el TOTAL (monto negociado) se recalcula solo. Aplica a reservas desde cotizacion (siembra el total) y a reservas nuevas manuales (item por item)."
+  "notas": "Version 6.0 - Reservas: nuevo boton 'Desde tarifario' en los items. Eliges destino, acomodacion, noches y grupo, y se listan los HOTELES y TOURS/servicios del mismo tarifario del cotizador (precios_2026) con su precio por persona en USD; con un clic los agregas como item y el total se recalcula solo. Sirve tanto para reservas desde cotizacion como manuales."
 }

@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "5.9"
+VERSION = "6.0"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -658,6 +658,82 @@ def hoteles_por_destino(precios, destino):
         if n and n not in nombres:
             nombres.append(n)
     return sorted(nombres)
+
+
+def _clave_destino(precios, destino):
+    for k in (precios or {}):
+        if k.strip().lower() == (destino or "").strip().lower():
+            return k
+    return None
+
+
+def _tasa_tarifario(precios, destino, cfg):
+    """TRM a usar: la del config si es valida, si no la embebida en el tarifario."""
+    if cfg:
+        t = _trm_valida(cfg.get("ultima_trm", ""))
+        if t:
+            return t
+    dd = precios.get(destino, {}) if precios else {}
+    for sec in ("hoteles", "terrestres"):
+        try:
+            v = float(dd.get(sec, {}).get("tasa", 0) or 0)
+            if v > 100:
+                return v
+        except Exception:
+            pass
+    return 4000.0
+
+
+def hoteles_detalle(precios, destino):
+    """Lista de dicts de hoteles del destino (nombre, temporada, sencilla/doble/triple...)."""
+    clave = _clave_destino(precios, destino)
+    if clave is None:
+        return []
+    return ((precios.get(clave, {}) or {}).get("hoteles", {}) or {}).get("hoteles", [])
+
+
+def servicios_terrestres(precios, destino):
+    """Lista de servicios terrestres (tours/traslados) del destino."""
+    clave = _clave_destino(precios, destino)
+    if clave is None:
+        return []
+    return ((precios.get(clave, {}) or {}).get("terrestres", {}) or {}).get("servicios", [])
+
+
+def precio_hotel_usd_pp(precios, destino, hotel, acomodacion="doble", noches=1, cfg=None):
+    """Precio por persona en USD de un hotel (acomodacion) para 'noches' noches."""
+    clave = _clave_destino(precios, destino)
+    dd = (precios.get(clave, {}) or {}).get("hoteles", {}) if clave else {}
+    margen = float(dd.get("margen", 0.88) or 0.88)
+    tasa = _tasa_tarifario(precios, clave or destino, cfg)
+    ocup = {"sencilla": 1, "doble": 2, "triple": 3}.get(acomodacion, 2)
+    room = float(hotel.get(acomodacion, 0) or 0)
+    if not room or not tasa or not margen:
+        return 0.0
+    pp_noche = (room / ocup) / margen / tasa
+    return round(pp_noche * max(1, int(noches or 1)), 2)
+
+
+def precio_servicio_usd_pp(precios, destino, serv, grupo=2, cfg=None):
+    """Precio por persona en USD de un servicio terrestre para un grupo de N."""
+    clave = _clave_destino(precios, destino)
+    dd = (precios.get(clave, {}) or {}).get("terrestres", {}) if clave else {}
+    margen = float(dd.get("margen", 0.75) or 0.75)
+    tasa = _tasa_tarifario(precios, clave or destino, cfg)
+    pr = serv.get("precios", {}) or {}
+    if not pr:
+        return 0.0
+    key = str(int(grupo or 2))
+    if key not in pr:
+        nums = sorted(int(k) for k in pr.keys() if str(k).isdigit())
+        menores = [n for n in nums if n <= (grupo or 2)]
+        elegido = (menores[-1] if menores else (nums[0] if nums else None))
+        key = str(elegido) if elegido is not None else None
+    val = float(pr.get(key, 0) or 0) if key else 0.0
+    if not val or not tasa or not margen:
+        return 0.0
+    return round(val / margen / tasa, 2)
+
 
 def es_transporte(nombre):
     n = nombre.lower()
@@ -4491,8 +4567,10 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         ih = ctk.CTkFrame(cont, fg_color="transparent"); ih.pack(fill="x", pady=(10, 2))
         ctk.CTkLabel(ih, text="ITEMS DE LA RESERVA  (servicios cobrados)", text_color=NAVY,
                      font=("Segoe UI", 13, "bold")).pack(side="left")
-        ctk.CTkButton(ih, text="+ Agregar item", width=140, height=30, fg_color=BLUE,
+        ctk.CTkButton(ih, text="+ Agregar item", width=130, height=30, fg_color=BLUE,
                       hover_color=BLUE_H, command=self._agregar_item).pack(side="right")
+        ctk.CTkButton(ih, text="🏨 Desde tarifario", width=150, height=30, fg_color=NAVY,
+                      hover_color=NAVY2, command=self._abrir_tarifario).pack(side="right", padx=(0, 6))
         self.items_box = ctk.CTkFrame(cont, fg_color="transparent"); self.items_box.pack(fill="x")
         tot_bar = ctk.CTkFrame(cont, fg_color=CARD2, corner_radius=8); tot_bar.pack(fill="x", pady=(2, 8))
         self.lbl_total = ctk.CTkLabel(tot_bar, text="Total:  USD 0.00", text_color=NAVY,
@@ -4887,6 +4965,42 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self.res.setdefault("items_cobro", []).append({"desc": "", "valor": 0.0})
         self._pintar_items()
 
+    def _noches_reserva(self):
+        try:
+            d1 = self.sel_llegada.get(); d2 = self.sel_salida.get()
+            if d1 and d2:
+                return max(1, (d2 - d1).days)
+        except Exception:
+            pass
+        return 1
+
+    def _grupo_reserva(self):
+        n = len([p for p in self.res.get("pasajeros_list", [])
+                 if (p.get("nombre") or p.get("documento"))])
+        if n >= 1:
+            return n
+        txt = self.v_pax.get() if hasattr(self, "v_pax") else ""
+        num = ""
+        for ch in txt:
+            if ch.isdigit():
+                num += ch
+            elif num:
+                break
+        return int(num) if num else 2
+
+    def _abrir_tarifario(self):
+        self._sync_items()
+        dd = destinos_detalle_de(self.res)
+        destino0 = dd[0].get("nombre", "") if dd else ""
+        SelectorTarifario(self, self.precios, self.cfg, destino0,
+                          self._noches_reserva(), self._grupo_reserva(),
+                          on_add=self._add_item_tarifa)
+
+    def _add_item_tarifa(self, desc, valor):
+        self._sync_items()
+        self.res.setdefault("items_cobro", []).append({"desc": desc, "valor": round(float(valor or 0), 2)})
+        self._pintar_items()
+
     def _quitar_item(self, i):
         self._sync_items()
         try:
@@ -5274,6 +5388,119 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
             self.on_save()
         messagebox.showinfo("Guardado", "Reserva actualizada.")
         self.destroy()
+
+
+class SelectorTarifario(ctk.CTkToplevel):
+    """Elegir hoteles y tours del tarifario (precios_2026) por destino y agregarlos
+       como items de la reserva, con su precio en USD por persona."""
+    def __init__(self, master, precios, cfg, destino, noches, grupo, on_add):
+        super().__init__(master)
+        self.precios = precios; self.cfg = cfg; self.on_add = on_add
+        self.title("Agregar items desde el tarifario")
+        self.geometry("860x660"); self.configure(fg_color=BG)
+        self.transient(master); self.grab_set()
+        ctk.CTkLabel(self, text="Agregar items desde el tarifario",
+                     text_color=NAVY, font=("Segoe UI", 16, "bold")).pack(anchor="w", padx=16, pady=(14, 2))
+        ctk.CTkLabel(self, text="Elige el destino; se listan hoteles y tours con su precio por "
+                     "persona (USD). Ajusta acomodacion, noches y grupo si hace falta.",
+                     text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=16)
+
+        destinos = sorted([d for d in (precios or {}).keys()])
+        dest0 = next((d for d in destinos if d.strip().lower() == (destino or "").strip().lower()),
+                     (destinos[0] if destinos else ""))
+        bar = ctk.CTkFrame(self, fg_color=CARD, corner_radius=10); bar.pack(fill="x", padx=16, pady=10)
+        row = ctk.CTkFrame(bar, fg_color="transparent"); row.pack(fill="x", padx=10, pady=8)
+        ctk.CTkLabel(row, text="Destino", text_color=MUTED).pack(side="left")
+        self.v_dest = tk.StringVar(value=dest0)
+        ctk.CTkOptionMenu(row, variable=self.v_dest, values=destinos, width=180, height=30,
+                          fg_color=NAVY, button_color=NAVY2,
+                          command=lambda _v=None: self._rebuild()).pack(side="left", padx=(4, 14))
+        ctk.CTkLabel(row, text="Acomodacion", text_color=MUTED).pack(side="left")
+        self.v_acom = tk.StringVar(value="doble")
+        ctk.CTkOptionMenu(row, variable=self.v_acom, values=["sencilla", "doble", "triple"],
+                          width=110, height=30, fg_color=NAVY, button_color=NAVY2,
+                          command=lambda _v=None: self._rebuild()).pack(side="left", padx=(4, 14))
+        ctk.CTkLabel(row, text="Noches", text_color=MUTED).pack(side="left")
+        self.v_noches = tk.StringVar(value=str(max(1, int(noches or 1))))
+        e1 = ctk.CTkEntry(row, textvariable=self.v_noches, width=54, height=30); e1.pack(side="left", padx=(4, 14))
+        ctk.CTkLabel(row, text="Grupo (pax)", text_color=MUTED).pack(side="left")
+        self.v_grupo = tk.StringVar(value=str(max(1, int(grupo or 2))))
+        e2 = ctk.CTkEntry(row, textvariable=self.v_grupo, width=54, height=30); e2.pack(side="left", padx=4)
+        ctk.CTkButton(row, text="Actualizar precios", width=150, height=30, fg_color=BLUE,
+                      hover_color=BLUE_H, command=self._rebuild).pack(side="right")
+        for e in (e1, e2):
+            e.bind("<Return>", lambda ev: self._rebuild())
+
+        self.lbl_msg = ctk.CTkLabel(self, text="", text_color=GREEN_H, font=("Segoe UI", 11, "bold"))
+        self.lbl_msg.pack(anchor="w", padx=16)
+        self.box = ctk.CTkScrollableFrame(self, fg_color=BG)
+        self.box.pack(fill="both", expand=True, padx=16, pady=(4, 14))
+        self._rebuild()
+
+    def _num(self, var, defecto):
+        try:
+            return max(1, int(float(str(var.get()).strip())))
+        except Exception:
+            return defecto
+
+    def _rebuild(self):
+        for w in self.box.winfo_children():
+            w.destroy()
+        dest = self.v_dest.get()
+        acom = self.v_acom.get()
+        noches = self._num(self.v_noches, 1)
+        grupo = self._num(self.v_grupo, 2)
+
+        self._banda(f"HOTELES  ·  precio por persona en {acom}, {noches} noche(s)")
+        hoteles = hoteles_detalle(self.precios, dest)
+        if not hoteles:
+            ctk.CTkLabel(self.box, text="Sin hoteles para este destino.", text_color=MUTED).pack(pady=4)
+        for h in hoteles:
+            if not float(h.get(acom, 0) or 0):
+                continue
+            usd = precio_hotel_usd_pp(self.precios, dest, h, acom, noches, self.cfg)
+            temp = h.get("temporada", "")
+            cat = h.get("categoria", "")
+            sub = "  ·  ".join(x for x in [temp, cat] if x)
+            desc = f"{dest} - {h.get('nombre','')} ({acom}, {noches}N, p.p.)"
+            self._fila(h.get("nombre", ""), sub, usd, desc)
+
+        self._banda(f"TOURS / SERVICIOS  ·  precio por persona, grupo de {grupo}")
+        servicios = servicios_terrestres(self.precios, dest)
+        if not servicios:
+            ctk.CTkLabel(self.box, text="Sin servicios para este destino.", text_color=MUTED).pack(pady=4)
+        for s in servicios:
+            usd = precio_servicio_usd_pp(self.precios, dest, s, grupo, self.cfg)
+            desc = f"{dest} - {s.get('nombre','')} (p.p., grupo {grupo})"
+            self._fila(s.get("nombre", ""), "", usd, desc)
+
+    def _banda(self, texto):
+        b = ctk.CTkLabel(self.box, text=texto, text_color="#FFFFFF", fg_color=NAVY,
+                         corner_radius=6, anchor="w", font=("Segoe UI", 11, "bold"))
+        b.pack(fill="x", pady=(8, 2), ipady=4, ipadx=8)
+
+    def _fila(self, nombre, sub, usd, desc):
+        row = ctk.CTkFrame(self.box, fg_color=CARD, corner_radius=8,
+                           border_width=1, border_color=LINE)
+        row.pack(fill="x", pady=2)
+        izq = ctk.CTkFrame(row, fg_color="transparent"); izq.pack(side="left", fill="x", expand=True, padx=10, pady=6)
+        ctk.CTkLabel(izq, text=nombre, text_color=NAVY, anchor="w",
+                     font=("Segoe UI", 12, "bold")).pack(anchor="w")
+        if sub:
+            ctk.CTkLabel(izq, text=sub, text_color=MUTED, anchor="w",
+                         font=("Segoe UI", 10)).pack(anchor="w")
+        ctk.CTkLabel(row, text=f"USD {usd:,.2f}", text_color=GREEN_H,
+                     font=("Segoe UI", 12, "bold")).pack(side="left", padx=10)
+        ctk.CTkButton(row, text="+ Agregar", width=100, height=30, fg_color=GREEN,
+                      hover_color=GREEN_H, font=("Segoe UI", 11, "bold"),
+                      command=lambda: self._agregar(desc, usd)).pack(side="right", padx=10)
+
+    def _agregar(self, desc, usd):
+        try:
+            self.on_add(desc, usd)
+            self.lbl_msg.configure(text=f"Agregado:  {desc}   (USD {usd:,.2f})")
+        except Exception as e:
+            messagebox.showerror("Error", str(e), parent=self)
 
 
 class VentanaVouchersProveedores(ctk.CTkToplevel):
