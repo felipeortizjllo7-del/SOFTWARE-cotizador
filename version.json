@@ -1,5 +1,5 @@
 {
-  "version": "6.1",
+  "version": "6.2",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 6.1 - Reportes en Excel: (1) Modulo Reservas: boton Reporte para descargar las reservas por mes (detalle + resumen por mes con montos y estados). (2) Modulo Cotizaciones: boton Reporte de ventas para descargar las ventas cerradas (Ganadas) por mes, separadas por Felipe y por Carlos (numero de ventas y montos)."
+  "notas": "Version 6.2 - Correccion: se elimina el error 'Not enough horizontal space to render a single character' al generar el PDF de cotizacion y los vouchers. Se blindaron los generadores de PDF para nunca dibujar una celda de ancho automatico con espacio ~0 (cursor pegado al margen)."
 }

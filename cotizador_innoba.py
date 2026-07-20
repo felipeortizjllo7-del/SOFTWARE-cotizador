@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "6.1"
+VERSION = "6.2"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -879,6 +879,23 @@ class CotizacionPDF(FPDF):
         self.cfg = cfg
         self.set_auto_page_break(auto=True, margin=18)
         self.set_margins(15, 15, 15)
+
+    def _guard_ancho(self, w):
+        # Evita el error de fpdf "Not enough horizontal space..." cuando una celda
+        # de ancho automatico (w=0) queda con ~0 de ancho por tener el cursor
+        # pegado al margen derecho: en ese caso se vuelve al margen izquierdo.
+        if not w:
+            disponible = (self.w - self.r_margin) - self.get_x()
+            if disponible < 3:
+                self.set_x(self.l_margin)
+
+    def cell(self, w=0, *args, **kwargs):
+        self._guard_ancho(w)
+        return super().cell(w, *args, **kwargs)
+
+    def multi_cell(self, w=0, *args, **kwargs):
+        self._guard_ancho(w)
+        return super().multi_cell(w, *args, **kwargs)
 
     def header(self):
         cfg = self.cfg; y0 = 12; logo = cfg.get("logo", ""); text_x = 15
@@ -1753,6 +1770,20 @@ class VoucherPDF(FPDF):
         self.cfg = cfg
         self.set_auto_page_break(auto=True, margin=12)
         self.set_margins(12, 12, 12)
+
+    def _guard_ancho(self, w):
+        if not w:
+            disponible = (self.w - self.r_margin) - self.get_x()
+            if disponible < 3:
+                self.set_x(self.l_margin)
+
+    def cell(self, w=0, *args, **kwargs):
+        self._guard_ancho(w)
+        return super().cell(w, *args, **kwargs)
+
+    def multi_cell(self, w=0, *args, **kwargs):
+        self._guard_ancho(w)
+        return super().multi_cell(w, *args, **kwargs)
 
     def footer(self):
         self.set_y(-12); self.set_font("Helvetica", "I", 7)
