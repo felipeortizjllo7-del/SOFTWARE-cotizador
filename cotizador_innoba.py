@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "5.8"
+VERSION = "5.9"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -4478,7 +4478,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self.v_hab = tk.StringVar(value=res.get("hab", ""))
         ctk.CTkEntry(cont, textvariable=self.v_hab, height=32).pack(fill="x", pady=(0, 8))
 
-        # Estado + monto
+        # Estado de la reserva
         fila = ctk.CTkFrame(cont, fg_color="transparent"); fila.pack(fill="x", pady=(10, 4))
         izq = ctk.CTkFrame(fila, fg_color="transparent"); izq.pack(side="left")
         ctk.CTkLabel(izq, text="Estado de la reserva", text_color=MUTED,
@@ -4486,11 +4486,21 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self.v_estado = tk.StringVar(value=res.get("estado", "Confirmada"))
         ctk.CTkOptionMenu(izq, variable=self.v_estado, values=ESTADOS_RES, width=220,
                           height=32, fg_color=NAVY, button_color=NAVY2).pack(anchor="w")
-        der = ctk.CTkFrame(fila, fg_color="transparent"); der.pack(side="left", padx=20)
-        ctk.CTkLabel(der, text="Monto negociado (USD)", text_color=MUTED,
-                     font=("Segoe UI", 11)).pack(anchor="w")
-        self.v_monto = tk.StringVar(value=f"{float(res.get('monto', 0) or 0):.2f}")
-        ctk.CTkEntry(der, textvariable=self.v_monto, width=160, height=32).pack(anchor="w")
+
+        # Items / servicios cobrados (el total se recalcula solo)
+        ih = ctk.CTkFrame(cont, fg_color="transparent"); ih.pack(fill="x", pady=(10, 2))
+        ctk.CTkLabel(ih, text="ITEMS DE LA RESERVA  (servicios cobrados)", text_color=NAVY,
+                     font=("Segoe UI", 13, "bold")).pack(side="left")
+        ctk.CTkButton(ih, text="+ Agregar item", width=140, height=30, fg_color=BLUE,
+                      hover_color=BLUE_H, command=self._agregar_item).pack(side="right")
+        self.items_box = ctk.CTkFrame(cont, fg_color="transparent"); self.items_box.pack(fill="x")
+        tot_bar = ctk.CTkFrame(cont, fg_color=CARD2, corner_radius=8); tot_bar.pack(fill="x", pady=(2, 8))
+        self.lbl_total = ctk.CTkLabel(tot_bar, text="Total:  USD 0.00", text_color=NAVY,
+                                      font=("Segoe UI", 15, "bold"))
+        self.lbl_total.pack(side="right", padx=12, pady=6)
+        ctk.CTkLabel(tot_bar, text="El monto negociado se calcula sumando los items.",
+                     text_color=MUTED, font=("Segoe UI", 10)).pack(side="left", padx=12)
+        self._pintar_items()
 
         ctk.CTkLabel(cont, text="Notas internas", text_color=MUTED,
                      font=("Segoe UI", 11)).pack(anchor="w", pady=(8, 0))
@@ -4812,6 +4822,79 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self._refrescar_resumen()
         self._refrescar_os_hoteles()
 
+    def _pintar_items(self):
+        for w in self.items_box.winfo_children():
+            w.destroy()
+        self.item_widgets = []
+        items = self.res.setdefault("items_cobro", [])
+        # Migracion: si no hay items pero hay monto, sembrar un item con ese monto
+        if not items and float(self.res.get("monto", 0) or 0) > 0:
+            items.append({"desc": "Servicios de la reserva",
+                          "valor": float(self.res.get("monto", 0) or 0)})
+        if not items:
+            ctk.CTkLabel(self.items_box, text="Sin items. Usa '+ Agregar item' para ingresar "
+                         "los servicios cobrados (descripcion y valor).", text_color=MUTED,
+                         font=("Segoe UI", 10)).pack(pady=4)
+        for i, it in enumerate(items):
+            self._fila_item(i, it)
+        self._recalcular_total()
+
+    def _fila_item(self, i, it):
+        row = ctk.CTkFrame(self.items_box, fg_color=CARD, corner_radius=8,
+                           border_width=1, border_color=LINE)
+        row.pack(fill="x", pady=2)
+        v_desc = tk.StringVar(value=it.get("desc", ""))
+        v_val = tk.StringVar(value=f"{float(it.get('valor', 0) or 0):.2f}")
+        ctk.CTkEntry(row, textvariable=v_desc, height=30,
+                     placeholder_text="Descripcion del servicio").pack(
+            side="left", fill="x", expand=True, padx=(6, 4), pady=5)
+        ctk.CTkLabel(row, text="USD", text_color=MUTED, font=("Segoe UI", 10)).pack(side="left")
+        e = ctk.CTkEntry(row, textvariable=v_val, width=110, height=30, placeholder_text="0.00")
+        e.pack(side="left", padx=4)
+        e.bind("<KeyRelease>", lambda ev: self._recalcular_total())
+        ctk.CTkButton(row, text="✕", width=28, height=28, fg_color=RED, hover_color="#9B2C22",
+                      command=lambda idx=i: self._quitar_item(idx)).pack(side="left", padx=(4, 6))
+        self.item_widgets.append({"desc": v_desc, "valor": v_val})
+
+    def _recalcular_total(self):
+        tot = 0.0
+        for w in self.item_widgets:
+            try:
+                tot += float(str(w["valor"].get()).replace(",", "").strip() or 0)
+            except Exception:
+                pass
+        self.res["monto"] = round(tot, 2)
+        try:
+            self.lbl_total.configure(text=f"Total:  USD {tot:,.2f}")
+        except Exception:
+            pass
+
+    def _sync_items(self):
+        items = []
+        for w in self.item_widgets:
+            desc = w["desc"].get().strip()
+            try:
+                val = float(str(w["valor"].get()).replace(",", "").strip() or 0)
+            except Exception:
+                val = 0.0
+            if desc or val:
+                items.append({"desc": desc, "valor": val})
+        self.res["items_cobro"] = items
+        self.res["monto"] = round(sum(it["valor"] for it in items), 2)
+
+    def _agregar_item(self):
+        self._sync_items()
+        self.res.setdefault("items_cobro", []).append({"desc": "", "valor": 0.0})
+        self._pintar_items()
+
+    def _quitar_item(self, i):
+        self._sync_items()
+        try:
+            del self.res["items_cobro"][i]
+        except Exception:
+            pass
+        self._pintar_items()
+
     def _maximizar(self):
         ok = False
         try:
@@ -5007,10 +5090,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self.res["pax_txt"] = self.v_pax.get().strip()
         self.res["hab"] = self.v_hab.get().strip()
         self.res["estado"] = self.v_estado.get()
-        try:
-            self.res["monto"] = float(str(self.v_monto.get()).replace(",", "").strip() or 0)
-        except Exception:
-            pass
+        self._sync_items()
         self.res["notas"] = self.v_notas.get().strip()
         try:
             self.res["itinerario"] = self.txt_itin.get("1.0", "end").strip()
@@ -5180,6 +5260,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
             "fechas_viaje": self.res.get("fechas_viaje", ""),
             "pax_txt": self.res.get("pax_txt", ""), "hab": self.res.get("hab", ""),
             "estado": self.res["estado"], "monto": self.res.get("monto", 0),
+            "items_cobro": self.res.get("items_cobro", []),
             "notas": self.res.get("notas", ""), "itinerario": self.res.get("itinerario", ""),
             "destinos_detalle": self.res.get("destinos_detalle", []),
             "pasajeros_list": self.res.get("pasajeros_list", []),
