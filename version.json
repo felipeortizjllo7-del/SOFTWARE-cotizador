@@ -1,5 +1,5 @@
 {
-  "version": "5.5",
+  "version": "5.6",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 5.5 - El voucher al cliente (Orden de Servicio) ahora incluye una pagina final de CONDICIONES GENERALES Y DE PAGO: IVA, forma de pago (BANISTMO PANAMA, link 3%), validez 30 dias, politica de cancelaciones, terminos, aviso de confidencialidad y firma del gerente."
+  "notas": "Version 5.6 - La ventana de la reserva abre maximizada (respetando la barra de tareas) para que la barra inferior con Voucher/Enviar/Guardar quede SIEMPRE visible, sin importar el escalado de pantalla."
 }

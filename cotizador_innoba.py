@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "5.5"
+VERSION = "5.6"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -4319,11 +4319,11 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self.precios = cargar_precios_seguro()   # para desplegar hoteles por destino
         self.title("Reserva " + res.get("numero", ""))
         self.configure(fg_color=BG)
-        # Ajustar a la altura util (sin barra de tareas) para que el pie SIEMPRE se vea
-        wah = _alto_util_pantalla(fallback=(self.winfo_screenheight() - 60))
-        alto = max(500, min(860, wah - 60))   # 60 = barra de titulo + margen
-        self.geometry(f"860x{alto}+120+6")
+        # Geometria inicial de respaldo; luego se maximiza para que Windows respete
+        # la barra de tareas y el pie (botones) SIEMPRE quede visible.
+        self.geometry("980x680+60+10")
         self.transient(master); self.grab_set()
+        self.after(60, self._maximizar)
         # Barra inferior FIJA (siempre visible) con las acciones
         self.footer = ctk.CTkFrame(self, fg_color=CARD, corner_radius=0, height=58)
         self.footer.pack(side="bottom", fill="x"); self.footer.pack_propagate(False)
@@ -4687,6 +4687,12 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
             self._card_destino(di, dest)
         self._refrescar_resumen()
         self._refrescar_os_hoteles()
+
+    def _maximizar(self):
+        try:
+            self.state("zoomed")
+        except Exception:
+            pass
 
     def _refrescar_os_hoteles(self):
         if not hasattr(self, "lbl_os_hoteles"):
