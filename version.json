@@ -1,5 +1,5 @@
 {
-  "version": "7.2",
+  "version": "7.3",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 7.2 - Modulo Comercial (tareas): el cliente se maneja como en cotizaciones -> buscar cliente (lupa), contacto como desplegable con los vendedores de la agencia, y boton '+ Nuevo' para crear un cliente al momento. Se agrego 'Estado del cliente' (Cliente actual vigente en compra / En seguimiento para ser cliente / Descartado) con campo de Motivo; se muestra con color en la lista de tareas."
+  "notas": "Version 7.3 - Cotizador HTML: cuando la agencia elige SU logo, el PDF sale en marca blanca (a nombre de la agencia): se quita todo lo de INNOBA DMC, los datos de contacto y la firma del asesor; se puede poner el nombre de la agencia. Si elige el logo INNOBA, el PDF queda con INNOBA y la firma de quien cotizo. El % de ganancia aplica en ambos casos."
 }

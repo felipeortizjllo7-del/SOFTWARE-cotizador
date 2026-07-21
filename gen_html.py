@@ -165,7 +165,7 @@ display:flex;align-items:center;gap:16px;margin-top:6px}
 
  <div class="card" style="border:2px solid var(--green)">
   <h3 style="margin:0 0 6px">Configuracion de la agencia</h3>
-  <div class="mut" style="font-size:12px;margin-bottom:8px">Los precios que ves son la tarifa para la agencia. Aqui puedes sumar tu <b>% de ganancia</b> (se aplica a toda la cotizacion y al PDF) y elegir el <b>logo del PDF</b>.</div>
+  <div class="mut" style="font-size:12px;margin-bottom:8px">Los precios que ves son la tarifa para la agencia. Aqui puedes sumar tu <b>% de ganancia</b> (se aplica a toda la cotizacion y al PDF) y elegir el <b>logo del PDF</b>. Si eliges <b>tu logo</b>, el PDF sale a nombre de tu agencia: se quita todo lo de INNOBA y la firma del asesor.</div>
   <div class="row">
    <div class="col"><label class="lb">% de ganancia de la agencia</label>
     <input id="ganancia" type="number" min="0" step="1" placeholder="ej. 15" oninput="setGanancia()"></div>
@@ -177,6 +177,11 @@ display:flex;align-items:center;gap:16px;margin-top:6px}
    <div class="col"><label class="lb">Subir mi logo (PNG/JPG)</label>
     <input type="file" id="logoFile" accept="image/*" onchange="subirLogo(event)">
     <div class="mut" id="logoMsg" style="font-size:11px"></div></div>
+  </div>
+  <div class="row" style="margin-top:6px">
+   <div class="col"><label class="lb">Nombre de tu agencia (para el PDF con tu logo)</label>
+    <input id="agenciaNombre" type="text" placeholder="Ej. Mi Agencia de Viajes SAS" oninput="setAgenciaNombre()"></div>
+   <div class="col"></div><div class="col"></div>
   </div>
  </div>
 
@@ -229,10 +234,11 @@ function registrarCotiz(rec){COTIZS.seq=(COTIZS.seq||0)+1;rec.numero="COT-"+Stri
 const EDADES = ["0-11 meses","1 ano","2 anos","3 anos","4 anos","5 anos","6 anos","7 anos","8 anos","9 anos"];
 const DEF_CFG = {empresa:"INNOBA Colombia DMC",nit:"",direccion:"",telefono:"",email:"",web:"",
  firma_nombre:"Felipe Ortiz",firma_cargo:"Gerente - INNOBA Colombia DMC",trm_hoy:"",
- ganancia:"",agencia_logo:"",usar_logo_agencia:false,
+ ganancia:"",agencia_logo:"",usar_logo_agencia:false,agencia_nombre:"",
  notas:"Tarifas sujetas a disponibilidad al momento de la reserva. Precios en dolares americanos (USD) por el total indicado."};
 function factorG(){const g=parseFloat((cfg.ganancia||"").toString().replace(/,/g,""));return (g>0)?(1+g/100):1;}
 function logoPDF(){return (cfg.usar_logo_agencia&&cfg.agencia_logo)?cfg.agencia_logo:LOGO;}
+function marcaAgencia(){return !!(cfg.usar_logo_agencia&&cfg.agencia_logo);}
 
 let cfg = Object.assign({}, DEF_CFG, JSON.parse(localStorage.getItem("innoba_cfg")||"{}"));
 let st = {adultos:2, ages:[], tramos:[], activo:null, tab:"hotel", hab:{sencilla:0,doble:1,triple:0}, itinerario:""};
@@ -452,8 +458,12 @@ function generar(){
  const ad=st.adultos;let paxtxt=`${ad} adultos`;if(st.ages.length)paxtxt+=`, ${st.ages.length} ninos (${st.ages.map(a=>a===0?"bebe":a+" anos").join(", ")})`;
  const multi=bloques.length>1;
  const numero=peekNumero();
- let html=`<div class="ph"><img src="${logoPDF()}"><div><div class="pe">${cfg.empresa}</div>
-  <div style="font-size:11px">${[cfg.nit?"NIT/RUC: "+cfg.nit:"",cfg.telefono?"Tel: "+cfg.telefono:"",cfg.email,cfg.web].filter(Boolean).join(" | ")}</div></div></div>`;
+ const _marca=marcaAgencia();
+ const _empresaPDF=_marca?(cfg.agencia_nombre||""):cfg.empresa;
+ let html=`<div class="ph"><img src="${logoPDF()}"><div>`;
+ if(_empresaPDF) html+=`<div class="pe">${_empresaPDF}</div>`;
+ if(!_marca) html+=`<div style="font-size:11px">${[cfg.nit?"NIT/RUC: "+cfg.nit:"",cfg.telefono?"Tel: "+cfg.telefono:"",cfg.email,cfg.web].filter(Boolean).join(" | ")}</div>`;
+ html+=`</div></div>`;
  html+=`<div class="band">COTIZACION ${multi?"- ITINERARIO":"- "+bloques[0].destino}</div>`;
  html+=`<table style="margin-top:8px"><tr>
   <td style="width:50%"><b>Cliente:</b> ${document.getElementById("cli").value||"-"}<br><b>Email:</b> ${document.getElementById("email").value}${document.getElementById("asesor").value?`<br><b>Asesor:</b> ${document.getElementById("asesor").value}`:""}${document.getElementById("asesorTel").value?`<br><b>Tel. asesor:</b> ${document.getElementById("asesorTel").value}`:""}</td>
@@ -504,7 +514,11 @@ function generar(){
    else html+=`<div style="font-size:11px;margin:3px 0;line-height:1.4">${par}</div>`;});}
  html+=`<div style="margin-top:10px;font-size:11px"><b>Notas:</b> Vigencia: esta cotizacion tiene una validez de un (1) mes, hasta el ${valida}. ${cfg.notas}</div>`;
  const ci=document.getElementById("cotizador").selectedIndex; const cz=COTIZADORES[ci]||COTIZADORES[0];
- html+=`<div class="firma"><div>Cordialmente,</div><br><br><div class="l"></div><b style="color:var(--navy)">${cz[0]}</b><br>${cz[1]}</div>`;
+ if(_marca){
+  html+=`<div class="firma"><div>Cordialmente,</div>`+(cfg.agencia_nombre?`<br><br><div class="l"></div><b style="color:var(--navy)">${cfg.agencia_nombre}</b>`:``)+`</div>`;
+ } else {
+  html+=`<div class="firma"><div>Cordialmente,</div><br><br><div class="l"></div><b style="color:var(--navy)">${cz[0]}</b><br>${cz[1]}</div>`;
+ }
  document.getElementById("print").innerHTML=html;
  // registrar (numero local para el PDF) y enviar a INNOBA (.exe) para seguimiento
  const rec={cliente:document.getElementById("cli").value.trim(),
@@ -518,7 +532,10 @@ function generar(){
    snapshot:snapshotActual()};
  registrarCotiz(rec);
  enviarCotizWebhook(rec);
+ const _tit=document.title;
+ if(_marca) document.title=(cfg.agencia_nombre||"Cotizacion");
  window.print();
+ setTimeout(function(){document.title=_tit;},800);
 }
 function snapshotActual(){
  return {cliente:document.getElementById("cli").value.trim(),
@@ -736,8 +753,9 @@ function render(){renderChips();renderActivo();renderPanel();recalc();}
 /* ---------- configuracion de la agencia (ganancia % + logo) ---------- */
 function setGanancia(){cfg.ganancia=document.getElementById("ganancia").value;localStorage.setItem("innoba_cfg",JSON.stringify(cfg));render();}
 function setLogoSel(){cfg.usar_logo_agencia=(document.getElementById("logoSel").value==="agencia");localStorage.setItem("innoba_cfg",JSON.stringify(cfg));}
-function subirLogo(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=function(){cfg.agencia_logo=r.result;cfg.usar_logo_agencia=true;localStorage.setItem("innoba_cfg",JSON.stringify(cfg));const s=document.getElementById("logoSel");if(s)s.value="agencia";const m=document.getElementById("logoMsg");if(m)m.textContent="Logo cargado ✓ (se usara en el PDF)";};r.readAsDataURL(f);}
-function initAgencia(){const g=document.getElementById("ganancia");if(g&&cfg.ganancia)g.value=cfg.ganancia;const s=document.getElementById("logoSel");if(s)s.value=cfg.usar_logo_agencia?"agencia":"innoba";const m=document.getElementById("logoMsg");if(m&&cfg.agencia_logo)m.textContent="Logo cargado ✓ (se usara en el PDF)";}
+function subirLogo(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=function(){cfg.agencia_logo=r.result;cfg.usar_logo_agencia=true;localStorage.setItem("innoba_cfg",JSON.stringify(cfg));const s=document.getElementById("logoSel");if(s)s.value="agencia";const m=document.getElementById("logoMsg");if(m)m.textContent="Logo cargado ✓ (PDF a nombre de tu agencia)";};r.readAsDataURL(f);}
+function setAgenciaNombre(){cfg.agencia_nombre=document.getElementById("agenciaNombre").value;localStorage.setItem("innoba_cfg",JSON.stringify(cfg));}
+function initAgencia(){const g=document.getElementById("ganancia");if(g&&cfg.ganancia)g.value=cfg.ganancia;const s=document.getElementById("logoSel");if(s)s.value=cfg.usar_logo_agencia?"agencia":"innoba";const an=document.getElementById("agenciaNombre");if(an&&cfg.agencia_nombre)an.value=cfg.agencia_nombre;const m=document.getElementById("logoMsg");if(m&&cfg.agencia_logo)m.textContent="Logo cargado ✓ (PDF a nombre de tu agencia)";}
 function nueva(){st={adultos:2,ages:[],tramos:[],activo:null,tab:"hotel",hab:{sencilla:0,doble:1,triple:0},itinerario:""};
  document.getElementById("cli").value="";document.getElementById("email").value="";
  document.getElementById("asesor").value="";document.getElementById("asesorTel").value="";
