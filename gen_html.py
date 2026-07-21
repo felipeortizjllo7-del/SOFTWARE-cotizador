@@ -521,13 +521,20 @@ function generar(){
  }
  document.getElementById("print").innerHTML=html;
  // registrar (numero local para el PDF) y enviar a INNOBA (.exe) para seguimiento
+ // El total que ve la agencia incluye SU margen (factorG). A INNOBA se le
+ // envia el precio BASE (sin margen), que es lo que INNOBA le cobra a la agencia.
+ const _totCliente=(totalReserva(bloques)!==null?totalReserva(bloques):total);
+ const _fg=factorG();
+ const _totBase=(_fg>0)?(_totCliente/_fg):_totCliente;
  const rec={cliente:document.getElementById("cli").value.trim(),
    asesor:document.getElementById("asesor").value.trim(),
    asesor_tel:document.getElementById("asesorTel").value.trim(),
    fecha:fecha, fechas_viaje:fechasViaje, cotizado_por:cz[0],
    email:document.getElementById("email").value.trim(),
    destinos:bloques.map(b=>b.destino),
-   total:(totalReserva(bloques)!==null?totalReserva(bloques):total),
+   total:_totBase,                 // precio para INNOBA (SIN el margen de la agencia)
+   total_cliente:_totCliente,      // precio final al cliente de la agencia (con margen) - referencia
+   ganancia:(cfg.ganancia||""),    // % de margen que aplico la agencia
    id:"WEB-"+Date.now()+"-"+Math.floor(Math.random()*10000),
    snapshot:snapshotActual()};
  registrarCotiz(rec);

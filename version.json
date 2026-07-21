@@ -1,5 +1,5 @@
 {
-  "version": "7.4",
+  "version": "7.5",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 7.4 - Historial de cotizaciones: las tarjetas de indicadores En seguimiento, Seguim. vencidos, Ganadas y Perdidas ahora son CLICABLES y filtran la lista para agrupar esas cotizaciones y gestionarlas mas facil. La tarjeta activa se resalta y aparece una barra 'Ver todas' para quitar el filtro."
+  "notas": "Version 7.5 - (1) Cotizador HTML: cuando la agencia sube su % de margen, al .exe de INNOBA llega el precio SIN ese margen (la tarifa real que INNOBA le cobra a la agencia). Se guarda tambien, solo como referencia, el margen y el precio final al cliente. En 'Ver' se muestra 'Total para INNOBA' y un boton 'Descargar PDF' que genera el PDF con la tarifa base. (2) Reservas: semaforo de colores - Aprobada con pago en VERDE, Confirmada/Aplazada (en seguimiento) en AMARILLO, Anulada en ROJO. KPIs de reservas reordenados igual."
 }

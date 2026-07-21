@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "7.4"
+VERSION = "7.5"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -366,17 +366,28 @@ def importar_cotizaciones_html():
         dests = rc.get("destinos", [])
         if isinstance(dests, str):
             dests = [d.strip() for d in dests.split(",") if d.strip()]
+        # total = precio BASE para INNOBA (sin el margen de la agencia)
         try:
             total = float(rc.get("total", 0) or 0)
         except (TypeError, ValueError):
             total = 0.0
+        # referencia: precio final que la agencia cobra a su cliente (con margen)
+        try:
+            total_cliente = float(rc.get("total_cliente", 0) or 0)
+        except (TypeError, ValueError):
+            total_cliente = 0.0
+        try:
+            ganancia = float(str(rc.get("ganancia", "") or "").replace(",", "") or 0)
+        except (TypeError, ValueError):
+            ganancia = 0.0
         data["seq"] = int(data.get("seq", 0)) + 1
         data["items"].append({
             "numero": f"COT-{data['seq']:05d}", "web_id": wid, "origen": "HTML (cliente)",
             "cliente": rc.get("cliente", ""), "asesor": rc.get("asesor", ""),
             "asesor_tel": rc.get("asesor_tel", ""), "email": rc.get("email", ""),
             "fecha": rc.get("fecha", ""), "fechas_viaje": rc.get("fechas_viaje", ""),
-            "destinos": dests, "total": total, "estado": "Pendiente", "pdf": "",
+            "destinos": dests, "total": total, "total_cliente": total_cliente,
+            "ganancia_agencia": ganancia, "estado": "Pendiente", "pdf": "",
             "snapshot": rc.get("snapshot")})
         existentes.add(wid); nuevas += 1
     if nuevas:
@@ -1367,10 +1378,12 @@ RESERVAS_PATH = os.path.join(datos_dir(), "reservas.json")
 RES_SEQ_INICIAL = 2951   # el proximo consecutivo asignado sera 2952
 
 ESTADOS_RES = ["Confirmada", "Confirmada con pago", "Aplazada", "Anulada"]
+# Semaforo: aprobada (con pago) = verde | en seguimiento (confirmada/aplazada) = amarillo |
+#           cancelada (anulada) = rojo
 ESTADO_RES_COLOR = {"Confirmada": "#D9A400", "Confirmada con pago": GREEN,
-                    "Aplazada": "#E67E22", "Anulada": RED}
+                    "Aplazada": "#D9A400", "Anulada": RED}
 ESTADO_RES_FILA = {"Confirmada": "#FFF3C4", "Confirmada con pago": "#E3F5EA",
-                   "Aplazada": "#FDEBD0", "Anulada": "#FBE6E6"}
+                   "Aplazada": "#FFF3C4", "Anulada": "#FBE6E6"}
 
 # Estado de la reserva con cada proveedor (seguimiento)
 ESTADOS_PROV = ["Pendiente", "Reservado sin pago", "Reservado con pago"]
@@ -3006,6 +3019,7 @@ class VentanaVerCotizacion(ctk.CTkToplevel):
     """Vista de solo lectura de lo que se cotizo (util para las del HTML)."""
     def __init__(self, master, item):
         super().__init__(master)
+        self._master = master; self._item = item
         self.title("Detalle cotizacion " + item.get("numero", ""))
         self.geometry("660x660"); self.configure(fg_color=BG)
         self.transient(master); self.grab_set()
@@ -3039,7 +3053,19 @@ class VentanaVerCotizacion(ctk.CTkToplevel):
             pax = f"{ad} adulto(s)" + (f", {ninos} nino(s)" if ninos else "")
             linea("Pasajeros", pax)
             linea("Alojamiento", snap.get("hab", ""))
-        linea("Total (USD)", usd(item.get("total", 0)))
+        linea("Total para INNOBA (USD)", usd(item.get("total", 0)))
+        # Si la cotizacion vino del HTML con margen de la agencia, mostrarlo como referencia
+        gan = float(item.get("ganancia_agencia", 0) or 0)
+        tcli = float(item.get("total_cliente", 0) or 0)
+        if gan > 0 or tcli > 0:
+            if gan > 0:
+                linea("Margen de la agencia", f"{gan:g}%")
+            if tcli > 0:
+                linea("Precio final al cliente", usd(tcli) + "  (con margen de la agencia)")
+            ctk.CTkLabel(cont, text="El precio que cobramos a la agencia es el 'Total para INNOBA' "
+                         "(SIN el margen que la agencia le suma a su cliente).",
+                         text_color=MUTED, font=("Segoe UI", 9), wraplength=580,
+                         justify="left").pack(anchor="w", pady=(2, 0))
 
         tramos = snap.get("tramos", [])
         if tramos:
@@ -3076,8 +3102,19 @@ class VentanaVerCotizacion(ctk.CTkToplevel):
                          "cotizaciones nuevas del HTML ya traen todo el detalle.",
                          text_color=MUTED, font=("Segoe UI", 10), wraplength=580,
                          justify="left").pack(anchor="w", pady=(10, 0))
-        ctk.CTkButton(cont, text="Cerrar", fg_color=NAVY, hover_color=NAVY2,
-                      command=self.destroy).pack(pady=14)
+        botones = ctk.CTkFrame(cont, fg_color="transparent"); botones.pack(pady=14)
+        if snap and hasattr(self._master, "_generar_pdf_de"):
+            ctk.CTkButton(botones, text="⬇ Descargar PDF", fg_color=GREEN, hover_color=GREEN_H,
+                          font=("Segoe UI", 12, "bold"), width=170,
+                          command=self._descargar).pack(side="left", padx=6)
+        ctk.CTkButton(botones, text="Cerrar", fg_color=NAVY, hover_color=NAVY2,
+                      command=self.destroy).pack(side="left", padx=6)
+
+    def _descargar(self):
+        # Genera el PDF con la tarifa de INNOBA (precios base, sin el margen de la agencia)
+        m = self._master
+        self.destroy()
+        m._generar_pdf_de(self._item)
 
 
 class VentanaCotizaciones(ctk.CTkToplevel):
@@ -6699,9 +6736,8 @@ class ModuloReservas(ctk.CTkToplevel):
         ind = indicadores_reservas()
         fila = ctk.CTkFrame(self.kpis, fg_color="transparent"); fila.pack(fill="x")
         _kpi_card(fila, "Reservas totales", ind["total"], NAVY)
-        _kpi_card(fila, "Confirmadas", ind.get("Confirmada", 0), "#D9A400")
-        _kpi_card(fila, "Con pago", ind.get("Confirmada con pago", 0), GREEN)
-        _kpi_card(fila, "Aplazadas", ind.get("Aplazada", 0), "#E67E22")
+        _kpi_card(fila, "Aprobadas (con pago)", ind.get("Confirmada con pago", 0), GREEN)
+        _kpi_card(fila, "En seguimiento", ind.get("Confirmada", 0) + ind.get("Aplazada", 0), "#D9A400")
         _kpi_card(fila, "Anuladas", ind.get("Anulada", 0), RED)
         _kpi_card(fila, "Negociado (activo)", usd(ind["monto_total"]), NAVY, ancho=170)
         _kpi_card(fila, "Cobrado (con pago)", usd(ind["con_pago_usd"]), GREEN_H, ancho=170)
