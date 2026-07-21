@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "6.8"
+VERSION = "6.9"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1475,6 +1475,7 @@ def reserva_desde_cotizacion(cot):
     rec = {
         "cot_origen": cot.get("numero", ""),
         "cliente": cot.get("cliente", ""),
+        "contacto": cot.get("asesor", ""),
         "email": cot.get("email", "") or snap.get("email", ""),
         "destinos": cot.get("destinos", []),
         "fechas_viaje": cot.get("fechas_viaje", ""),
@@ -1954,6 +1955,54 @@ def exportar_reporte_tareas(ruta, mes=None):
     _estilo_encabezado_xlsx(ws); _autoancho_xlsx(ws); ws.freeze_panes = "A2"
     wb.save(ruta)
     return len(items)
+
+
+def ranking_contactos():
+    """Ranking de contactos (vendedores de agencia) por reservas hechas con nosotros:
+       del mes, del ano y total. Para premiar a los mejores contactos."""
+    hoy = datetime.date.today()
+    mes = hoy.strftime("%Y-%m"); ano = str(hoy.year)
+    r = {}
+    for it in cargar_reservas().get("items", []):
+        con = (it.get("contacto", "") or "").strip() or "(sin contacto)"
+        d = r.setdefault(con, {"contacto": con, "empresas": set(), "mes_n": 0,
+                               "ano_n": 0, "ano_usd": 0.0, "total_n": 0, "total_usd": 0.0})
+        if it.get("cliente"):
+            d["empresas"].add(it.get("cliente"))
+        fc = it.get("fecha_creacion", "")
+        anulada = it.get("estado") == "Anulada"
+        monto = float(it.get("monto", 0) or 0)
+        d["total_n"] += 1
+        if not anulada:
+            d["total_usd"] += monto
+        if fc[:7] == mes:
+            d["mes_n"] += 1
+        if fc[:4] == ano:
+            d["ano_n"] += 1
+            if not anulada:
+                d["ano_usd"] += monto
+    filas = list(r.values())
+    for f in filas:
+        f["empresas"] = ", ".join(sorted(f["empresas"]))
+        f["ano_usd"] = round(f["ano_usd"], 2); f["total_usd"] = round(f["total_usd"], 2)
+    filas.sort(key=lambda x: (x["ano_n"], x["ano_usd"], x["total_n"]), reverse=True)
+    return filas
+
+
+def exportar_reporte_contactos(ruta, mes=None):
+    """Reporte del ranking de contactos (Excel)."""
+    import openpyxl
+    filas = ranking_contactos()
+    wb = openpyxl.Workbook()
+    ws = wb.active; ws.title = "Ranking contactos"
+    ws.append(["#", "Contacto", "Agencia(s)", "Reservas del mes", "Reservas del ano",
+               "Monto ano USD", "Reservas total", "Monto total USD"])
+    for i, f in enumerate(filas, 1):
+        ws.append([i, f["contacto"], f["empresas"], f["mes_n"], f["ano_n"], f["ano_usd"],
+                   f["total_n"], f["total_usd"]])
+    _estilo_encabezado_xlsx(ws); _autoancho_xlsx(ws); ws.freeze_panes = "A2"
+    wb.save(ruta)
+    return len(filas)
 
 
 def _fechas_in_out(fechas_viaje):
@@ -2666,6 +2715,77 @@ class BuscadorClientes(ctk.CTkToplevel):
             if self.on_eliminar:
                 self.on_eliminar(emp)
             self._pintar()
+
+
+class SelectorContacto(ctk.CTkToplevel):
+    """Busca una empresa y permite elegir el CONTACTO (vendedor) en un clic.
+       Llama on_pick(empresa_dict, contacto_dict)."""
+    def __init__(self, master, on_pick, titulo="Buscar cliente y contacto"):
+        super().__init__(master)
+        self.on_pick = on_pick
+        self.clientes = cargar_clientes()
+        self.title(titulo)
+        self.geometry("580x620"); self.configure(fg_color=BG)
+        self.transient(master); self.grab_set()
+        ctk.CTkLabel(self, text=titulo, font=("Segoe UI", 15, "bold"),
+                     text_color=NAVY).pack(anchor="w", padx=16, pady=(14, 2))
+        ctk.CTkLabel(self, text="Elige el contacto (vendedor) de la agencia para vincularlo de una vez.",
+                     text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=16)
+        self.q = tk.StringVar()
+        e = ctk.CTkEntry(self, textvariable=self.q, height=40, corner_radius=10, border_color=BLUE,
+                         border_width=2, fg_color=CARD, font=("Segoe UI", 12),
+                         placeholder_text="Buscar empresa o contacto...")
+        e.pack(fill="x", padx=16, pady=(8, 8))
+        self.q.trace_add("write", lambda *a: self._pintar())
+        self.lista = ctk.CTkScrollableFrame(self, fg_color=CARD, corner_radius=12)
+        self.lista.pack(fill="both", expand=True, padx=16, pady=(0, 14))
+        self._pintar()
+        self.after(120, e.focus_set)
+        self.bind("<Escape>", lambda ev: self.destroy())
+
+    def _pintar(self):
+        for w in self.lista.winfo_children():
+            w.destroy()
+        q = _nz(self.q.get())
+        n = 0
+        for c in self.clientes:
+            emp = c.get("empresa", "")
+            vends = c.get("vendedores", []) or []
+            if q and not (q in _nz(emp) or any(q in _nz(v.get("nombre", "")) for v in vends)):
+                continue
+            n += 1
+            if n > 200:
+                break
+            card = ctk.CTkFrame(self.lista, fg_color=CARD2, corner_radius=8)
+            card.pack(fill="x", padx=4, pady=3)
+            ctk.CTkLabel(card, text=emp or "(sin nombre)", text_color=NAVY, anchor="w",
+                         font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=8, pady=(6, 2))
+            if vends:
+                for v in vends:
+                    nom = v.get("nombre", "") or "(sin nombre)"
+                    sub = v.get("cargo", "") or v.get("telefono", "")
+                    ctk.CTkButton(card, text="👤  " + nom + (("   ·   " + sub) if sub else ""),
+                                  height=30, corner_radius=6, fg_color=CARD, text_color=NAVY,
+                                  hover_color=LINE, anchor="w",
+                                  command=lambda cc=c, vv=v: self._pick(cc, vv)).pack(
+                        fill="x", padx=8, pady=2)
+                ctk.CTkButton(card, text="Usar solo la empresa (sin contacto)", height=26,
+                              corner_radius=6, fg_color="transparent", text_color=MUTED,
+                              hover_color=LINE, command=lambda cc=c: self._pick(cc, {})).pack(
+                    fill="x", padx=8, pady=(2, 6))
+            else:
+                ctk.CTkButton(card, text="Usar esta empresa", height=30, corner_radius=6,
+                              fg_color=GREEN, hover_color=GREEN_H,
+                              command=lambda cc=c: self._pick(cc, {})).pack(fill="x", padx=8, pady=(0, 6))
+        if n == 0:
+            ctk.CTkLabel(self.lista, text="Sin resultados.\nCrea el cliente en 'Clientes'.",
+                         text_color=MUTED).pack(pady=20)
+
+    def _pick(self, c, v):
+        try:
+            self.on_pick(c, v)
+        finally:
+            self.destroy()
 
 
 # ============================================================================
@@ -4658,9 +4778,25 @@ class App(ctk.CTkToplevel):
         pass  # el buscador (lupa) lee self.clientes directamente
 
     def _buscar_cliente(self):
-        BuscadorClientes(self, self.clientes, self._usar_cliente,
-                         on_editar=self._editar_cliente_por_nombre,
-                         on_eliminar=self._eliminar_cliente_por_nombre)
+        SelectorContacto(self, self._usar_cliente_contacto)
+
+    def _usar_cliente_contacto(self, c, v):
+        """Coloca empresa + contacto (vendedor) elegido en la cotizacion."""
+        self.var_cli.set(c.get("empresa", ""))
+        self._vendedores = c.get("vendedores", []) or []
+        vals = [x.get("nombre", "") for x in self._vendedores if x.get("nombre")]
+        self.opt_asesor.configure(values=vals or ["(vendedor)"])
+        if v and v.get("nombre"):
+            self.opt_asesor.set(v.get("nombre", ""))
+            self.var_asesor.set(v.get("nombre", ""))
+            self.var_aso_tel.set(v.get("telefono", ""))
+            self.var_email.set(v.get("email", "") or c.get("email", ""))
+        else:
+            self.opt_asesor.set(vals[0] if vals else "(vendedor)")
+            if vals:
+                self._usar_asesor(vals[0])
+            self.var_email.set(c.get("email", "") or
+                               (self._vendedores[0].get("email", "") if self._vendedores else ""))
 
     def _eliminar_cliente_por_nombre(self, nombre):
         # filtra en el mismo objeto lista para que el buscador vea el cambio
@@ -5156,8 +5292,24 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
                          border_color=LINE).pack(fill="x", pady=(0, 6))
             return v
 
-        self.v_cli = campo("Cliente / Agencia", res.get("cliente", ""))
-        self.v_email = campo("Correo del cliente", res.get("email", ""))
+        # Cliente / Agencia con buscador de contacto
+        ctk.CTkLabel(cont, text="Cliente / Agencia", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        fcli = ctk.CTkFrame(cont, fg_color="transparent"); fcli.pack(fill="x", pady=(0, 6))
+        self.v_cli = tk.StringVar(value=res.get("cliente", ""))
+        ctk.CTkEntry(fcli, textvariable=self.v_cli, height=32, corner_radius=8,
+                     border_color=LINE).pack(side="left", fill="x", expand=True)
+        ctk.CTkButton(fcli, text="🔍 Buscar cliente", width=140, height=32, fg_color=NAVY,
+                      hover_color=NAVY2, command=self._buscar_cliente_res).pack(side="left", padx=(6, 0))
+        f0 = ctk.CTkFrame(cont, fg_color="transparent"); f0.pack(fill="x")
+        e1 = ctk.CTkFrame(f0, fg_color="transparent"); e1.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        e2 = ctk.CTkFrame(f0, fg_color="transparent"); e2.pack(side="left", fill="x", expand=True, padx=(6, 0))
+        ctk.CTkLabel(e1, text="Correo del cliente", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        self.v_email = tk.StringVar(value=res.get("email", ""))
+        ctk.CTkEntry(e1, textvariable=self.v_email, height=32).pack(fill="x", pady=(0, 6))
+        ctk.CTkLabel(e2, text="Contacto (vendedor de la agencia)", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        self.v_contacto = tk.StringVar(value=res.get("contacto", ""))
+        ctk.CTkEntry(e2, textvariable=self.v_contacto, height=32).pack(fill="x", pady=(0, 6))
         f2 = ctk.CTkFrame(cont, fg_color="transparent"); f2.pack(fill="x")
         c1 = ctk.CTkFrame(f2, fg_color="transparent"); c1.pack(side="left", fill="x", expand=True, padx=(0, 6))
         c2 = ctk.CTkFrame(f2, fg_color="transparent"); c2.pack(side="left", fill="x", expand=True, padx=(6, 0))
@@ -5702,6 +5854,18 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         except Exception:
             pass
 
+    def _buscar_cliente_res(self):
+        SelectorContacto(self, self._usar_cliente_res)
+
+    def _usar_cliente_res(self, c, v):
+        self.v_cli.set(c.get("empresa", ""))
+        if v and v.get("nombre"):
+            self.v_contacto.set(v.get("nombre", ""))
+            if v.get("email"):
+                self.v_email.set(v.get("email", ""))
+        elif c.get("email"):
+            self.v_email.set(c.get("email", ""))
+
     def _abrir_panel_vouchers(self):
         self._sync()
         VentanaVouchersProveedores(self, self.res, self.cfg, on_change=self._pintar_servicios)
@@ -5857,6 +6021,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self._sync_pax()
         self.res["cliente"] = self.v_cli.get().strip()
         self.res["email"] = self.v_email.get().strip()
+        self.res["contacto"] = self.v_contacto.get().strip()
         ll = self.sel_llegada.get_str(); sa = self.sel_salida.get_str()
         self.res["os_fecha_in"] = ll
         self.res["os_fecha_out"] = sa
@@ -6030,6 +6195,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self._sync()
         cambios = {
             "cliente": self.res.get("cliente", ""), "email": self.res.get("email", ""),
+            "contacto": self.res.get("contacto", ""),
             "destinos": self.res.get("destinos", []),
             "fechas_viaje": self.res.get("fechas_viaje", ""),
             "pax_txt": self.res.get("pax_txt", ""), "hab": self.res.get("hab", ""),
@@ -6669,13 +6835,21 @@ class VentanaTareaDetalle(ctk.CTkToplevel):
             empresas = sorted([c.get("empresa", "") for c in cargar_clientes() if c.get("empresa")])
         except Exception:
             empresas = []
+        acli = ctk.CTkFrame(a, fg_color="transparent"); acli.pack(fill="x", padx=2)
         self.v_cliente = tk.StringVar(value=tarea.get("cliente", ""))
-        ctk.CTkComboBox(a, variable=self.v_cliente, values=empresas, height=32).pack(fill="x", padx=2)
-        ctk.CTkLabel(b, text="Responsable", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        ctk.CTkComboBox(acli, variable=self.v_cliente, values=empresas, height=32).pack(
+            side="left", fill="x", expand=True)
+        ctk.CTkButton(acli, text="🔍", width=40, height=32, fg_color=NAVY, hover_color=NAVY2,
+                      command=self._buscar_cliente_tarea).pack(side="left", padx=(4, 0))
+        ctk.CTkLabel(b, text="Contacto (vendedor)", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        self.v_contacto = tk.StringVar(value=tarea.get("contacto", ""))
+        ctk.CTkEntry(b, textvariable=self.v_contacto, height=32).pack(fill="x", padx=2)
+        f2b = ctk.CTkFrame(cont, fg_color="transparent"); f2b.pack(fill="x", pady=(6, 0))
+        ctk.CTkLabel(f2b, text="Responsable", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
         resp = [x.get("nombre", "") for x in asesores_reservas(cfg)] + [c[0] for c in COTIZADORES]
         resp = sorted(set([r for r in resp if r]))
         self.v_resp = tk.StringVar(value=tarea.get("responsable", ""))
-        ctk.CTkComboBox(b, variable=self.v_resp, values=resp, height=32).pack(fill="x", padx=2)
+        ctk.CTkComboBox(f2b, variable=self.v_resp, values=resp, height=32).pack(fill="x", padx=2)
 
         # estado + prioridad + fecha limite
         f3 = ctk.CTkFrame(cont, fg_color="transparent"); f3.pack(fill="x", pady=(8, 0))
@@ -6769,11 +6943,20 @@ class VentanaTareaDetalle(ctk.CTkToplevel):
             pass
         self._pintar_checklist()
 
+    def _buscar_cliente_tarea(self):
+        SelectorContacto(self, self._usar_cliente_tarea)
+
+    def _usar_cliente_tarea(self, c, v):
+        self.v_cliente.set(c.get("empresa", ""))
+        if v and v.get("nombre"):
+            self.v_contacto.set(v.get("nombre", ""))
+
     def _recoger(self):
         self._sync_checklist()
         return {
             "titulo": self.v_titulo.get().strip(),
             "cliente": self.v_cliente.get().strip(),
+            "contacto": self.v_contacto.get().strip(),
             "responsable": self.v_resp.get().strip(),
             "estado": self.v_estado.get(),
             "prioridad": self.v_prio.get(),
@@ -6868,6 +7051,9 @@ class ModuloComercial(ctk.CTkToplevel):
         ctk.CTkButton(hb, text="+ Nueva tarea", width=140, height=36, corner_radius=10, fg_color=GREEN,
                       hover_color=GREEN_H, font=("Segoe UI", 12, "bold"),
                       command=self._nueva_tarea).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(hb, text="🏆 Contactos", width=130, height=36, corner_radius=10,
+                      fg_color="#D9A400", hover_color="#B7791F", font=("Segoe UI", 12, "bold"),
+                      command=self._ranking_contactos).pack(side="left", padx=(0, 8))
         ctk.CTkButton(hb, text="📊 Reporte", width=110, height=36, corner_radius=10, fg_color="#7A5AB5",
                       hover_color="#63459A", font=("Segoe UI", 12, "bold"),
                       command=self._reporte).pack(side="left")
@@ -6979,6 +7165,9 @@ class ModuloComercial(ctk.CTkToplevel):
         VentanaTareaDetalle(self, {"estado": "Pendiente", "prioridad": "Media", "checklist": []},
                             self.cfg, on_save=self._refrescar)
 
+    def _ranking_contactos(self):
+        VentanaRankingContactos(self)
+
     def _reporte(self):
         data = cargar_tareas()
         meses = sorted({_mes_de_iso(it.get("fecha_creacion", "")) for it in data.get("items", [])
@@ -6986,6 +7175,70 @@ class ModuloComercial(ctk.CTkToplevel):
         DialogoReporteMes(self, "Reporte de tareas comerciales",
                           "Descarga un Excel con las tareas de gestion.",
                           meses, exportar_reporte_tareas, "Reporte_tareas")
+
+
+class VentanaRankingContactos(ctk.CTkToplevel):
+    """Ranking de contactos por reservas (mes / ano) para premiar a los mejores."""
+    def __init__(self, master):
+        super().__init__(master)
+        self.title("Ranking de contactos")
+        self.geometry("900x640"); self.configure(fg_color=BG)
+        self.transient(master); self.grab_set()
+        top = ctk.CTkFrame(self, fg_color="transparent"); top.pack(fill="x", padx=16, pady=(14, 4))
+        ctk.CTkLabel(top, text="🏆  Ranking de contactos por reservas",
+                     text_color=NAVY, font=("Segoe UI", 16, "bold")).pack(side="left")
+        ctk.CTkButton(top, text="⬇ Descargar Excel", height=34, fg_color=GREEN, hover_color=GREEN_H,
+                      command=self._exportar).pack(side="right")
+        ctk.CTkLabel(self, text="Cuenta las reservas que cada contacto (vendedor de agencia) ha "
+                     "hecho con nosotros. Ordenado por reservas del ano.", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w", padx=16)
+        # encabezado
+        hdr = ctk.CTkFrame(self, fg_color=NAVY, corner_radius=6); hdr.pack(fill="x", padx=16, pady=(8, 0))
+        cols = [("#", 40), ("Contacto", 220), ("Agencia(s)", 260), ("Mes", 70),
+                ("Ano", 70), ("Monto ano", 120)]
+        for txt, w in cols:
+            ctk.CTkLabel(hdr, text=txt, text_color="#FFFFFF", font=("Segoe UI", 11, "bold"),
+                         width=w, anchor="w").pack(side="left", padx=6, pady=6)
+        self.box = ctk.CTkScrollableFrame(self, fg_color=CARD)
+        self.box.pack(fill="both", expand=True, padx=16, pady=(2, 14))
+        self._pintar()
+
+    def _pintar(self):
+        for w in self.box.winfo_children():
+            w.destroy()
+        filas = ranking_contactos()
+        if not filas:
+            ctk.CTkLabel(self.box, text="Aun no hay reservas con contacto asignado.",
+                         text_color=MUTED).pack(pady=24)
+            return
+        medallas = {1: "🥇", 2: "🥈", 3: "🥉"}
+        for i, f in enumerate(filas, 1):
+            fg = "#FFF7DB" if i <= 3 else CARD2
+            row = ctk.CTkFrame(self.box, fg_color=fg, corner_radius=8); row.pack(fill="x", pady=2)
+            ctk.CTkLabel(row, text=medallas.get(i, str(i)), text_color=NAVY,
+                         font=("Segoe UI", 13, "bold"), width=40, anchor="w").pack(side="left", padx=6, pady=6)
+            ctk.CTkLabel(row, text=f["contacto"], text_color=NAVY, font=("Segoe UI", 12, "bold"),
+                         width=220, anchor="w").pack(side="left", padx=6)
+            ctk.CTkLabel(row, text=f["empresas"] or "-", text_color=MUTED, font=("Segoe UI", 10),
+                         width=260, anchor="w", wraplength=250, justify="left").pack(side="left", padx=6)
+            ctk.CTkLabel(row, text=str(f["mes_n"]), text_color=BLUE, font=("Segoe UI", 12, "bold"),
+                         width=70, anchor="w").pack(side="left", padx=6)
+            ctk.CTkLabel(row, text=str(f["ano_n"]), text_color=GREEN_H, font=("Segoe UI", 12, "bold"),
+                         width=70, anchor="w").pack(side="left", padx=6)
+            ctk.CTkLabel(row, text=usd(f["ano_usd"]), text_color=NAVY, font=("Segoe UI", 11),
+                         width=120, anchor="w").pack(side="left", padx=6)
+
+    def _exportar(self):
+        ruta = filedialog.asksaveasfilename(
+            title="Guardar ranking", defaultextension=".xlsx",
+            initialfile="Ranking_contactos.xlsx", filetypes=[("Excel", "*.xlsx")])
+        if not ruta:
+            return
+        try:
+            exportar_reporte_contactos(ruta)
+            os.startfile(ruta)
+        except Exception as e:
+            messagebox.showerror("Error", str(e), parent=self)
 
 
 class Launcher(ctk.CTk):

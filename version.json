@@ -1,5 +1,5 @@
 {
-  "version": "6.8",
+  "version": "6.9",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 6.8 - Cotizador HTML (agencias): nueva 'Configuracion de la agencia' con % de ganancia (se suma a todos los precios y al PDF) y eleccion de logo del PDF (INNOBA o el de la agencia, con opcion de subir su propio logo). Los precios base siguen siendo la tarifa para la agencia; el % de ganancia lo pone cada agencia."
+  "notas": "Version 6.9 - .exe: al buscar el cliente (en Cotizacion, Reserva y Tarea comercial) ahora se elige el CONTACTO (vendedor de la agencia) en un clic y queda vinculado. Nuevo campo 'Contacto' en reservas y tareas. Modulo Comercial: boton 'Contactos' con el RANKING de contactos por reservas hechas con nosotros (del mes y del ano) con medallas, para premiar a los mejores; descargable en Excel."
 }
