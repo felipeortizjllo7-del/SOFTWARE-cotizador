@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "7.1"
+VERSION = "7.2"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1756,6 +1756,8 @@ def exportar_reporte_ventas(ruta, mes=None):
 # ============================================================================
 TAREAS_PATH = os.path.join(datos_dir(), "tareas.json")
 ESTADOS_TAREA = ["Pendiente", "En progreso", "Completada"]
+ESTADOS_CLIENTE = ["Sin clasificar", "Cliente actual (vigente en compra)",
+                   "En seguimiento (para ser cliente)", "Descartado"]
 ESTADO_TAREA_COLOR = {"Pendiente": MUTED, "En progreso": BLUE, "Completada": GREEN, "Vencida": RED}
 ESTADO_TAREA_FILA = {"Pendiente": "#F1F5FB", "En progreso": "#EAF2FD",
                      "Completada": "#E3F5EA", "Vencida": "#FBE6E6"}
@@ -6855,19 +6857,37 @@ class VentanaTareaDetalle(ctk.CTkToplevel):
             empresas = []
         acli = ctk.CTkFrame(a, fg_color="transparent"); acli.pack(fill="x", padx=2)
         self.v_cliente = tk.StringVar(value=tarea.get("cliente", ""))
-        ctk.CTkComboBox(acli, variable=self.v_cliente, values=empresas, height=32).pack(
-            side="left", fill="x", expand=True)
-        ctk.CTkButton(acli, text="🔍", width=40, height=32, fg_color=NAVY, hover_color=NAVY2,
+        self.combo_cliente = ctk.CTkComboBox(acli, variable=self.v_cliente, values=empresas, height=32)
+        self.combo_cliente.pack(side="left", fill="x", expand=True)
+        ctk.CTkButton(acli, text="🔍", width=38, height=32, fg_color=NAVY, hover_color=NAVY2,
                       command=self._buscar_cliente_tarea).pack(side="left", padx=(4, 0))
+        ctk.CTkButton(acli, text="+ Nuevo", width=70, height=32, fg_color=GREEN, hover_color=GREEN_H,
+                      font=("Segoe UI", 11, "bold"),
+                      command=self._nuevo_cliente_tarea).pack(side="left", padx=(4, 0))
         ctk.CTkLabel(b, text="Contacto (vendedor)", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
         self.v_contacto = tk.StringVar(value=tarea.get("contacto", ""))
-        ctk.CTkEntry(b, textvariable=self.v_contacto, height=32).pack(fill="x", padx=2)
+        self.combo_contacto = ctk.CTkComboBox(
+            b, variable=self.v_contacto, height=32,
+            values=([tarea.get("contacto", "")] if tarea.get("contacto") else []))
+        self.combo_contacto.pack(fill="x", padx=2)
         f2b = ctk.CTkFrame(cont, fg_color="transparent"); f2b.pack(fill="x", pady=(6, 0))
-        ctk.CTkLabel(f2b, text="Responsable", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        ra = ctk.CTkFrame(f2b, fg_color="transparent"); ra.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        rb = ctk.CTkFrame(f2b, fg_color="transparent"); rb.pack(side="left", fill="x", expand=True, padx=(6, 0))
+        ctk.CTkLabel(ra, text="Responsable", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
         resp = [x.get("nombre", "") for x in asesores_reservas(cfg)] + [c[0] for c in COTIZADORES]
         resp = sorted(set([r for r in resp if r]))
         self.v_resp = tk.StringVar(value=tarea.get("responsable", ""))
-        ctk.CTkComboBox(f2b, variable=self.v_resp, values=resp, height=32).pack(fill="x", padx=2)
+        ctk.CTkComboBox(ra, variable=self.v_resp, values=resp, height=32).pack(fill="x", padx=2)
+        ctk.CTkLabel(rb, text="Estado del cliente", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        self.v_cli_estado = tk.StringVar(value=tarea.get("cliente_estado", "Sin clasificar"))
+        ctk.CTkOptionMenu(rb, variable=self.v_cli_estado, values=ESTADOS_CLIENTE, height=32,
+                          fg_color=NAVY, button_color=NAVY2).pack(fill="x", padx=2)
+        ctk.CTkLabel(cont, text="Motivo / observacion del estado del cliente", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w", padx=2, pady=(6, 0))
+        self.v_cli_motivo = tk.StringVar(value=tarea.get("cliente_motivo", ""))
+        ctk.CTkEntry(cont, textvariable=self.v_cli_motivo, height=32,
+                     placeholder_text="Ej. compra activa mensual / pendiente de decision / precio alto...").pack(
+            fill="x", padx=2, pady=(0, 4))
 
         # estado + prioridad + fecha limite
         f3 = ctk.CTkFrame(cont, fg_color="transparent"); f3.pack(fill="x", pady=(8, 0))
@@ -6966,8 +6986,27 @@ class VentanaTareaDetalle(ctk.CTkToplevel):
 
     def _usar_cliente_tarea(self, c, v):
         self.v_cliente.set(c.get("empresa", ""))
+        vends = c.get("vendedores", []) or []
+        nombres = [x.get("nombre", "") for x in vends if x.get("nombre")]
+        try:
+            self.combo_contacto.configure(values=nombres or [""])
+        except Exception:
+            pass
         if v and v.get("nombre"):
             self.v_contacto.set(v.get("nombre", ""))
+        elif nombres:
+            self.v_contacto.set(nombres[0])
+
+    def _nuevo_cliente_tarea(self):
+        VentanaClientes(self, on_cambio=self._refrescar_empresas,
+                        preseleccion=self.v_cliente.get().strip() or None)
+
+    def _refrescar_empresas(self):
+        try:
+            empresas = sorted([c.get("empresa", "") for c in cargar_clientes() if c.get("empresa")])
+            self.combo_cliente.configure(values=empresas)
+        except Exception:
+            pass
 
     def _recoger(self):
         self._sync_checklist()
@@ -6975,6 +7014,8 @@ class VentanaTareaDetalle(ctk.CTkToplevel):
             "titulo": self.v_titulo.get().strip(),
             "cliente": self.v_cliente.get().strip(),
             "contacto": self.v_contacto.get().strip(),
+            "cliente_estado": self.v_cli_estado.get(),
+            "cliente_motivo": self.v_cli_motivo.get().strip(),
             "responsable": self.v_resp.get().strip(),
             "estado": self.v_estado.get(),
             "prioridad": self.v_prio.get(),
@@ -7147,10 +7188,18 @@ class ModuloComercial(ctk.CTkToplevel):
         ctk.CTkLabel(info, text=t.get("titulo", "(sin titulo)"), text_color=TEXT,
                      font=("Segoe UI", 13, "bold")).pack(anchor="w")
         h, n = _progreso_checklist(t)
-        sub = f"{t.get('cliente','') or '(sin cliente)'}   ·   Resp: {t.get('responsable','') or '-'}"
+        con = t.get("contacto", "")
+        sub = f"{t.get('cliente','') or '(sin cliente)'}"
+        if con:
+            sub += f" ({con})"
+        sub += f"   ·   Resp: {t.get('responsable','') or '-'}"
         if n:
             sub += f"   ·   Checklist {h}/{n}"
         ctk.CTkLabel(info, text=sub, text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w")
+        ce = t.get("cliente_estado", "")
+        if ce and ce != "Sin clasificar":
+            col = {"Cliente actual (vigente en compra)": GREEN, "Descartado": RED}.get(ce, "#D9A400")
+            ctk.CTkLabel(info, text="● " + ce, text_color=col, font=("Segoe UI", 10, "bold")).pack(anchor="w")
         fl = _parse_fecha_iso(t.get("fecha_limite", ""))
         ftxt = ("Vence: " + fl.strftime("%d/%m/%Y")) if fl else "Sin fecha"
         ctk.CTkLabel(fila, text=ftxt, text_color=(RED if est == "Vencida" else MUTED),

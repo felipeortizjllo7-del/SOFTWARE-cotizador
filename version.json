@@ -1,5 +1,5 @@
 {
-  "version": "7.1",
+  "version": "7.2",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 7.1 - Reservas: los botones Guardar reserva, Voucher cliente y Enviar voucher ahora estan en una barra FIJA en la parte SUPERIOR de la ventana (siempre visibles), para que nunca queden tapados por la barra de tareas y se pueda guardar sin problema."
+  "notas": "Version 7.2 - Modulo Comercial (tareas): el cliente se maneja como en cotizaciones -> buscar cliente (lupa), contacto como desplegable con los vendedores de la agencia, y boton '+ Nuevo' para crear un cliente al momento. Se agrego 'Estado del cliente' (Cliente actual vigente en compra / En seguimiento para ser cliente / Descartado) con campo de Motivo; se muestra con color en la lista de tareas."
 }
