@@ -1,5 +1,5 @@
 {
-  "version": "6.6",
+  "version": "6.7",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 6.6 - Seguimiento de cotizaciones: se puede enviar (o PROGRAMAR) el correo de seguimiento al cliente desde el sistema, con el texto de seguimiento firmado por quien hizo la cotizacion. Boton 'Enviar seguimiento ahora' y opcion 'Programar' para enviarlo automaticamente al llegar la fecha de seguimiento (al abrir la app). Boton 'Ver texto' para previsualizar."
+  "notas": "Version 6.7 - (1) El correo de seguimiento sale del correo del cotizador que hizo la cotizacion: Felipe desde felipe@innobadmc.com y Carlos desde directorcomercial@innobadmc.com (se configuran sus correos y claves en 'Datos de mi empresa'). (2) Nuevo boton 'Ver' en el historial de cotizaciones: muestra el detalle de lo cotizado (destinos, pasajeros, hoteles, traslados, tours e itinerario), util para las cotizaciones que llegan desde el HTML."
 }

@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "6.6"
+VERSION = "6.7"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -620,11 +620,24 @@ def cuerpo_seguimiento_cotizacion(item, cfg):
             "Cordialmente,\n" + firma)
 
 
+def cfg_remitente_cotizador(cfg, item):
+    """Copia de cfg con el correo remitente/clave del cotizador que hizo la cotizacion.
+       Felipe -> correo_felipe/pass_felipe; Carlos -> correo_carlos/pass_carlos; si no,
+       usa el remitente por defecto (correo_remitente/smtp_password)."""
+    c = dict(cfg or {})
+    quien = _quien_cerro(item)
+    if quien == "Felipe" and c.get("correo_felipe"):
+        c["correo_remitente"] = c.get("correo_felipe", "")
+        c["smtp_password"] = c.get("pass_felipe", "")
+    elif quien == "Carlos" and c.get("correo_carlos"):
+        c["correo_remitente"] = c.get("correo_carlos", "")
+        c["smtp_password"] = c.get("pass_carlos", "")
+    return c
+
+
 def procesar_correos_programados(cfg):
     """Envia los correos de seguimiento PROGRAMADOS cuya fecha ya llego (una vez).
-       Devuelve la lista de numeros enviados. Requiere SMTP configurado."""
-    if not cfg or not (cfg.get("correo_remitente") and cfg.get("smtp_password")):
-        return []
+       Cada uno sale del correo del cotizador que la hizo. Devuelve numeros enviados."""
     data = cargar_cotizaciones()
     hoy = datetime.date.today()
     enviados = []
@@ -643,9 +656,12 @@ def procesar_correos_programados(cfg):
         dest = (it.get("email", "") or "").strip()
         if not dest:
             continue
-        asunto = f"Seguimiento de su cotizacion {it.get('numero','')} - {cfg.get('empresa','')}"
+        cfgr = cfg_remitente_cotizador(cfg, it)
+        if not (cfgr.get("correo_remitente") and cfgr.get("smtp_password")):
+            continue
+        asunto = f"Seguimiento de su cotizacion {it.get('numero','')} - {cfgr.get('empresa','')}"
         try:
-            enviar_correo_texto(cfg, dest, asunto, cuerpo_seguimiento_cotizacion(it, cfg))
+            enviar_correo_texto(cfgr, dest, asunto, cuerpo_seguimiento_cotizacion(it, cfgr))
             it["correo_seg_enviado"] = hoy.isoformat()
             enviados.append(it.get("numero", ""))
             cambiado = True
@@ -2784,19 +2800,21 @@ class VentanaCotizacionDetalle(ctk.CTkToplevel):
             messagebox.showinfo("Correo del cliente",
                                 "Escribe el correo del cliente.", parent=self)
             return
-        if not (self.cfg.get("correo_remitente") and self.cfg.get("smtp_password")):
+        cfgr = cfg_remitente_cotizador(self.cfg, self.item)
+        if not (cfgr.get("correo_remitente") and cfgr.get("smtp_password")):
             messagebox.showwarning("Correo no configurado",
-                                   "Configura el correo remitente y su contrasena en "
-                                   "'Datos de mi empresa'.", parent=self)
+                                   "Configura el correo remitente y su contrasena (o el correo "
+                                   "de Felipe/Carlos) en 'Datos de mi empresa'.", parent=self)
             return
         if not messagebox.askyesno("Enviar seguimiento",
-                                   f"Enviar el correo de seguimiento a {dest}?", parent=self):
+                                   f"Enviar el correo de seguimiento a {dest}\n"
+                                   f"desde {cfgr.get('correo_remitente','')}?", parent=self):
             return
         asunto = (f"Seguimiento de su cotizacion {self.item.get('numero','')} - "
-                  f"{self.cfg.get('empresa','')}")
+                  f"{cfgr.get('empresa','')}")
         try:
-            enviar_correo_texto(self.cfg, dest, asunto,
-                                cuerpo_seguimiento_cotizacion(self.item, self.cfg))
+            enviar_correo_texto(cfgr, dest, asunto,
+                                cuerpo_seguimiento_cotizacion(self.item, cfgr))
         except Exception as e:
             messagebox.showerror("No se pudo enviar", str(e), parent=self)
             return
@@ -2853,6 +2871,84 @@ class VentanaCotizacionDetalle(ctk.CTkToplevel):
                                                "No se pudo enviar el recordatorio:\n" + str(e),
                                                parent=self)
         self.destroy()
+
+
+class VentanaVerCotizacion(ctk.CTkToplevel):
+    """Vista de solo lectura de lo que se cotizo (util para las del HTML)."""
+    def __init__(self, master, item):
+        super().__init__(master)
+        self.title("Detalle cotizacion " + item.get("numero", ""))
+        self.geometry("660x660"); self.configure(fg_color=BG)
+        self.transient(master); self.grab_set()
+        cont = ctk.CTkScrollableFrame(self, fg_color=BG)
+        cont.pack(fill="both", expand=True, padx=16, pady=16)
+        ctk.CTkLabel(cont, text=f"{item.get('numero','')}   ·   {item.get('estado','')}",
+                     text_color=NAVY, font=("Segoe UI", 17, "bold")).pack(anchor="w", pady=(0, 6))
+        snap = item.get("snapshot") or {}
+
+        def linea(lbl, val):
+            if not val:
+                return
+            f = ctk.CTkFrame(cont, fg_color="transparent"); f.pack(fill="x", pady=1)
+            ctk.CTkLabel(f, text=lbl + ":", text_color=MUTED, font=("Segoe UI", 11, "bold"),
+                         width=150, anchor="w").pack(side="left")
+            ctk.CTkLabel(f, text=str(val), text_color=TEXT, font=("Segoe UI", 11), anchor="w",
+                         justify="left", wraplength=440).pack(side="left", fill="x", expand=True)
+
+        linea("Agencia / cliente", item.get("cliente", ""))
+        linea("Asesor", item.get("asesor", ""))
+        linea("Cotizado por", item.get("cotizado_por", ""))
+        linea("Correo cliente", item.get("email", ""))
+        linea("Fecha cotizacion", item.get("fecha", ""))
+        linea("Destinos", ", ".join(item.get("destinos", [])))
+        fviaje = item.get("fechas_viaje", "") or (
+            f"{snap.get('fecha_desde','')} al {snap.get('fecha_hasta','')}"
+            if snap.get("fecha_desde") else "")
+        linea("Fechas de viaje", fviaje)
+        if snap:
+            ad = snap.get("adultos", 0); ninos = len(snap.get("ages", []) or [])
+            pax = f"{ad} adulto(s)" + (f", {ninos} nino(s)" if ninos else "")
+            linea("Pasajeros", pax)
+            linea("Alojamiento", snap.get("hab", ""))
+        linea("Total (USD)", usd(item.get("total", 0)))
+
+        tramos = snap.get("tramos", [])
+        if tramos:
+            ctk.CTkLabel(cont, text="SERVICIOS COTIZADOS", text_color=NAVY,
+                         font=("Segoe UI", 13, "bold")).pack(anchor="w", pady=(10, 2))
+            for i, tr in enumerate(tramos, 1):
+                card = ctk.CTkFrame(cont, fg_color=CARD, corner_radius=8,
+                                    border_width=1, border_color=LINE)
+                card.pack(fill="x", pady=3)
+                ctk.CTkLabel(card, text=f"Destino {i}: {tr.get('destino','')}  "
+                             f"({tr.get('noches','?')} noches)", text_color=NAVY,
+                             font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=8, pady=(6, 2))
+
+                def bloque(tit, lst):
+                    if lst:
+                        ctk.CTkLabel(card, text=f"   {tit}: " + ", ".join(lst), text_color=TEXT,
+                                     font=("Segoe UI", 11), anchor="w", justify="left",
+                                     wraplength=580).pack(anchor="w", padx=8, pady=(0, 2))
+                bloque("Hoteles", tr.get("hoteles", []))
+                bloque("Traslados", tr.get("trans", []))
+                bloque("Tours / actividades", tr.get("act", []))
+                ctk.CTkFrame(card, fg_color="transparent", height=4).pack()
+
+        itin = snap.get("itinerario", "") or item.get("itinerario", "")
+        if itin:
+            ctk.CTkLabel(cont, text="ITINERARIO", text_color=NAVY,
+                         font=("Segoe UI", 13, "bold")).pack(anchor="w", pady=(10, 2))
+            tb = ctk.CTkTextbox(cont, height=140, fg_color=CARD, font=("Segoe UI", 11))
+            tb.pack(fill="x"); tb.insert("1.0", itin); tb.configure(state="disabled")
+
+        if not snap:
+            ctk.CTkLabel(cont, text="Esta cotizacion llego del HTML (o de una version anterior) sin "
+                         "el detalle completo. Arriba se muestran los datos que si llegaron. Las "
+                         "cotizaciones nuevas del HTML ya traen todo el detalle.",
+                         text_color=MUTED, font=("Segoe UI", 10), wraplength=580,
+                         justify="left").pack(anchor="w", pady=(10, 0))
+        ctk.CTkButton(cont, text="Cerrar", fg_color=NAVY, hover_color=NAVY2,
+                      command=self.destroy).pack(pady=14)
 
 
 class VentanaCotizaciones(ctk.CTkToplevel):
@@ -2955,7 +3051,11 @@ class VentanaCotizaciones(ctk.CTkToplevel):
             ctk.CTkLabel(cel, text=linea2, text_color=MUTED, anchor="w",
                          font=("Segoe UI", 10)).pack(anchor="w")
             col = 1
-            ctk.CTkButton(fila, text="✎ Editar", width=88, height=30,
+            ctk.CTkButton(fila, text="👁 Ver", width=76, height=30, corner_radius=8,
+                          fg_color=CYAN, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
+                          command=lambda x=it: self._ver(x)).grid(row=0, column=col, padx=4)
+            col += 1
+            ctk.CTkButton(fila, text="✎ Editar", width=84, height=30,
                           corner_radius=8, fg_color=GREEN, hover_color=GREEN_H,
                           font=("Segoe UI", 11, "bold"),
                           command=lambda x=it: self._editar_cotizacion(x)).grid(
@@ -3009,6 +3109,9 @@ class VentanaCotizaciones(ctk.CTkToplevel):
         messagebox.showinfo("Importar del HTML",
                             (f"Se importaron {n} cotizacion(es) nueva(s) del HTML."
                              if n else "No hay cotizaciones nuevas del HTML."), parent=self)
+
+    def _ver(self, it):
+        VentanaVerCotizacion(self, it)
 
     def _enviar_a_reserva(self, it):
         cfg = getattr(self.master, "cfg", None) or cargar_config()
@@ -4842,10 +4945,10 @@ class VentanaEmpresa(ctk.CTkToplevel):
         ctk.CTkLabel(cont, text="Datos de mi empresa", text_color=NAVY,
                      font=("Segoe UI", 18, "bold")).pack(anchor="w", pady=(0, 10))
         self.entradas = {}
-        def campo(clave, etq, secreto=False):
+        def campo(clave, etq, secreto=False, defecto=""):
             ctk.CTkLabel(cont, text=etq, text_color=MUTED, font=("Segoe UI", 11)).pack(
                 anchor="w", padx=2)
-            v = tk.StringVar(value=str(self.cfg.get(clave, "")))
+            v = tk.StringVar(value=str(self.cfg.get(clave, "") or defecto))
             self.entradas[clave] = v
             e = ctk.CTkEntry(cont, textvariable=v, height=34, corner_radius=8, border_color=LINE,
                              show="*" if secreto else "")
@@ -4857,10 +4960,20 @@ class VentanaEmpresa(ctk.CTkToplevel):
             campo(clave, etq)
         ctk.CTkLabel(cont, text="—  Envio de correo (Office 365)  —", text_color=NAVY,
                      font=("Segoe UI", 13, "bold")).pack(anchor="w", pady=(6, 4))
-        campo("correo_remitente", "Correo remitente (desde donde se envia)")
+        campo("correo_remitente", "Correo remitente por defecto (desde donde se envia)")
         campo("smtp_password", "Contrasena del correo (o contrasena de aplicacion)", secreto=True)
         campo("smtp_servidor", "Servidor SMTP")
         campo("smtp_puerto", "Puerto SMTP")
+        ctk.CTkLabel(cont, text="—  Correo por cotizador (seguimientos)  —", text_color=NAVY,
+                     font=("Segoe UI", 13, "bold")).pack(anchor="w", pady=(6, 2))
+        ctk.CTkLabel(cont, text="El correo de seguimiento sale del correo del cotizador que hizo "
+                     "la cotizacion. Escribe la contrasena (o contrasena de aplicacion) de cada uno.",
+                     text_color=MUTED, font=("Segoe UI", 10), wraplength=520,
+                     justify="left").pack(anchor="w", padx=2, pady=(0, 4))
+        campo("correo_felipe", "Correo de Felipe", defecto="felipe@innobadmc.com")
+        campo("pass_felipe", "Contrasena de Felipe", secreto=True)
+        campo("correo_carlos", "Correo de Carlos", defecto="directorcomercial@innobadmc.com")
+        campo("pass_carlos", "Contrasena de Carlos", secreto=True)
         ctk.CTkLabel(cont, text="Logo (PNG/JPG)", text_color=MUTED,
                      font=("Segoe UI", 11)).pack(anchor="w", padx=2)
         lf = ctk.CTkFrame(cont, fg_color="transparent"); lf.pack(fill="x", pady=(0, 8))
