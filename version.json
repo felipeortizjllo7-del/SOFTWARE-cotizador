@@ -1,5 +1,5 @@
 {
-  "version": "6.9",
+  "version": "7.0",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 6.9 - .exe: al buscar el cliente (en Cotizacion, Reserva y Tarea comercial) ahora se elige el CONTACTO (vendedor de la agencia) en un clic y queda vinculado. Nuevo campo 'Contacto' en reservas y tareas. Modulo Comercial: boton 'Contactos' con el RANKING de contactos por reservas hechas con nosotros (del mes y del ano) con medallas, para premiar a los mejores; descargable en Excel."
+  "notas": "Version 7.0 - Reservas: el bloque de cliente ahora es como en cotizaciones: boton 'Buscar cliente' (lupa) y el Contacto como desplegable que se llena con los vendedores de la agencia. Al elegir el cliente se coloca agencia + contacto + correo de una vez."
 }

@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "6.9"
+VERSION = "7.0"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -5309,7 +5309,10 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         ctk.CTkEntry(e1, textvariable=self.v_email, height=32).pack(fill="x", pady=(0, 6))
         ctk.CTkLabel(e2, text="Contacto (vendedor de la agencia)", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
         self.v_contacto = tk.StringVar(value=res.get("contacto", ""))
-        ctk.CTkEntry(e2, textvariable=self.v_contacto, height=32).pack(fill="x", pady=(0, 6))
+        self.combo_contacto = ctk.CTkComboBox(
+            e2, variable=self.v_contacto, height=32,
+            values=([res.get("contacto", "")] if res.get("contacto") else []))
+        self.combo_contacto.pack(fill="x", pady=(0, 6))
         f2 = ctk.CTkFrame(cont, fg_color="transparent"); f2.pack(fill="x")
         c1 = ctk.CTkFrame(f2, fg_color="transparent"); c1.pack(side="left", fill="x", expand=True, padx=(0, 6))
         c2 = ctk.CTkFrame(f2, fg_color="transparent"); c2.pack(side="left", fill="x", expand=True, padx=(6, 0))
@@ -5859,12 +5862,23 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
 
     def _usar_cliente_res(self, c, v):
         self.v_cli.set(c.get("empresa", ""))
+        vends = c.get("vendedores", []) or []
+        nombres = [x.get("nombre", "") for x in vends if x.get("nombre")]
+        try:
+            self.combo_contacto.configure(values=nombres or [""])
+        except Exception:
+            pass
         if v and v.get("nombre"):
             self.v_contacto.set(v.get("nombre", ""))
             if v.get("email"):
                 self.v_email.set(v.get("email", ""))
-        elif c.get("email"):
-            self.v_email.set(c.get("email", ""))
+            elif c.get("email"):
+                self.v_email.set(c.get("email", ""))
+        else:
+            if nombres:
+                self.v_contacto.set(nombres[0])
+            if c.get("email"):
+                self.v_email.set(c.get("email", ""))
 
     def _abrir_panel_vouchers(self):
         self._sync()
