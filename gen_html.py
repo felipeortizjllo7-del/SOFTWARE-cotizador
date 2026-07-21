@@ -163,6 +163,23 @@ display:flex;align-items:center;gap:16px;margin-top:6px}
   </div>
  </div>
 
+ <div class="card" style="border:2px solid var(--green)">
+  <h3 style="margin:0 0 6px">Configuracion de la agencia</h3>
+  <div class="mut" style="font-size:12px;margin-bottom:8px">Los precios que ves son la tarifa para la agencia. Aqui puedes sumar tu <b>% de ganancia</b> (se aplica a toda la cotizacion y al PDF) y elegir el <b>logo del PDF</b>.</div>
+  <div class="row">
+   <div class="col"><label class="lb">% de ganancia de la agencia</label>
+    <input id="ganancia" type="number" min="0" step="1" placeholder="ej. 15" oninput="setGanancia()"></div>
+   <div class="col"><label class="lb">Logo del PDF</label>
+    <select id="logoSel" onchange="setLogoSel()">
+     <option value="innoba">Logo INNOBA (nuestro)</option>
+     <option value="agencia">Mi logo (agencia)</option>
+    </select></div>
+   <div class="col"><label class="lb">Subir mi logo (PNG/JPG)</label>
+    <input type="file" id="logoFile" accept="image/*" onchange="subirLogo(event)">
+    <div class="mut" id="logoMsg" style="font-size:11px"></div></div>
+  </div>
+ </div>
+
  <div class="destbar">
   <b>Destinos del itinerario (max 5):</b>
   <div id="chips" style="display:flex;gap:8px;flex-wrap:wrap"></div>
@@ -212,7 +229,10 @@ function registrarCotiz(rec){COTIZS.seq=(COTIZS.seq||0)+1;rec.numero="COT-"+Stri
 const EDADES = ["0-11 meses","1 ano","2 anos","3 anos","4 anos","5 anos","6 anos","7 anos","8 anos","9 anos"];
 const DEF_CFG = {empresa:"INNOBA Colombia DMC",nit:"",direccion:"",telefono:"",email:"",web:"",
  firma_nombre:"Felipe Ortiz",firma_cargo:"Gerente - INNOBA Colombia DMC",trm_hoy:"",
+ ganancia:"",agencia_logo:"",usar_logo_agencia:false,
  notas:"Tarifas sujetas a disponibilidad al momento de la reserva. Precios en dolares americanos (USD) por el total indicado."};
+function factorG(){const g=parseFloat((cfg.ganancia||"").toString().replace(/,/g,""));return (g>0)?(1+g/100):1;}
+function logoPDF(){return (cfg.usar_logo_agencia&&cfg.agencia_logo)?cfg.agencia_logo:LOGO;}
 
 let cfg = Object.assign({}, DEF_CFG, JSON.parse(localStorage.getItem("innoba_cfg")||"{}"));
 let st = {adultos:2, ages:[], tramos:[], activo:null, tab:"hotel", hab:{sencilla:0,doble:1,triple:0}, itinerario:""};
@@ -240,15 +260,15 @@ function precioTerrestreUSD(serv,pax,ta,margen){
  let col=disp.includes(pax)?pax:disp.reduce((p,c)=>Math.abs(c-pax)<Math.abs(p-pax)?c:p,disp[0]);
  if(pax>Math.max(...disp))col=Math.max(...disp);
  const ppc=precios[String(col)];const totalCop=ppc*pax;const ventaCop=margen?totalCop/margen:totalCop;
- return ventaCop/ta;
+ return (ventaCop/ta)*factorG();
 }
-function precioHotelNoche(cop,ta,margen){if(!cop||!ta)return 0;const v=margen?cop/margen:cop;return v/ta;}
-function precioHotelNino(ta,margen){if(!ta)return 0;return margen?(70000/margen)/ta:70000/ta;}
+function precioHotelNoche(cop,ta,margen){if(!cop||!ta)return 0;const v=margen?cop/margen:cop;return (v/ta)*factorG();}
+function precioHotelNino(ta,margen){if(!ta)return 0;return (margen?(70000/margen)/ta:70000/ta)*factorG();}
 function precioServicioGrupo(serv,adultos,ages,ta,margen,privado){
  const N=Math.max(adultos+ages.filter(a=>a>=1).length,1);
  const pp=precioTerrestreUSD(serv,N,ta,margen)/N;
  let total=adultos*pp;
- for(const a of ages){if(a===0)continue;else if(a<=2)total+=privado?10:pp;else total+=0.5*pp;}
+ for(const a of ages){if(a===0)continue;else if(a<=2)total+=privado?10*factorG():pp;else total+=0.5*pp;}
  return total;
 }
 
@@ -432,7 +452,7 @@ function generar(){
  const ad=st.adultos;let paxtxt=`${ad} adultos`;if(st.ages.length)paxtxt+=`, ${st.ages.length} ninos (${st.ages.map(a=>a===0?"bebe":a+" anos").join(", ")})`;
  const multi=bloques.length>1;
  const numero=peekNumero();
- let html=`<div class="ph"><img src="${LOGO}"><div><div class="pe">${cfg.empresa}</div>
+ let html=`<div class="ph"><img src="${logoPDF()}"><div><div class="pe">${cfg.empresa}</div>
   <div style="font-size:11px">${[cfg.nit?"NIT/RUC: "+cfg.nit:"",cfg.telefono?"Tel: "+cfg.telefono:"",cfg.email,cfg.web].filter(Boolean).join(" | ")}</div></div></div>`;
  html+=`<div class="band">COTIZACION ${multi?"- ITINERARIO":"- "+bloques[0].destino}</div>`;
  html+=`<table style="margin-top:8px"><tr>
@@ -712,6 +732,12 @@ function guardarConfig(){["empresa","nit","direccion","telefono","email","web","
 
 /* ---------- render maestro ---------- */
 function render(){renderChips();renderActivo();renderPanel();recalc();}
+
+/* ---------- configuracion de la agencia (ganancia % + logo) ---------- */
+function setGanancia(){cfg.ganancia=document.getElementById("ganancia").value;localStorage.setItem("innoba_cfg",JSON.stringify(cfg));render();}
+function setLogoSel(){cfg.usar_logo_agencia=(document.getElementById("logoSel").value==="agencia");localStorage.setItem("innoba_cfg",JSON.stringify(cfg));}
+function subirLogo(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=function(){cfg.agencia_logo=r.result;cfg.usar_logo_agencia=true;localStorage.setItem("innoba_cfg",JSON.stringify(cfg));const s=document.getElementById("logoSel");if(s)s.value="agencia";const m=document.getElementById("logoMsg");if(m)m.textContent="Logo cargado ✓ (se usara en el PDF)";};r.readAsDataURL(f);}
+function initAgencia(){const g=document.getElementById("ganancia");if(g&&cfg.ganancia)g.value=cfg.ganancia;const s=document.getElementById("logoSel");if(s)s.value=cfg.usar_logo_agencia?"agencia":"innoba";const m=document.getElementById("logoMsg");if(m&&cfg.agencia_logo)m.textContent="Logo cargado ✓ (se usara en el PDF)";}
 function nueva(){st={adultos:2,ages:[],tramos:[],activo:null,tab:"hotel",hab:{sencilla:0,doble:1,triple:0},itinerario:""};
  document.getElementById("cli").value="";document.getElementById("email").value="";
  document.getElementById("asesor").value="";document.getElementById("asesorTel").value="";
@@ -744,7 +770,7 @@ function chequearSeguimientos(){const p=segPendientes();const b=document.getElem
  else b.classList.add("hidden");}
 
 /* init */
-renderPax();addDestino(Object.keys(PRECIOS)[0]);sugerirHab();cargarTRM(false);chequearActualizacion();
+renderPax();addDestino(Object.keys(PRECIOS)[0]);sugerirHab();cargarTRM(false);chequearActualizacion();initAgencia();
 </script>
 </body>
 </html>"""

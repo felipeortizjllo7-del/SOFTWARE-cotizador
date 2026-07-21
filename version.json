@@ -1,5 +1,5 @@
 {
-  "version": "6.7",
+  "version": "6.8",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 6.7 - (1) El correo de seguimiento sale del correo del cotizador que hizo la cotizacion: Felipe desde felipe@innobadmc.com y Carlos desde directorcomercial@innobadmc.com (se configuran sus correos y claves en 'Datos de mi empresa'). (2) Nuevo boton 'Ver' en el historial de cotizaciones: muestra el detalle de lo cotizado (destinos, pasajeros, hoteles, traslados, tours e itinerario), util para las cotizaciones que llegan desde el HTML."
+  "notas": "Version 6.8 - Cotizador HTML (agencias): nueva 'Configuracion de la agencia' con % de ganancia (se suma a todos los precios y al PDF) y eleccion de logo del PDF (INNOBA o el de la agencia, con opcion de subir su propio logo). Los precios base siguen siendo la tarifa para la agencia; el % de ganancia lo pone cada agencia."
 }
