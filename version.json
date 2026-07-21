@@ -1,5 +1,5 @@
 {
-  "version": "8.2",
+  "version": "8.3",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 8.2 - Reservas: cuando se crea/asigna una reserva, el sistema ahora ENVIA UN CORREO AUTOMATICO a la asesora asignada (a su correo configurado) con los datos de la reserva (numero, cliente, destinos, fechas, pasajeros, servicios, monto) y el voucher del cliente en PDF adjunto. Asi la reserva le llega para su gestion aunque este en otro computador. Nuevo boton 'Enviar a la asesora' en el detalle de la reserva para reenviar tras editar. El mensaje de creacion avisa si el correo se envio o si falta configurar el correo de la asesora / remitente."
+  "notas": "Version 8.3 - Reservas en la nube: las reservas ahora se SINCRONIZAN entre los computadores del equipo por el mismo webhook. Al crear o editar una reserva se sube automaticamente; al abrir el modulo Reservas se traen las de los demas. Nuevo boton 'Sincronizar'. Cada reserva tiene un identificador unico (uid) para no duplicar y para actualizar estados/proveedores entre equipos. (Requiere actualizar el Google Apps Script una sola vez - ver instrucciones.)"
 }

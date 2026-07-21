@@ -11,6 +11,7 @@ import sys
 import re
 import ssl
 import json
+import uuid
 import shutil
 import smtplib
 import difflib
@@ -59,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "8.2"
+VERSION = "8.3"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -393,6 +394,94 @@ def importar_cotizaciones_html():
     if nuevas:
         guardar_cotizaciones(data)
     return nuevas
+
+
+# ---- Sincronizacion de RESERVAS en la nube (mismo webhook, tipo=reserva) ----
+def enviar_reserva_nube(rec):
+    """Sube (o actualiza) una reserva al webhook para que los demas equipos la vean.
+       Best-effort: no lanza excepciones. Devuelve True/False."""
+    if not WEBHOOK_URL:
+        return False
+    try:
+        payload = {k: v for k, v in rec.items() if not str(k).startswith("_")}
+        payload["tipo"] = "reserva"
+        if not payload.get("uid"):
+            return False
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        req = urllib.request.Request(
+            WEBHOOK_URL, data=body, method="POST",
+            headers={"Content-Type": "text/plain;charset=utf-8",
+                     "User-Agent": "CotizadorInnoba"})
+        ctx = ssl.create_default_context()
+        with urllib.request.urlopen(req, context=ctx, timeout=15) as r:
+            r.read()
+        return True
+    except Exception:
+        return False
+
+
+def importar_reservas_nube():
+    """Trae las reservas de la nube y las mezcla en el archivo local (por 'uid', sin
+       duplicar; si ya existe y cambio, la actualiza). Devuelve cuantas nuevas/cambiadas."""
+    if not WEBHOOK_URL:
+        return 0
+    try:
+        ctx = ssl.create_default_context()
+        url = (WEBHOOK_URL + ("&" if "?" in WEBHOOK_URL else "?")
+               + "key=" + WEBHOOK_KEY + "&tipo=reserva")
+        req = urllib.request.Request(url, headers={"User-Agent": "CotizadorInnoba"})
+        with urllib.request.urlopen(req, context=ctx, timeout=20) as r:
+            remotas = json.loads(r.read().decode("utf-8"))
+    except Exception:
+        return 0
+    if isinstance(remotas, dict):
+        remotas = remotas.get("items", [])
+    if not isinstance(remotas, list):
+        return 0
+    data = cargar_reservas()
+    por_uid = {str(it.get("uid")): it for it in data["items"] if it.get("uid")}
+    cambios = 0
+    max_num = 0
+    for rc in remotas:
+        if not isinstance(rc, dict):
+            continue
+        uid = str(rc.get("uid") or "")
+        if not uid:
+            continue
+        rc = {k: v for k, v in rc.items() if k != "tipo"}
+        try:
+            max_num = max(max_num, int(re.sub(r"\D", "", str(rc.get("numero", "0"))) or 0))
+        except Exception:
+            pass
+        if uid in por_uid:
+            local = por_uid[uid]
+            a = json.dumps(local, sort_keys=True, ensure_ascii=False)
+            b = json.dumps(rc, sort_keys=True, ensure_ascii=False)
+            if a != b:
+                local.clear(); local.update(rc); cambios += 1
+        else:
+            data["items"].append(rc); cambios += 1
+    # mantener el consecutivo por encima del mayor numero visto
+    if max_num:
+        data["seq"] = max(int(data.get("seq", RES_SEQ_INICIAL) or RES_SEQ_INICIAL), max_num)
+    if cambios:
+        guardar_reservas(data)
+    return cambios
+
+
+def sincronizar_reservas_nube():
+    """Sube las reservas locales que aun no estan en la nube y luego importa las remotas.
+       Devuelve (subidas, importadas)."""
+    subidas = 0
+    try:
+        for r in cargar_reservas().get("items", []):
+            if r.get("uid") and enviar_reserva_nube(r):
+                subidas += 1
+    except Exception:
+        pass
+    importadas = importar_reservas_nube()
+    return subidas, importadas
+
 
 def parse_fecha(s):
     """Convierte 'dd/mm/aaaa' (o similares) a date; None si no se puede."""
@@ -1441,6 +1530,8 @@ def registrar_reserva(rec, cfg):
         data["rot"] = idx + 1
     rec = dict(rec)
     rec["numero"] = numero
+    if not rec.get("uid"):
+        rec["uid"] = "RES-" + uuid.uuid4().hex[:12]
     if not rec.get("asesor"):
         rec["asesor"] = asesor
     data["items"].append(rec)
@@ -1457,6 +1548,11 @@ def registrar_reserva(rec, cfg):
         ok, info = None, "reserva en blanco"
     rec["_notif_ok"] = ok
     rec["_notif_info"] = info
+    # Subir a la nube para que la asesora la vea en su equipo (best-effort).
+    try:
+        enviar_reserva_nube(rec)
+    except Exception:
+        pass
     return numero, rec
 
 
@@ -1541,13 +1637,23 @@ def _texto_notif_reserva(guardado):
 
 
 def actualizar_reserva(numero, cambios):
-    """Aplica cambios a la reserva con ese numero y guarda."""
+    """Aplica cambios a la reserva con ese numero, guarda y sincroniza a la nube."""
     data = cargar_reservas()
+    actualizada = None
     for it in data["items"]:
         if it.get("numero") == numero:
             it.update(cambios)
+            actualizada = it
             break
     guardar_reservas(data)
+    if actualizada is not None:
+        try:
+            if not actualizada.get("uid"):
+                actualizada["uid"] = "RES-" + uuid.uuid4().hex[:12]
+                guardar_reservas(data)
+            enviar_reserva_nube(actualizada)
+        except Exception:
+            pass
 
 
 def _pax_desde_snapshot(snap):
@@ -6885,6 +6991,11 @@ class ModuloReservas(ctk.CTkToplevel):
         self.title(f"Reservas - INNOBA Colombia DMC   v{VERSION}")
         self.configure(fg_color=BG)
         self.geometry("1180x720")
+        # Traer reservas de la nube al abrir (para ver las de otros equipos).
+        try:
+            importar_reservas_nube()
+        except Exception:
+            pass
         self._build()
         self.after(60, lambda: self._max())
 
@@ -6934,6 +7045,10 @@ class ModuloReservas(ctk.CTkToplevel):
         ctk.CTkButton(hb, text="+ Nueva reserva", width=160, height=36, corner_radius=10,
                       fg_color=GREEN, hover_color=GREEN_H, font=("Segoe UI", 12, "bold"),
                       command=self._nueva_desde_cot).pack(side="left", padx=(0, 8))
+        if WEBHOOK_URL:
+            ctk.CTkButton(hb, text="☁ Sincronizar", width=130, height=36, corner_radius=10,
+                          fg_color=BLUE, hover_color=NAVY, font=("Segoe UI", 12, "bold"),
+                          command=self._sincronizar).pack(side="left", padx=(0, 8))
         ctk.CTkButton(hb, text="📊 Reporte", width=110, height=36, corner_radius=10,
                       fg_color="#7A5AB5", hover_color="#63459A", font=("Segoe UI", 12, "bold"),
                       command=self._reporte).pack(side="left", padx=(0, 8))
@@ -7054,6 +7169,19 @@ class ModuloReservas(ctk.CTkToplevel):
         DialogoReporteMes(self, "Reporte de reservas por mes",
                           "Descarga un Excel con el detalle de las reservas y un resumen por mes.",
                           meses, exportar_reporte_reservas, "Reporte_reservas")
+
+    def _sincronizar(self):
+        try:
+            subidas, importadas = sincronizar_reservas_nube()
+        except Exception as e:
+            messagebox.showerror("Sincronizar", str(e), parent=self); return
+        self._pintar()
+        messagebox.showinfo(
+            "Sincronizacion de reservas",
+            f"Reservas subidas a la nube: {subidas}\n"
+            f"Reservas traidas/actualizadas: {importadas}\n\n"
+            "Las reservas ahora se comparten entre los equipos que usan el sistema.",
+            parent=self)
 
     def _config_asesores(self):
         DialogoAsesores(self, self.cfg, on_save=self._recargar_cfg)
