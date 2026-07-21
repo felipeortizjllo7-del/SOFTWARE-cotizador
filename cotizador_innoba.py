@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "7.7"
+VERSION = "7.8"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -5485,7 +5485,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self.lbl_total = ctk.CTkLabel(tot_bar, text="Total:  USD 0.00", text_color=NAVY,
                                       font=("Segoe UI", 15, "bold"))
         self.lbl_total.pack(side="right", padx=12, pady=6)
-        ctk.CTkLabel(tot_bar, text="El monto negociado se calcula sumando los items.",
+        ctk.CTkLabel(tot_bar, text="El monto negociado = suma de (precio por persona × pasajeros) de cada item.",
                      text_color=MUTED, font=("Segoe UI", 10)).pack(side="left", padx=12)
         self._pintar_items()
 
@@ -5821,7 +5821,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         # Migracion: si no hay items pero hay monto, sembrar un item con ese monto
         if not items and float(self.res.get("monto", 0) or 0) > 0:
             items.append({"desc": "Servicios de la reserva",
-                          "valor": float(self.res.get("monto", 0) or 0)})
+                          "valor": float(self.res.get("monto", 0) or 0), "cant": 1})
         if not items:
             ctk.CTkLabel(self.items_box, text="Sin items. Usa '+ Agregar item' para ingresar "
                          "los servicios cobrados (descripcion y valor).", text_color=MUTED,
@@ -5836,22 +5836,54 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         row.pack(fill="x", pady=2)
         v_desc = tk.StringVar(value=it.get("desc", ""))
         v_val = tk.StringVar(value=f"{float(it.get('valor', 0) or 0):.2f}")
+        # cantidad de pasajeros: si el item no la trae, se asume el # de pasajeros de la
+        # reserva cuando el precio es "por persona" (p.p.), o 1 si es un valor total.
+        cant0 = it.get("cant")
+        if cant0 in (None, ""):
+            cant0 = self._grupo_reserva() if "p.p." in (it.get("desc", "") or "").lower() else 1
+        try:
+            cant0 = max(1, int(float(cant0)))
+        except Exception:
+            cant0 = 1
+        v_cant = tk.StringVar(value=str(cant0))
         ctk.CTkEntry(row, textvariable=v_desc, height=30,
                      placeholder_text="Descripcion del servicio").pack(
             side="left", fill="x", expand=True, padx=(6, 4), pady=5)
-        ctk.CTkLabel(row, text="USD", text_color=MUTED, font=("Segoe UI", 10)).pack(side="left")
-        e = ctk.CTkEntry(row, textvariable=v_val, width=110, height=30, placeholder_text="0.00")
-        e.pack(side="left", padx=4)
+        ctk.CTkLabel(row, text="USD p.p.", text_color=MUTED, font=("Segoe UI", 10)).pack(side="left")
+        e = ctk.CTkEntry(row, textvariable=v_val, width=84, height=30, placeholder_text="0.00")
+        e.pack(side="left", padx=2)
         e.bind("<KeyRelease>", lambda ev: self._recalcular_total())
+        ctk.CTkLabel(row, text="× pax", text_color=MUTED, font=("Segoe UI", 10)).pack(side="left")
+        ec = ctk.CTkEntry(row, textvariable=v_cant, width=46, height=30, placeholder_text="2")
+        ec.pack(side="left", padx=2)
+        ec.bind("<KeyRelease>", lambda ev: self._recalcular_total())
+        lbl_sub = ctk.CTkLabel(row, text="= USD 0.00", text_color=GREEN_H, width=118,
+                               anchor="e", font=("Segoe UI", 11, "bold"))
+        lbl_sub.pack(side="left", padx=4)
         ctk.CTkButton(row, text="✕", width=28, height=28, fg_color=RED, hover_color="#9B2C22",
                       command=lambda idx=i: self._quitar_item(idx)).pack(side="left", padx=(4, 6))
-        self.item_widgets.append({"desc": v_desc, "valor": v_val})
+        self.item_widgets.append({"desc": v_desc, "valor": v_val, "cant": v_cant, "sub": lbl_sub})
+
+    @staticmethod
+    def _num_pos(sv, defecto):
+        try:
+            v = float(str(sv.get()).replace(",", "").strip() or defecto)
+            return v if v > 0 else defecto
+        except Exception:
+            return defecto
 
     def _recalcular_total(self):
         tot = 0.0
         for w in self.item_widgets:
             try:
-                tot += float(str(w["valor"].get()).replace(",", "").strip() or 0)
+                val = float(str(w["valor"].get()).replace(",", "").strip() or 0)
+            except Exception:
+                val = 0.0
+            cant = self._num_pos(w["cant"], 1)
+            sub = val * cant
+            tot += sub
+            try:
+                w["sub"].configure(text=f"= USD {sub:,.2f}")
             except Exception:
                 pass
         self.res["monto"] = round(tot, 2)
@@ -5868,14 +5900,15 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
                 val = float(str(w["valor"].get()).replace(",", "").strip() or 0)
             except Exception:
                 val = 0.0
+            cant = int(self._num_pos(w["cant"], 1))
             if desc or val:
-                items.append({"desc": desc, "valor": val})
+                items.append({"desc": desc, "valor": val, "cant": cant})
         self.res["items_cobro"] = items
-        self.res["monto"] = round(sum(it["valor"] for it in items), 2)
+        self.res["monto"] = round(sum(it["valor"] * it.get("cant", 1) for it in items), 2)
 
     def _agregar_item(self):
         self._sync_items()
-        self.res.setdefault("items_cobro", []).append({"desc": "", "valor": 0.0})
+        self.res.setdefault("items_cobro", []).append({"desc": "", "valor": 0.0, "cant": 1})
         self._pintar_items()
 
     def _noches_reserva(self):
@@ -5911,7 +5944,9 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
 
     def _add_item_tarifa(self, desc, valor):
         self._sync_items()
-        self.res.setdefault("items_cobro", []).append({"desc": desc, "valor": round(float(valor or 0), 2)})
+        # Los precios del tarifario son POR PERSONA: se multiplican por el # de pasajeros.
+        self.res.setdefault("items_cobro", []).append(
+            {"desc": desc, "valor": round(float(valor or 0), 2), "cant": self._grupo_reserva()})
         self._pintar_items()
 
     def _quitar_item(self, i):

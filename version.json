@@ -1,5 +1,5 @@
 {
-  "version": "7.7",
+  "version": "7.8",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 7.7 - Modulo Comercial: la ventana de Tarea ahora se ajusta al area util de la pantalla (ya no usa maximizado que tapaba la barra inferior). Los botones 'Marcar completada' y 'Guardar tarea' quedan SIEMPRE visibles por encima de la barra de tareas."
+  "notas": "Version 7.8 - Reservas: los items se ingresan por persona (p.p.) y ahora el sistema los multiplica por el numero de pasajeros. Cada item tiene una casilla 'x pax' (por defecto toma los pasajeros de la reserva), muestra su subtotal, y el Total (monto negociado) = suma de (precio p.p. x pasajeros). Los items que vienen del tarifario traen la cantidad de pasajeros automaticamente."
 }
