@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "8.1"
+VERSION = "8.2"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1445,7 +1445,99 @@ def registrar_reserva(rec, cfg):
         rec["asesor"] = asesor
     data["items"].append(rec)
     guardar_reservas(data)
+    # Notificar por correo a la asesora asignada (para que le llegue para su gestion).
+    # Solo si la reserva ya trae datos (las 'en blanco' se avisan luego al enviar).
+    # No bloquea el registro: el resultado se adjunta al rec devuelto (no se persiste).
+    if rec.get("cliente") or rec.get("destinos") or rec.get("destinos_detalle"):
+        try:
+            ok, info = notificar_reserva_asesora(rec, cfg)
+        except Exception as e:
+            ok, info = False, str(e)
+    else:
+        ok, info = None, "reserva en blanco"
+    rec["_notif_ok"] = ok
+    rec["_notif_info"] = info
     return numero, rec
+
+
+def _servicios_reserva_texto(rec):
+    """Resumen de servicios de la reserva (por destino) para el correo a la asesora."""
+    lineas = []
+    try:
+        for d in destinos_detalle_de(rec):
+            nom = d.get("nombre", "") or "(destino)"
+            servs = []
+            for k in ("hotel", "transporte", "guia", "actividad"):
+                for s in (d.get(k, []) or []):
+                    sv = s.get("servicio", "") or s.get("proveedor", "")
+                    if sv:
+                        servs.append(sv)
+            lineas.append(f"  - {nom}: " + (", ".join(servs) if servs else "(sin servicios)"))
+    except Exception:
+        pass
+    return "\n".join(lineas)
+
+
+def notificar_reserva_asesora(rec, cfg):
+    """Envia a la asesora asignada un correo con los datos de la reserva (y el voucher del
+       cliente si se puede) para su gestion. Devuelve (ok, info). No lanza excepciones."""
+    ase = rec.get("asesor", {}) or {}
+    if isinstance(ase, dict):
+        email = (ase.get("email", "") or "").strip()
+        nombre_ase = (ase.get("nombre", "") or "").strip() or "asesora"
+    else:
+        email, nombre_ase = "", str(ase)
+    if not email:
+        return False, "la asesora asignada no tiene correo configurado (Reservas > Asesores)"
+    numero = rec.get("numero", "")
+    creador = (rec.get("cotizado_por") or cfg.get("firma_nombre", "") or "").strip()
+    dests = ", ".join(rec.get("destinos", []) or []) or "-"
+    try:
+        monto = float(rec.get("monto", 0) or 0)
+    except Exception:
+        monto = 0.0
+    cuerpo = (
+        f"Hola {nombre_ase},\n\n"
+        "Se te asigno una nueva reserva para gestion:\n\n"
+        f"  Reserva N.: {numero}\n"
+        f"  Cliente / agencia: {rec.get('cliente','') or '-'}\n"
+        f"  Contacto: {rec.get('contacto','') or '-'}\n"
+        f"  Destinos: {dests}\n"
+        f"  Fechas de viaje: {rec.get('fechas_viaje','') or '-'}\n"
+        f"  Pasajeros: {rec.get('pax_txt','') or '-'}\n"
+        f"  Monto: USD {monto:,.2f}\n\n"
+        "Servicios:\n" + (_servicios_reserva_texto(rec) or "  (ver detalle en el sistema)") + "\n\n"
+        "Por favor abre el modulo Reservas para confirmar proveedores y enviar los vouchers.\n"
+        + (f"\nCreada por: {creador}\n" if creador else "")
+        + f"\n{cfg.get('empresa','INNOBA Colombia DMC')}"
+    )
+    asunto = f"Nueva reserva {numero} asignada - {rec.get('cliente','')}"
+    # Intentar adjuntar el voucher del cliente; si falla, enviar solo texto.
+    try:
+        ruta = os.path.join(tempfile.gettempdir(), f"Reserva_{numero}.pdf")
+        generar_voucher_cliente(cfg, rec, ruta)
+        enviar_correo(cfg, email, asunto, cuerpo, ruta)
+        return True, email
+    except Exception:
+        try:
+            enviar_correo_texto(cfg, email, asunto, cuerpo)
+            return True, email
+        except Exception as e:
+            return False, str(e)
+
+
+def _texto_notif_reserva(guardado):
+    """Linea para el messagebox que informa si se le aviso a la asesora por correo."""
+    ok = guardado.get("_notif_ok")
+    if ok is True:
+        return f"\n\n✉ Se notifico a la asesora por correo ({guardado.get('_notif_info','')})."
+    if ok is None:
+        return ("\n\nℹ Cuando completes los datos, usa el boton '✉ Enviar a la asesora' "
+                "en la reserva para avisarle.")
+    return ("\n\n⚠ No se pudo avisar a la asesora por correo: "
+            f"{guardado.get('_notif_info','') or 'sin correo'}.\n"
+            "Verifica el correo de la asesora (Reservas > Asesores) y el correo remitente "
+            "con su contrasena en 'Datos de mi empresa'.")
 
 
 def actualizar_reserva(numero, cambios):
@@ -3413,7 +3505,8 @@ class VentanaCotizaciones(ctk.CTkToplevel):
             "Reserva creada",
             f"Reserva N. {numero} creada desde {it.get('numero','')}.\n"
             f"Asignada a: {ase.get('nombre', '(sin asignar)')}\n\n"
-            "Abrela desde el modulo Reservas para gestionarla.", parent=self)
+            "Abrela desde el modulo Reservas para gestionarla."
+            + _texto_notif_reserva(guardado), parent=self)
 
     def _editar_cotizacion(self, it):
         app = self.master
@@ -5655,8 +5748,41 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         ctk.CTkButton(self.footer, text="Enviar voucher al cliente", height=38, corner_radius=10,
                       fg_color=CYAN, hover_color=BLUE, font=("Segoe UI", 12, "bold"),
                       command=self._enviar_cliente).pack(side="left", pady=9)
+        ctk.CTkButton(self.footer, text="✉ Enviar a la asesora", height=38, corner_radius=10,
+                      fg_color="#7A5AB5", hover_color="#63459A", font=("Segoe UI", 12, "bold"),
+                      command=self._enviar_asesora).pack(side="left", padx=(8, 0), pady=9)
         ctk.CTkLabel(self.footer, text="Acciones de la reserva", text_color="#BBD0EC",
                      font=("Segoe UI", 11)).pack(side="right", padx=16)
+
+    def _enviar_asesora(self):
+        # Sincroniza lo editado y notifica por correo a la asesora asignada.
+        try:
+            self._sync_items()
+        except Exception:
+            pass
+        try:
+            self.res["estado"] = self.v_estado.get()
+        except Exception:
+            pass
+        ase = self.res.get("asesor", {}) or {}
+        nom = ase.get("nombre", "") if isinstance(ase, dict) else str(ase)
+        if not (isinstance(ase, dict) and (ase.get("email") or "").strip()):
+            messagebox.showwarning(
+                "Sin correo de la asesora",
+                f"La asesora asignada ({nom or 'sin asignar'}) no tiene correo configurado.\n"
+                "Configuralo en el modulo Reservas > boton 'Asesores'.", parent=self)
+            return
+        ok, info = notificar_reserva_asesora(self.res, self.cfg)
+        if ok:
+            messagebox.showinfo("Enviado",
+                                f"Se envio la reserva {self.res.get('numero','')} a la asesora "
+                                f"{nom} ({info}).", parent=self)
+        else:
+            messagebox.showerror(
+                "No se pudo enviar",
+                f"No se pudo enviar el correo a la asesora: {info}\n\n"
+                "Verifica el correo remitente y su contrasena en 'Datos de mi empresa'.",
+                parent=self)
 
     def _pintar_pasajeros(self):
         for w in self.pax_box.winfo_children():
@@ -6983,7 +7109,8 @@ class ModuloReservas(ctk.CTkToplevel):
         ase = guardado.get("asesor", {}) or {}
         messagebox.showinfo("Reserva creada",
                             f"Reserva N. {numero} creada.\n"
-                            f"Asesor asignado: {ase.get('nombre','(sin asignar)')}")
+                            f"Asesor asignado: {ase.get('nombre','(sin asignar)')}"
+                            + _texto_notif_reserva(guardado))
         VentanaReservaDetalle(self, guardado, self.cfg, on_save=self._pintar)
 
     def _crear_blanco(self):
@@ -6999,7 +7126,8 @@ class ModuloReservas(ctk.CTkToplevel):
         messagebox.showinfo("Reserva creada",
                             f"Reserva N. {numero} creada (manual).\n"
                             f"Asesor asignado: {ase.get('nombre','(sin asignar)')}\n\n"
-                            "Completa los datos del cliente y agrega los servicios.")
+                            "Completa los datos del cliente y agrega los servicios."
+                            + _texto_notif_reserva(guardado))
         VentanaReservaDetalle(self, guardado, self.cfg, on_save=self._pintar)
 
 

@@ -1,5 +1,5 @@
 {
-  "version": "8.1",
+  "version": "8.2",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 8.1 - Reservas: el consecutivo ahora arranca en 2989 (la proxima reserva sera la 2989). Si ya existen reservas con un numero mayor, el consecutivo no baja."
+  "notas": "Version 8.2 - Reservas: cuando se crea/asigna una reserva, el sistema ahora ENVIA UN CORREO AUTOMATICO a la asesora asignada (a su correo configurado) con los datos de la reserva (numero, cliente, destinos, fechas, pasajeros, servicios, monto) y el voucher del cliente en PDF adjunto. Asi la reserva le llega para su gestion aunque este en otro computador. Nuevo boton 'Enviar a la asesora' en el detalle de la reserva para reenviar tras editar. El mensaje de creacion avisa si el correo se envio o si falta configurar el correo de la asesora / remitente."
 }
