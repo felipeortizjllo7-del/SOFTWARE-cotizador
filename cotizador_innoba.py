@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "6.5"
+VERSION = "6.6"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -568,6 +568,92 @@ def enviar_correo(cfg, destinatario, asunto, cuerpo, adjunto):
         s.ehlo()
         s.login(remit, pw)
         s.send_message(msg)
+
+
+def enviar_correo_texto(cfg, destinatario, asunto, cuerpo):
+    """Envia un correo solo de texto (sin adjunto), p.ej. el seguimiento comercial."""
+    remit = cfg.get("correo_remitente", "").strip()
+    servidor = (cfg.get("smtp_servidor", "") or "smtp.office365.com").strip()
+    try:
+        puerto = int(cfg.get("smtp_puerto", "587") or 587)
+    except Exception:
+        puerto = 587
+    pw = cfg.get("smtp_password", "")
+    if not remit or not pw:
+        raise ValueError("Falta configurar el correo remitente y su contrasena "
+                         "en 'Datos de mi empresa'.")
+    if not destinatario:
+        raise ValueError("No hay correo del cliente.")
+    msg = EmailMessage()
+    msg["From"] = remit
+    msg["To"] = destinatario
+    msg["Subject"] = asunto
+    msg.set_content(cuerpo)
+    with smtplib.SMTP(servidor, puerto, timeout=30) as s:
+        s.ehlo()
+        s.starttls(context=ssl.create_default_context())
+        s.ehlo()
+        s.login(remit, pw)
+        s.send_message(msg)
+
+
+def cuerpo_seguimiento_cotizacion(item, cfg):
+    """Texto del correo de seguimiento a una cotizacion, firmado por quien la hizo."""
+    quien = (item.get("cotizado_por") or item.get("asesor") or "").strip()
+    if not quien and cfg:
+        quien = (cfg.get("firma_nombre", "") or "").strip()
+    empresa = (cfg.get("empresa", "") if cfg else "") or "INNOBA Colombia DMC"
+    tel = (cfg.get("telefono", "") if cfg else "")
+    cliente = (item.get("cliente", "") or "").strip()
+    saludo = f"Hola{(' ' + cliente) if cliente else ''},\n\n"
+    firma = "\n".join(x for x in [quien, empresa, ("Cel: " + tel) if tel else ""] if x)
+    return (saludo +
+            "Espero que te encuentres muy bien.\n\n"
+            "Queria hacer un breve seguimiento a la cotizacion que te envie hace unos dias "
+            "para conocer si tuviste la oportunidad de revisarla y saber si existe alguna "
+            "inquietud o informacion adicional en la que podamos apoyarte.\n\n"
+            "Para nosotros sera un gusto acompanarte en este proyecto y adaptar la propuesta, "
+            "si es necesario, para que se ajuste a tus necesidades.\n\n"
+            "Quedo muy atento(a) a tus comentarios y a cualquier consulta que tengas. Sera un "
+            "placer ayudarte a hacer realidad esta experiencia.\n\n"
+            "Muchas gracias por tu tiempo y quedo pendiente de tu respuesta.\n\n"
+            "Cordialmente,\n" + firma)
+
+
+def procesar_correos_programados(cfg):
+    """Envia los correos de seguimiento PROGRAMADOS cuya fecha ya llego (una vez).
+       Devuelve la lista de numeros enviados. Requiere SMTP configurado."""
+    if not cfg or not (cfg.get("correo_remitente") and cfg.get("smtp_password")):
+        return []
+    data = cargar_cotizaciones()
+    hoy = datetime.date.today()
+    enviados = []
+    cambiado = False
+    for it in data.get("items", []):
+        if not it.get("auto_correo_seg"):
+            continue
+        if it.get("estado") in ("Ganada", "Perdida"):
+            continue
+        fseg = parse_fecha(it.get("fecha_seg", ""))
+        if not fseg or fseg > hoy:
+            continue
+        ya = _parse_fecha_iso(it.get("correo_seg_enviado", ""))
+        if ya and ya >= fseg:      # ya se envio para este ciclo de seguimiento
+            continue
+        dest = (it.get("email", "") or "").strip()
+        if not dest:
+            continue
+        asunto = f"Seguimiento de su cotizacion {it.get('numero','')} - {cfg.get('empresa','')}"
+        try:
+            enviar_correo_texto(cfg, dest, asunto, cuerpo_seguimiento_cotizacion(it, cfg))
+            it["correo_seg_enviado"] = hoy.isoformat()
+            enviados.append(it.get("numero", ""))
+            cambiado = True
+        except Exception:
+            pass
+    if cambiado:
+        guardar_cotizaciones(data)
+    return enviados
 
 
 def _ics_recordatorio(item, fecha_dt):
@@ -2625,6 +2711,26 @@ class VentanaCotizacionDetalle(ctk.CTkToplevel):
                       or (_cfg0.get("correo_remitente") if _cfg0 else "") or "")
         self.v_correo_seg = campo("Correo donde llega el recordatorio de seguimiento",
                                   correo_def)
+        self.cfg = _cfg0 or cargar_config()
+
+        # --- Correo de seguimiento AL CLIENTE ---
+        ctk.CTkLabel(cont, text="CORREO DE SEGUIMIENTO AL CLIENTE", text_color=NAVY,
+                     font=("Segoe UI", 13, "bold")).pack(anchor="w", pady=(6, 2))
+        self.v_correo_cli = campo("Correo del cliente", item.get("email", ""))
+        self.v_auto = tk.BooleanVar(value=bool(item.get("auto_correo_seg")))
+        ctk.CTkCheckBox(cont, text="Programar: enviarlo automaticamente cuando llegue la fecha "
+                        "de seguimiento (al abrir el sistema)", variable=self.v_auto,
+                        font=("Segoe UI", 11)).pack(anchor="w", pady=(0, 4))
+        fc = ctk.CTkFrame(cont, fg_color="transparent"); fc.pack(fill="x", pady=(0, 8))
+        ctk.CTkButton(fc, text="✉ Enviar seguimiento ahora", height=36, fg_color=CYAN,
+                      hover_color=BLUE, font=("Segoe UI", 12, "bold"),
+                      command=self._enviar_seguimiento).pack(side="left")
+        ctk.CTkButton(fc, text="Ver texto", height=36, width=90, fg_color=CARD2, text_color=NAVY,
+                      hover_color=LINE, command=self._ver_texto_seg).pack(side="left", padx=8)
+        if item.get("correo_seg_enviado"):
+            ctk.CTkLabel(fc, text="✓ Enviado " + item.get("correo_seg_enviado", ""),
+                         text_color=GREEN_H, font=("Segoe UI", 10, "bold")).pack(side="left", padx=8)
+
         ctk.CTkLabel(cont, text="Notas", text_color=MUTED,
                      font=("Segoe UI", 11)).pack(anchor="w", padx=2)
         self.txt_notas = ctk.CTkTextbox(cont, height=70, corner_radius=8, border_width=1,
@@ -2672,12 +2778,51 @@ class VentanaCotizacionDetalle(ctk.CTkToplevel):
             side="left", padx=(2, 6))
         self.tareas_rows.append(entry)
 
+    def _enviar_seguimiento(self):
+        dest = self.v_correo_cli.get().strip()
+        if not dest:
+            messagebox.showinfo("Correo del cliente",
+                                "Escribe el correo del cliente.", parent=self)
+            return
+        if not (self.cfg.get("correo_remitente") and self.cfg.get("smtp_password")):
+            messagebox.showwarning("Correo no configurado",
+                                   "Configura el correo remitente y su contrasena en "
+                                   "'Datos de mi empresa'.", parent=self)
+            return
+        if not messagebox.askyesno("Enviar seguimiento",
+                                   f"Enviar el correo de seguimiento a {dest}?", parent=self):
+            return
+        asunto = (f"Seguimiento de su cotizacion {self.item.get('numero','')} - "
+                  f"{self.cfg.get('empresa','')}")
+        try:
+            enviar_correo_texto(self.cfg, dest, asunto,
+                                cuerpo_seguimiento_cotizacion(self.item, self.cfg))
+        except Exception as e:
+            messagebox.showerror("No se pudo enviar", str(e), parent=self)
+            return
+        self.item["email"] = dest
+        self.item["correo_seg_enviado"] = datetime.date.today().isoformat()
+        messagebox.showinfo("Enviado", f"Correo de seguimiento enviado a {dest}.", parent=self)
+
+    def _ver_texto_seg(self):
+        top = ctk.CTkToplevel(self); top.title("Texto del correo de seguimiento")
+        top.geometry("560x480"); top.configure(fg_color=BG)
+        top.transient(self); top.grab_set()
+        ctk.CTkLabel(top, text="Asunto: Seguimiento de su cotizacion " +
+                     self.item.get("numero", ""), text_color=NAVY,
+                     font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=14, pady=(12, 4))
+        tb = ctk.CTkTextbox(top, fg_color=CARD, font=("Segoe UI", 12))
+        tb.pack(fill="both", expand=True, padx=14, pady=(0, 14))
+        tb.insert("1.0", cuerpo_seguimiento_cotizacion(self.item, self.cfg))
+
     def _guardar(self):
         self.item["cliente"] = self.v_cli.get().strip()
         self.item["asesor"] = self.v_ase.get().strip()
         self.item["estado"] = self.v_estado.get()
         self.item["fecha_seg"] = self.sel_fecha_seg.get_str()
         self.item["correo_seg"] = self.v_correo_seg.get().strip()
+        self.item["email"] = self.v_correo_cli.get().strip() or self.item.get("email", "")
+        self.item["auto_correo_seg"] = bool(self.v_auto.get())
         self.item["notas"] = self.txt_notas.get("1.0", "end").strip()
         self.item["tareas"] = [
             {"texto": r["texto"].get().strip(), "fecha": r["fecha"].get().strip(),
@@ -4373,6 +4518,15 @@ class App(ctk.CTkToplevel):
                 importar_cotizaciones_html()
             except Exception:
                 pass
+            try:
+                enviados = procesar_correos_programados(self.cfg)
+            except Exception:
+                enviados = []
+            if enviados:
+                self.after(0, lambda: messagebox.showinfo(
+                    "Correos de seguimiento programados",
+                    f"Se enviaron {len(enviados)} correo(s) de seguimiento a clientes:\n"
+                    + ", ".join(enviados)))
             try:
                 pend = seguimientos_pendientes()
             except Exception:

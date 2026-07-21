@@ -1,5 +1,5 @@
 {
-  "version": "6.5",
+  "version": "6.6",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 6.5 - PDF de cotizacion: el encabezado ahora muestra AGENCIA/CLIENTE (Nombre agencia, Asesor) y DETALLES DE LA COTIZACION (No. cotizacion, Fecha de cotizacion, Destino, Valida hasta, Fechas de viaje, Pasajeros)."
+  "notas": "Version 6.6 - Seguimiento de cotizaciones: se puede enviar (o PROGRAMAR) el correo de seguimiento al cliente desde el sistema, con el texto de seguimiento firmado por quien hizo la cotizacion. Boton 'Enviar seguimiento ahora' y opcion 'Programar' para enviarlo automaticamente al llegar la fecha de seguimiento (al abrir la app). Boton 'Ver texto' para previsualizar."
 }
