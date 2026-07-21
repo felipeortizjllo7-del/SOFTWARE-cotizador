@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "7.6"
+VERSION = "7.7"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -7027,10 +7027,18 @@ class VentanaTareaDetalle(ctk.CTkToplevel):
                       command=self._guardar).pack(side="right", padx=(8, 16), pady=9)
 
     def _max(self):
+        # Ajustar al area util (deja la barra de tareas libre) para que el footer
+        # con 'Guardar tarea' quede SIEMPRE visible por encima de la barra de tareas.
         try:
-            self.state("zoomed")
+            wah = _alto_util_pantalla(fallback=(self.winfo_screenheight() - 70))
+            sw = self.winfo_screenwidth()
+            alto = max(520, wah - 44)
+            self.geometry(f"{min(1100, sw - 80)}x{alto}+40+0")
         except Exception:
-            pass
+            try:
+                self.state("zoomed")
+            except Exception:
+                pass
 
     def _pintar_checklist(self):
         for w in self.check_box.winfo_children():

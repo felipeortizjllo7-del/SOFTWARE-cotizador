@@ -1,5 +1,5 @@
 {
-  "version": "7.6",
+  "version": "7.7",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 7.6 - Ventana de Seguimiento de cotizacion: los botones Guardar y Cancelar ahora estan en una barra FIJA al fondo (siempre visible), ya no se cortan aunque la pantalla sea pequena. La ventana ajusta su alto al area util de la pantalla."
+  "notas": "Version 7.7 - Modulo Comercial: la ventana de Tarea ahora se ajusta al area util de la pantalla (ya no usa maximizado que tapaba la barra inferior). Los botones 'Marcar completada' y 'Guardar tarea' quedan SIEMPRE visibles por encima de la barra de tareas."
 }
