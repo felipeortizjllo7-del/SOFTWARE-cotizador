@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "7.5"
+VERSION = "7.6"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -2827,8 +2827,20 @@ class VentanaCotizacionDetalle(ctk.CTkToplevel):
         super().__init__(master)
         self.item = item; self.on_save = on_save
         self.title("Cotizacion " + item.get("numero", ""))
-        self.geometry("660x700"); self.configure(fg_color=BG)
+        alto = min(700, _alto_util_pantalla(700))
+        self.geometry(f"660x{alto}"); self.configure(fg_color=BG)
         self.transient(master); self.grab_set()
+        # Barra FIJA al fondo (siempre visible) con Guardar / Cancelar
+        footer = ctk.CTkFrame(self, fg_color=CARD2, height=60, corner_radius=0)
+        footer.pack(side="bottom", fill="x")
+        footer.pack_propagate(False)
+        ctk.CTkButton(footer, text="💾  Guardar", fg_color=GREEN, hover_color=GREEN_H,
+                      height=40, width=170, font=("Segoe UI", 13, "bold"),
+                      command=self._guardar).pack(side="right", padx=(6, 16), pady=10)
+        ctk.CTkButton(footer, text="Cancelar", fg_color=CARD, text_color=NAVY, hover_color=LINE,
+                      height=40, width=120, border_width=1, border_color=LINE,
+                      font=("Segoe UI", 12, "bold"),
+                      command=self.destroy).pack(side="right", padx=6, pady=10)
         cont = ctk.CTkScrollableFrame(self, fg_color=BG)
         cont.pack(fill="both", expand=True, padx=16, pady=16)
         ctk.CTkLabel(cont, text=f"{item.get('numero','')}   ·   {item.get('fecha','')}",
@@ -2908,11 +2920,8 @@ class VentanaCotizacionDetalle(ctk.CTkToplevel):
             self._add_tarea(t)
         if not item.get("tareas"):
             self._add_tarea()
-        bts = ctk.CTkFrame(cont, fg_color="transparent"); bts.pack(fill="x", pady=12)
-        ctk.CTkButton(bts, text="Guardar", fg_color=GREEN, hover_color=GREEN_H,
-                      font=("Segoe UI", 13, "bold"), command=self._guardar).pack(side="right")
-        ctk.CTkButton(bts, text="Cancelar", fg_color=CARD2, text_color=NAVY, hover_color=LINE,
-                      command=self.destroy).pack(side="right", padx=8)
+        # (Guardar / Cancelar viven en la barra fija del fondo; ver __init__)
+        ctk.CTkFrame(cont, fg_color="transparent", height=8).pack()
 
     def _add_tarea(self, t=None):
         t = t or {}
