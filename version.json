@@ -1,5 +1,5 @@
 {
-  "version": "7.0",
+  "version": "7.1",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 7.0 - Reservas: el bloque de cliente ahora es como en cotizaciones: boton 'Buscar cliente' (lupa) y el Contacto como desplegable que se llena con los vendedores de la agencia. Al elegir el cliente se coloca agencia + contacto + correo de una vez."
+  "notas": "Version 7.1 - Reservas: los botones Guardar reserva, Voucher cliente y Enviar voucher ahora estan en una barra FIJA en la parte SUPERIOR de la ventana (siempre visibles), para que nunca queden tapados por la barra de tareas y se pueda guardar sin problema."
 }

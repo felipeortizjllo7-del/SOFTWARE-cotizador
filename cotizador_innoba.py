@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "7.0"
+VERSION = "7.1"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -5265,9 +5265,9 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self.geometry("980x680+60+10")
         self.transient(master); self.grab_set()
         self.after(60, self._maximizar)
-        # Barra inferior FIJA (siempre visible) con las acciones
-        self.footer = ctk.CTkFrame(self, fg_color=CARD, corner_radius=0, height=58)
-        self.footer.pack(side="bottom", fill="x"); self.footer.pack_propagate(False)
+        # Barra de acciones FIJA ARRIBA (siempre visible, no la tapa la barra de tareas)
+        self.footer = ctk.CTkFrame(self, fg_color=NAVY, corner_radius=0, height=56)
+        self.footer.pack(side="top", fill="x"); self.footer.pack_propagate(False)
         cont = ctk.CTkScrollableFrame(self, fg_color=BG)
         cont.pack(fill="both", expand=True, padx=16, pady=16)
 
@@ -5490,15 +5490,19 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self.serv_box = ctk.CTkFrame(cont, fg_color="transparent"); self.serv_box.pack(fill="x")
         self._pintar_servicios()
 
-        # Los botones de accion van en la barra inferior FIJA (self.footer)
-        ctk.CTkButton(self.footer, text="Voucher cliente (PDF)", height=40, fg_color=NAVY,
-                      hover_color=NAVY2, command=self._voucher_cliente).pack(
-            side="left", padx=(16, 8), pady=9)
-        ctk.CTkButton(self.footer, text="Enviar voucher al cliente", height=40, fg_color=CYAN,
-                      hover_color=BLUE, command=self._enviar_cliente).pack(side="left", pady=9)
-        ctk.CTkButton(self.footer, text="Guardar reserva", height=40, fg_color=GREEN,
-                      hover_color=GREEN_H, command=self._guardar).pack(
-            side="right", padx=(8, 16), pady=9)
+        # Botones de accion en la barra FIJA superior (self.footer, fondo navy)
+        ctk.CTkButton(self.footer, text="💾  Guardar reserva", height=38, corner_radius=10,
+                      fg_color=GREEN, hover_color=GREEN_H, font=("Segoe UI", 13, "bold"),
+                      command=self._guardar).pack(side="left", padx=(16, 8), pady=9)
+        ctk.CTkButton(self.footer, text="Voucher cliente (PDF)", height=38, corner_radius=10,
+                      fg_color="#FFFFFF", text_color=NAVY, hover_color="#E7EEF8",
+                      font=("Segoe UI", 12, "bold"),
+                      command=self._voucher_cliente).pack(side="left", padx=(0, 8), pady=9)
+        ctk.CTkButton(self.footer, text="Enviar voucher al cliente", height=38, corner_radius=10,
+                      fg_color=CYAN, hover_color=BLUE, font=("Segoe UI", 12, "bold"),
+                      command=self._enviar_cliente).pack(side="left", pady=9)
+        ctk.CTkLabel(self.footer, text="Acciones de la reserva", text_color="#BBD0EC",
+                     font=("Segoe UI", 11)).pack(side="right", padx=16)
 
     def _pintar_pasajeros(self):
         for w in self.pax_box.winfo_children():
