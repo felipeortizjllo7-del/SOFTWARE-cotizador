@@ -1,5 +1,5 @@
 {
-  "version": "8.0",
+  "version": "8.1",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 8.0 - Los botones de Guardar/Cancelar de la ventana de Tarea (modulo Comercial) y de Seguimiento de cotizacion ahora estan en una barra FIJA ARRIBA, siempre visible sin importar el tamano de pantalla ni la escala (DPI) de Windows. Corrige el problema de que no se veian/usaban los botones en pantallas con escala 125%."
+  "notas": "Version 8.1 - Reservas: el consecutivo ahora arranca en 2989 (la proxima reserva sera la 2989). Si ya existen reservas con un numero mayor, el consecutivo no baja."
 }

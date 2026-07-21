@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "8.0"
+VERSION = "8.1"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1375,7 +1375,7 @@ def generar_pdf(cfg, datos, bloques, total, ruta_salida):
 # MODULO RESERVAS: datos, consecutivo, rotacion de asesores y vouchers PDF
 # ============================================================================
 RESERVAS_PATH = os.path.join(datos_dir(), "reservas.json")
-RES_SEQ_INICIAL = 2951   # el proximo consecutivo asignado sera 2952
+RES_SEQ_INICIAL = 2988   # el proximo consecutivo asignado sera 2989
 
 ESTADOS_RES = ["Confirmada", "Confirmada con pago", "Aplazada", "Anulada"]
 # Semaforo: aprobada (con pago) = verde | en seguimiento (confirmada/aplazada) = amarillo |
@@ -1399,6 +1399,13 @@ def cargar_reservas():
             if isinstance(d, dict) and "items" in d:
                 d.setdefault("seq", RES_SEQ_INICIAL)
                 d.setdefault("rot", 0)
+                # Piso del consecutivo: nunca por debajo de RES_SEQ_INICIAL (no baja si
+                # ya se paso ese numero). Asi el proximo consecutivo arranca en 2989.
+                try:
+                    d["seq"] = max(int(d.get("seq", RES_SEQ_INICIAL) or RES_SEQ_INICIAL),
+                                   RES_SEQ_INICIAL)
+                except Exception:
+                    d["seq"] = RES_SEQ_INICIAL
                 return d
         except Exception:
             pass
