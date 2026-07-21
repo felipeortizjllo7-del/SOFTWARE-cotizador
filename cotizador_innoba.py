@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "7.8"
+VERSION = "7.9"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1462,6 +1462,51 @@ def _pax_desde_snapshot(snap):
     return ", ".join(partes) or "-"
 
 
+def _acom_de_hab(hab):
+    """Acomodacion dominante (sencilla/doble/triple) a partir de la habitacion."""
+    if isinstance(hab, dict):
+        best = max(("sencilla", "doble", "triple"),
+                   key=lambda k: float(hab.get(k, 0) or 0))
+        if float(hab.get(best, 0) or 0) > 0:
+            return best
+    elif isinstance(hab, str):
+        for k in ("sencilla", "doble", "triple"):
+            if k in hab.lower():
+                return k
+    return "doble"
+
+
+def items_cobro_desde_snapshot(snap, cfg=None):
+    """Reconstruye los items cotizados (hoteles + tours/traslados) con su precio POR
+       PERSONA del tarifario, para precargarlos en la reserva. cant = # de pasajeros."""
+    snap = snap or {}
+    try:
+        precios = cargar_precios_seguro()
+    except Exception:
+        precios = {}
+    ad = int(snap.get("adultos", 2) or 2)
+    ninos = len(snap.get("ages", []) or [])
+    pax = max(1, ad + ninos)
+    acom = _acom_de_hab(snap.get("hab", ""))
+    items = []
+    for tr in snap.get("tramos", []):
+        dest = tr.get("destino", "")
+        noches = int(tr.get("noches", 1) or 1)
+        hoteles = hoteles_detalle(precios, dest)
+        for hname in tr.get("hoteles", []):
+            hd = next((h for h in hoteles if h.get("nombre") == hname), None)
+            val = precio_hotel_usd_pp(precios, dest, hd, acom, noches, cfg) if hd else 0.0
+            items.append({"desc": f"{dest} - {hname} ({acom}, {noches}N, p.p.)",
+                          "valor": round(float(val or 0), 2), "cant": pax})
+        servs = servicios_terrestres(precios, dest)
+        for sname in list(tr.get("trans", [])) + list(tr.get("act", [])):
+            sd = next((s for s in servs if s.get("nombre") == sname), None)
+            val = precio_servicio_usd_pp(precios, dest, sd, pax, cfg) if sd else 0.0
+            items.append({"desc": f"{dest} - {sname} (p.p., grupo {pax})",
+                          "valor": round(float(val or 0), 2), "cant": pax})
+    return items
+
+
 def reserva_desde_cotizacion(cot):
     """Construye el borrador de reserva a partir de una cotizacion del historial.
        Extrae hoteles y servicios (traslados/tours) como renglones asignables a
@@ -1485,6 +1530,10 @@ def reserva_desde_cotizacion(cot):
         detalle.append(item)
     ini, fin = _fechas_in_out(cot.get("fechas_viaje", ""))
     ciudad = (cot.get("destinos", []) or [""])[0]
+    # Precargar los items cobrados con el detalle cotizado (servicios + precio p.p.)
+    items_cobro = items_cobro_desde_snapshot(snap)
+    monto = (round(sum(it["valor"] * it.get("cant", 1) for it in items_cobro), 2)
+             if items_cobro else float(cot.get("total", 0) or 0))
     rec = {
         "cot_origen": cot.get("numero", ""),
         "cliente": cot.get("cliente", ""),
@@ -1495,8 +1544,9 @@ def reserva_desde_cotizacion(cot):
         "pax_txt": _pax_desde_snapshot(snap),
         "hab": snap.get("hab", ""),
         "estado": "Confirmada",
-        "monto": float(cot.get("total", 0) or 0),
+        "monto": monto,
         "moneda": "USD",
+        "items_cobro": items_cobro,
         "destinos_detalle": detalle,
         "itinerario": snap.get("itinerario", ""),
         "notas": "",

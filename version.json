@@ -1,5 +1,5 @@
 {
-  "version": "7.8",
+  "version": "7.9",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 7.8 - Reservas: los items se ingresan por persona (p.p.) y ahora el sistema los multiplica por el numero de pasajeros. Cada item tiene una casilla 'x pax' (por defecto toma los pasajeros de la reserva), muestra su subtotal, y el Total (monto negociado) = suma de (precio p.p. x pasajeros). Los items que vienen del tarifario traen la cantidad de pasajeros automaticamente."
+  "notas": "Version 7.9 - Reservas: cuando la reserva viene de una cotizacion, la seccion 'ITEMS DE LA RESERVA' ahora se precarga automaticamente con el DETALLE cotizado por el cliente (hoteles + traslados + tours) y su precio por persona del tarifario, con la cantidad de pasajeros y el subtotal. Asi el area de reservas sabe exactamente que cotizo el cliente final y por cuanto."
 }
