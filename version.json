@@ -1,5 +1,5 @@
 {
-  "version": "7.9",
+  "version": "8.0",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 7.9 - Reservas: cuando la reserva viene de una cotizacion, la seccion 'ITEMS DE LA RESERVA' ahora se precarga automaticamente con el DETALLE cotizado por el cliente (hoteles + traslados + tours) y su precio por persona del tarifario, con la cantidad de pasajeros y el subtotal. Asi el area de reservas sabe exactamente que cotizo el cliente final y por cuanto."
+  "notas": "Version 8.0 - Los botones de Guardar/Cancelar de la ventana de Tarea (modulo Comercial) y de Seguimiento de cotizacion ahora estan en una barra FIJA ARRIBA, siempre visible sin importar el tamano de pantalla ni la escala (DPI) de Windows. Corrige el problema de que no se veian/usaban los botones en pantallas con escala 125%."
 }

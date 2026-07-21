@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "7.9"
+VERSION = "8.0"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -2877,12 +2877,15 @@ class VentanaCotizacionDetalle(ctk.CTkToplevel):
         super().__init__(master)
         self.item = item; self.on_save = on_save
         self.title("Cotizacion " + item.get("numero", ""))
-        alto = min(700, _alto_util_pantalla(700))
-        self.geometry(f"660x{alto}"); self.configure(fg_color=BG)
+        self.geometry("660x680+140+10"); self.configure(fg_color=BG)
         self.transient(master); self.grab_set()
-        # Barra FIJA al fondo (siempre visible) con Guardar / Cancelar
+        try:
+            self.after(60, lambda: self.state("zoomed"))
+        except Exception:
+            pass
+        # Barra FIJA ARRIBA (siempre visible, no depende del alto ni del DPI) con Guardar / Cancelar
         footer = ctk.CTkFrame(self, fg_color=CARD2, height=60, corner_radius=0)
-        footer.pack(side="bottom", fill="x")
+        footer.pack(side="top", fill="x")
         footer.pack_propagate(False)
         ctk.CTkButton(footer, text="💾  Guardar", fg_color=GREEN, hover_color=GREEN_H,
                       height=40, width=170, font=("Segoe UI", 13, "bold"),
@@ -7003,11 +7006,12 @@ class VentanaTareaDetalle(ctk.CTkToplevel):
         self.tarea = tarea; self.cfg = cfg; self.on_save = on_save
         self.title("Tarea " + tarea.get("numero", "nueva"))
         self.configure(fg_color=BG)
-        self.geometry("760x680+120+20")
+        self.geometry("860x720+80+10")
         self.transient(master); self.grab_set()
         self.after(60, self._max)
+        # Barra de acciones FIJA ARRIBA (siempre visible, no depende del alto ni del DPI)
         self.footer = ctk.CTkFrame(self, fg_color=CARD, corner_radius=0, height=58)
-        self.footer.pack(side="bottom", fill="x"); self.footer.pack_propagate(False)
+        self.footer.pack(side="top", fill="x"); self.footer.pack_propagate(False)
         cont = ctk.CTkScrollableFrame(self, fg_color=BG)
         cont.pack(fill="both", expand=True, padx=16, pady=16)
 
@@ -7106,24 +7110,23 @@ class VentanaTareaDetalle(ctk.CTkToplevel):
         self.txt_notas.pack(fill="x", padx=2, pady=(0, 8))
         self.txt_notas.insert("1.0", tarea.get("notas", "") or "")
 
-        ctk.CTkButton(self.footer, text="✓ Marcar completada", height=40, fg_color=GREEN,
-                      hover_color=GREEN_H, command=self._completar).pack(side="left", padx=(16, 8), pady=9)
-        ctk.CTkButton(self.footer, text="Guardar tarea", height=40, fg_color=NAVY, hover_color=NAVY2,
+        ctk.CTkButton(self.footer, text="💾  Guardar tarea", height=40, width=190, fg_color=GREEN,
+                      hover_color=GREEN_H, font=("Segoe UI", 13, "bold"),
                       command=self._guardar).pack(side="right", padx=(8, 16), pady=9)
+        ctk.CTkButton(self.footer, text="✓ Marcar completada", height=40, fg_color=NAVY,
+                      hover_color=NAVY2, font=("Segoe UI", 12, "bold"),
+                      command=self._completar).pack(side="right", padx=8, pady=9)
+        ctk.CTkButton(self.footer, text="Cancelar", height=40, width=100, fg_color=CARD2,
+                      text_color=NAVY, hover_color=LINE, command=self.destroy).pack(
+            side="left", padx=(16, 8), pady=9)
 
     def _max(self):
-        # Ajustar al area util (deja la barra de tareas libre) para que el footer
-        # con 'Guardar tarea' quede SIEMPRE visible por encima de la barra de tareas.
+        # El gestor de ventanas maximiza respetando la barra de tareas; como los
+        # botones estan en la barra fija de ARRIBA, siempre quedan visibles.
         try:
-            wah = _alto_util_pantalla(fallback=(self.winfo_screenheight() - 70))
-            sw = self.winfo_screenwidth()
-            alto = max(520, wah - 44)
-            self.geometry(f"{min(1100, sw - 80)}x{alto}+40+0")
+            self.state("zoomed")
         except Exception:
-            try:
-                self.state("zoomed")
-            except Exception:
-                pass
+            pass
 
     def _pintar_checklist(self):
         for w in self.check_box.winfo_children():
