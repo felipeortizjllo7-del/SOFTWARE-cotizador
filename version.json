@@ -1,5 +1,5 @@
 {
-  "version": "7.3",
+  "version": "7.4",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 7.3 - Cotizador HTML: cuando la agencia elige SU logo, el PDF sale en marca blanca (a nombre de la agencia): se quita todo lo de INNOBA DMC, los datos de contacto y la firma del asesor; se puede poner el nombre de la agencia. Si elige el logo INNOBA, el PDF queda con INNOBA y la firma de quien cotizo. El % de ganancia aplica en ambos casos."
+  "notas": "Version 7.4 - Historial de cotizaciones: las tarjetas de indicadores En seguimiento, Seguim. vencidos, Ganadas y Perdidas ahora son CLICABLES y filtran la lista para agrupar esas cotizaciones y gestionarlas mas facil. La tarjeta activa se resalta y aparece una barra 'Ver todas' para quitar el filtro."
 }

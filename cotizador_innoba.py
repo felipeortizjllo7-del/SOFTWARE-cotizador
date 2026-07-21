@@ -59,7 +59,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "7.3"
+VERSION = "7.4"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1927,15 +1927,22 @@ def indicadores_reservas():
     return ind
 
 
-def _kpi_card(parent, titulo, valor, color, ancho=140, alto=66):
-    """Tarjeta compacta de indicador (valor grande + titulo)."""
-    card = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=12, border_width=1,
-                        border_color=LINE, width=ancho, height=alto)
+def _kpi_card(parent, titulo, valor, color, ancho=140, alto=66, on_click=None, active=False):
+    """Tarjeta compacta de indicador (valor grande + titulo). Si on_click se pasa,
+       la tarjeta es clicable (para filtrar) y 'active' la resalta."""
+    card = ctk.CTkFrame(parent, fg_color=("#EAF2FD" if active else CARD), corner_radius=12,
+                        border_width=(2 if active else 1),
+                        border_color=(color if active else LINE), width=ancho, height=alto)
     card.pack(side="left", padx=4, fill="y"); card.pack_propagate(False)
-    ctk.CTkLabel(card, text=str(valor), text_color=color,
-                 font=("Segoe UI", 18, "bold")).pack(pady=(9, 0), padx=8)
-    ctk.CTkLabel(card, text=titulo, text_color=MUTED, font=("Segoe UI", 10),
-                 wraplength=ancho - 14).pack(pady=(0, 8), padx=6)
+    l1 = ctk.CTkLabel(card, text=str(valor), text_color=color, font=("Segoe UI", 18, "bold"))
+    l1.pack(pady=(9, 0), padx=8)
+    l2 = ctk.CTkLabel(card, text=titulo, text_color=MUTED, font=("Segoe UI", 10),
+                      wraplength=ancho - 14)
+    l2.pack(pady=(0, 8), padx=6)
+    if on_click:
+        for w in (card, l1, l2):
+            w.configure(cursor="hand2")
+            w.bind("<Button-1>", lambda e: on_click())
     return card
 
 
@@ -3109,30 +3116,67 @@ class VentanaCotizaciones(ctk.CTkToplevel):
         self.kpis.grid(row=2, column=0, sticky="ew", padx=12, pady=(0, 4))
         self.lista = ctk.CTkScrollableFrame(self, fg_color=CARD, corner_radius=12)
         self.lista.grid(row=3, column=0, sticky="nsew", padx=16, pady=(0, 14))
+        self.filtro_seg = None   # None / "seg" / "venc" / "ganada" / "perdida"
         self.after(120, e.focus_set)
         self.bind("<Escape>", lambda ev: self.destroy())
         self._pintar()
+
+    def _toggle_filtro(self, f):
+        self.filtro_seg = None if self.filtro_seg == f else f
+        self._pintar()
+
+    def _pasa_filtro(self, it):
+        f = self.filtro_seg
+        if not f:
+            return True
+        estado = it.get("estado", "Pendiente")
+        if f == "seg":
+            return estado == "En seguimiento"
+        if f == "ganada":
+            return estado == "Ganada"
+        if f == "perdida":
+            return estado == "Perdida"
+        if f == "venc":
+            fseg = parse_fecha(it.get("fecha_seg", ""))
+            return bool(fseg and fseg <= datetime.date.today()
+                        and estado not in ("Ganada", "Perdida"))
+        return True
 
     def _pintar_kpis(self):
         for w in self.kpis.winfo_children():
             w.destroy()
         ind = indicadores_cotizaciones()
         fila = ctk.CTkFrame(self.kpis, fg_color="transparent"); fila.pack(fill="x")
-        _kpi_card(fila, "Cotizaciones", ind["total"], NAVY)
-        _kpi_card(fila, "En seguimiento", ind.get("En seguimiento", 0), "#D9A400")
-        _kpi_card(fila, "Ganadas", ind.get("Ganada", 0), GREEN)
-        _kpi_card(fila, "Perdidas", ind.get("Perdida", 0), RED)
+        _kpi_card(fila, "Cotizaciones", ind["total"], NAVY,
+                  on_click=lambda: self._toggle_filtro(None), active=(self.filtro_seg is None))
+        _kpi_card(fila, "En seguimiento", ind.get("En seguimiento", 0), "#D9A400",
+                  on_click=lambda: self._toggle_filtro("seg"), active=(self.filtro_seg == "seg"))
+        _kpi_card(fila, "Ganadas", ind.get("Ganada", 0), GREEN,
+                  on_click=lambda: self._toggle_filtro("ganada"), active=(self.filtro_seg == "ganada"))
+        _kpi_card(fila, "Perdidas", ind.get("Perdida", 0), RED,
+                  on_click=lambda: self._toggle_filtro("perdida"), active=(self.filtro_seg == "perdida"))
         _kpi_card(fila, "Conversion", f"{ind['conversion']}%", "#7A5AB5")
         _kpi_card(fila, "Ganado (USD)", usd(ind["monto_ganado"]), GREEN_H, ancho=170)
         _kpi_card(fila, "Ticket prom.", usd(ind["ticket"]), NAVY, ancho=150)
         _kpi_card(fila, f"Del mes ({ind['mes_n']})", usd(ind["mes_usd"]), BLUE, ancho=160)
         _kpi_card(fila, "Seguim. vencidos", ind["seg_vencidos"],
-                  RED if ind["seg_vencidos"] else MUTED)
+                  RED if ind["seg_vencidos"] else MUTED,
+                  on_click=lambda: self._toggle_filtro("venc"), active=(self.filtro_seg == "venc"))
 
     def _pintar(self):
         self._pintar_kpis()
         for w in self.lista.winfo_children():
             w.destroy()
+        etiquetas = {"seg": "En seguimiento", "venc": "Seguimientos vencidos",
+                     "ganada": "Ganadas", "perdida": "Perdidas"}
+        if self.filtro_seg in etiquetas:
+            bar = ctk.CTkFrame(self.lista, fg_color="#EAF2FD", corner_radius=8)
+            bar.pack(fill="x", padx=4, pady=(2, 4))
+            ctk.CTkLabel(bar, text="Filtro activo:  " + etiquetas[self.filtro_seg],
+                         text_color=NAVY, font=("Segoe UI", 11, "bold")).pack(side="left", padx=10, pady=6)
+            ctk.CTkButton(bar, text="Ver todas ✕", width=100, height=28, fg_color=NAVY,
+                          hover_color=NAVY2, command=lambda: self._toggle_filtro(None)).pack(
+                side="right", padx=8)
         q = _nz(self.var_q.get())
         items = list(reversed(self.data.get("items", [])))   # mas recientes primero
         n = 0
@@ -3140,6 +3184,8 @@ class VentanaCotizaciones(ctk.CTkToplevel):
             campos = " ".join([it.get("numero", ""), it.get("cliente", ""),
                                it.get("asesor", "")])
             if q and q not in _nz(campos):
+                continue
+            if not self._pasa_filtro(it):
                 continue
             n += 1
             estado = it.get("estado", "Pendiente")
