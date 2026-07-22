@@ -1,5 +1,5 @@
 {
-  "version": "8.8",
+  "version": "8.9",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 8.8 - Cotizaciones -> Reserva sin duplicar: al enviar una cotizacion a reserva, el sistema revisa (incluso en otros equipos via nube) si esa cotizacion YA tiene reserva; si ya la tiene, avisa y NO la crea de nuevo salvo que se confirme. El boton cambia a 'Reserva NNNN' en verde cuando ya se creo. Las reservas y cotizaciones siguen sincronizadas entre todos los equipos."
+  "notas": "Version 8.9 - Reservas: (1) la lista se ordena por consecutivo DESCENDENTE (la ultima de primero). (2) Nuevo boton 'Reordenar N°' que renumera las reservas de forma continua (quita saltos como 2993 -> 3015) y las re-sincroniza para que todos los equipos adopten los mismos numeros. (3) El asesor asignado por rotacion se conserva y viaja igual a todos los equipos (no se cambia ni se troca al sincronizar)."
 }

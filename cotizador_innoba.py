@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "8.8"
+VERSION = "8.9"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -537,8 +537,8 @@ def importar_reservas_nube():
             a = json.dumps(local, sort_keys=True, ensure_ascii=False)
             b = json.dumps(rc, sort_keys=True, ensure_ascii=False)
             if a != b:
-                # conservar el numero local (ya podria haberse renumerado por choque)
-                rc["numero"] = local.get("numero", rc.get("numero", ""))
+                # adoptar el registro remoto (incluye el numero canonico de la nube);
+                # asi una reorganizacion del consecutivo se propaga a todos los equipos
                 local.clear(); local.update(rc); cambios += 1
         else:
             # si el numero choca con uno local de OTRA reserva, renumerar la entrante
@@ -558,6 +558,38 @@ def importar_reservas_nube():
     if cambios:
         guardar_reservas(data)
     return cambios
+
+
+def compactar_consecutivo_reservas():
+    """Renumera las reservas de forma CONTINUA (2989, 2990, 2991, ...) en orden de
+       creacion, para quitar saltos en el consecutivo, y las re-sube a la nube para
+       que todos los equipos adopten el mismo numero. Devuelve el ultimo numero usado."""
+    data = cargar_reservas()
+
+    def clave(it):
+        f = str(it.get("fecha_creacion", "") or "")
+        try:
+            n = int(re.sub(r"\D", "", str(it.get("numero", "0"))) or 0)
+        except Exception:
+            n = 0
+        return (f or "9999", n)
+
+    orden = sorted(data.get("items", []), key=clave)
+    seq = RES_SEQ_INICIAL
+    for it in orden:
+        seq += 1
+        it["numero"] = str(seq)
+        if not it.get("uid"):
+            it["uid"] = "RES-" + uuid.uuid4().hex[:12]
+    data["seq"] = seq
+    guardar_reservas(data)
+    # re-subir para que los demas equipos adopten los numeros nuevos
+    try:
+        for it in orden:
+            enviar_reserva_nube(it)
+    except Exception:
+        pass
+    return seq
 
 
 def sincronizar_reservas_nube():
@@ -7334,6 +7366,9 @@ class ModuloReservas(ctk.CTkToplevel):
             ctk.CTkButton(hb, text="☁ Sincronizar", width=130, height=36, corner_radius=10,
                           fg_color=BLUE, hover_color=NAVY, font=("Segoe UI", 12, "bold"),
                           command=self._sincronizar).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(hb, text="🔢 Reordenar N°", width=140, height=36, corner_radius=10,
+                      fg_color="#0E7C6B", hover_color="#0A5C50", font=("Segoe UI", 12, "bold"),
+                      command=self._reordenar).pack(side="left", padx=(0, 8))
         ctk.CTkButton(hb, text="📊 Reporte", width=110, height=36, corner_radius=10,
                       fg_color="#7A5AB5", hover_color="#63459A", font=("Segoe UI", 12, "bold"),
                       command=self._reporte).pack(side="left", padx=(0, 8))
@@ -7379,7 +7414,13 @@ class ModuloReservas(ctk.CTkToplevel):
         self._pintar_kpis()
         for w in self.lista.winfo_children():
             w.destroy()
-        items = list(reversed(cargar_reservas().get("items", [])))
+        # Ordenar por consecutivo DESCENDENTE (la ultima reserva de primero)
+        def _num_res(it):
+            try:
+                return int(re.sub(r"\D", "", str(it.get("numero", "0"))) or 0)
+            except Exception:
+                return 0
+        items = sorted(cargar_reservas().get("items", []), key=_num_res, reverse=True)
         q = self.q.get().lower().strip()
         if q:
             items = [it for it in items if q in json.dumps(it, ensure_ascii=False).lower()]
@@ -7467,6 +7508,25 @@ class ModuloReservas(ctk.CTkToplevel):
             f"Reservas traidas/actualizadas: {importadas}\n\n"
             "Las reservas ahora se comparten entre los equipos que usan el sistema.",
             parent=self)
+
+    def _reordenar(self):
+        if not messagebox.askyesno(
+                "Reordenar consecutivo",
+                "Se renumeraran TODAS las reservas de forma continua (2989, 2990, 2991, ...) "
+                "en orden de creacion, para quitar saltos en el consecutivo.\n\n"
+                "Hazlo en UN solo equipo; los demas adoptaran los numeros al Sincronizar.\n\n"
+                "¿Continuar?", icon="warning", parent=self):
+            return
+        try:
+            ultimo = compactar_consecutivo_reservas()
+        except Exception as e:
+            messagebox.showerror("Reordenar", str(e), parent=self); return
+        self._pintar()
+        messagebox.showinfo(
+            "Consecutivo reordenado",
+            f"Listo. Las reservas quedaron numeradas de forma continua hasta {ultimo}.\n"
+            "En los demas equipos, entra a Reservas y dale '☁ Sincronizar' para que "
+            "adopten los mismos numeros.", parent=self)
 
     def _config_asesores(self):
         DialogoAsesores(self, self.cfg, on_save=self._recargar_cfg)
