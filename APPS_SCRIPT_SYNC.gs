@@ -27,8 +27,8 @@ function doPost(e) {
     var tipo = _tipo(body.tipo);
     var id = String(body.id || body.uid || body.web_id || body.numero ||
                     Utilities.getUuid());
-    _guardar(tipo, id, body);
-    return _json({ ok: true, id: id, tipo: tipo });
+    _guardar(tipo, id, body);   // un borrado llega como marca {_accion:'borrar'} y solo
+    return _json({ ok: true, id: id, tipo: tipo });   // sobrescribe la fila (tombstone)
   } catch (err) {
     return _json({ ok: false, error: String(err) });
   }

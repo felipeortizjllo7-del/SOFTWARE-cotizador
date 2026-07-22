@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "9.0"
+VERSION = "9.1"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -368,39 +368,50 @@ def importar_cotizaciones_html():
     if not isinstance(remotas, list):
         return 0
     data = cargar_cotizaciones()
-    existentes = {str(it.get("web_id")) for it in data["items"] if it.get("web_id")}
-    uids = {str(it.get("uid")) for it in data["items"] if it.get("uid")}
-    nuevas = 0
+    por_wid = {str(it.get("web_id")): it for it in data["items"] if it.get("web_id")}
+    por_uid = {str(it.get("uid")): it for it in data["items"] if it.get("uid")}
+    cambios = 0
+    borrados = set()
     for rc in remotas:
         if not isinstance(rc, dict):
             continue
         uid = str(rc.get("uid") or "")
         wid = str(rc.get("id") or rc.get("web_id") or "")
-        # --- Cotizacion hecha en el .exe por Felipe/Carlos (sincronizada) ---
-        if uid and rc.get("origen", "") != "HTML (cliente)" and not wid.startswith("WEB-"):
-            if uid in uids:
+        # marca de borrado (tombstone): quitar esa cotizacion en este equipo
+        if rc.get("_accion") == "borrar" or rc.get("borrar"):
+            borrados.add(uid); borrados.add(wid)
+            continue
+        es_exe = bool(uid) and not wid.startswith("WEB-") and rc.get("origen", "") != "HTML (cliente)"
+        if es_exe:
+            # --- Cotizacion hecha en el .exe (Felipe/Carlos) ---
+            local = por_uid.get(uid)
+            if local is not None:
+                if _merge_cot(local, rc):
+                    cambios += 1
                 continue
             rc2 = {k: v for k, v in rc.items() if k != "tipo"}
             data["seq"] = int(data.get("seq", 0)) + 1
             rc2["numero"] = f"COT-{data['seq']:05d}"   # numero unico en este equipo
             rc2.setdefault("estado", "Pendiente")
-            rc2["pdf"] = ""   # el PDF vive en el otro equipo; aca se regenera del snapshot
-            rc2["nube_ok"] = True   # ya esta en la nube: este equipo no la re-sube
-            data["items"].append(rc2)
-            uids.add(uid); nuevas += 1
+            rc2["pdf"] = ""            # el PDF vive en el otro equipo; se regenera del snapshot
+            rc2["nube_ok"] = True      # ya esta en la nube: este equipo no la re-sube
+            data["items"].append(rc2); por_uid[uid] = rc2; cambios += 1
             continue
         # --- Cotizacion del HTML (cliente/agencia) ---
-        if not wid or wid in existentes:
+        if not wid:
+            continue
+        local = por_wid.get(wid)
+        if local is not None:
+            if _merge_cot(local, rc):
+                cambios += 1
             continue
         dests = rc.get("destinos", [])
         if isinstance(dests, str):
             dests = [d.strip() for d in dests.split(",") if d.strip()]
-        # total = precio BASE para INNOBA (sin el margen de la agencia)
         try:
             total = float(rc.get("total", 0) or 0)
         except (TypeError, ValueError):
             total = 0.0
-        # referencia: precio final que la agencia cobra a su cliente (con margen)
         try:
             total_cliente = float(rc.get("total_cliente", 0) or 0)
         except (TypeError, ValueError):
@@ -410,34 +421,80 @@ def importar_cotizaciones_html():
         except (TypeError, ValueError):
             ganancia = 0.0
         data["seq"] = int(data.get("seq", 0)) + 1
-        data["items"].append({
+        nuevo = {
             "numero": f"COT-{data['seq']:05d}", "web_id": wid, "origen": "HTML (cliente)",
             "cliente": rc.get("cliente", ""), "asesor": rc.get("asesor", ""),
             "asesor_tel": rc.get("asesor_tel", ""), "email": rc.get("email", ""),
             "fecha": rc.get("fecha", ""), "fechas_viaje": rc.get("fechas_viaje", ""),
             "destinos": dests, "total": total, "total_cliente": total_cliente,
-            "ganancia_agencia": ganancia, "estado": "Pendiente", "pdf": "",
-            "snapshot": rc.get("snapshot")})
-        existentes.add(wid); nuevas += 1
-    if nuevas:
+            "ganancia_agencia": ganancia, "estado": rc.get("estado", "") or "Pendiente",
+            "pdf": "", "snapshot": rc.get("snapshot")}
+        # traer tambien la gestion si ya venia en la nube (estado/seguimiento/reserva)
+        _merge_cot(nuevo, rc)
+        data["items"].append(nuevo); por_wid[wid] = nuevo; cambios += 1
+    # aplicar borrados (tombstones)
+    if borrados:
+        borrados.discard("")
+        antes = len(data["items"])
+        data["items"] = [x for x in data["items"]
+                         if str(x.get("uid")) not in borrados
+                         and str(x.get("web_id")) not in borrados]
+        cambios += (antes - len(data["items"]))
+    if cambios:
         guardar_cotizaciones(data)
-    return nuevas
+    return cambios
+
+
+# Campos de GESTION que se sincronizan entre equipos (no tocan numero/pdf/uid locales)
+_COT_SYNC_FIELDS = ("estado", "fecha_seg", "correo_seg", "notas", "tareas",
+                    "reserva_creada", "auto_correo_seg", "correo_seg_enviado")
+
+
+def _merge_cot(local, rc):
+    """Copia a 'local' los campos de gestion que cambiaron en 'rc'. Devuelve True si hubo
+       cambios. Conserva numero, pdf, uid, web_id y origen del registro local."""
+    cambio = False
+    for f in _COT_SYNC_FIELDS:
+        if f in rc and local.get(f) != rc.get(f):
+            local[f] = rc.get(f)
+            cambio = True
+    return cambio
 
 
 def enviar_cotizacion_nube(rec):
-    """Sube una cotizacion hecha en el .exe (Felipe/Carlos) al webhook para que se vea
-       en los demas equipos. Best-effort. Requiere 'uid'. No sube las del HTML."""
+    """Sube/actualiza una cotizacion en el webhook para que su gestion (estado, seguimiento,
+       'enviada a reserva'...) se vea en los demas equipos. Sirve para las del .exe y las del
+       HTML. Best-effort. Requiere 'uid' o 'web_id'."""
     if not WEBHOOK_URL:
         return False
-    if rec.get("origen", "") == "HTML (cliente)":
+    try:
+        key = rec.get("uid") or rec.get("web_id")
+        if not key:
+            return False
+        payload = {k: v for k, v in rec.items()
+                   if not str(k).startswith("_") and k != "pdf"}
+        payload["tipo"] = "cotizacion"          # bucket 'cotizaciones' del webhook
+        payload["id"] = str(key)                # clave con la que el webhook deduplica
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        req = urllib.request.Request(
+            WEBHOOK_URL, data=body, method="POST",
+            headers={"Content-Type": "text/plain;charset=utf-8",
+                     "User-Agent": "CotizadorInnoba"})
+        ctx = ssl.create_default_context()
+        with urllib.request.urlopen(req, context=ctx, timeout=15) as r:
+            r.read()
+        return True
+    except Exception:
+        return False
+
+
+def enviar_borrado_nube(tipo, clave):
+    """Le pide al webhook que BORRE de la nube el registro (reserva/cotizacion) con esa
+       clave (uid/web_id), para que el borrado se propague a todos. Best-effort."""
+    if not WEBHOOK_URL or not clave:
         return False
     try:
-        payload = {k: v for k, v in rec.items()
-                   if not str(k).startswith("_") and k not in ("pdf",)}
-        if not payload.get("uid"):
-            return False
-        payload["tipo"] = "cotizacion"          # bucket 'cotizaciones' del webhook
-        payload.setdefault("origen", "Escritorio")
+        payload = {"tipo": tipo, "id": str(clave), "uid": str(clave), "_accion": "borrar"}
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         req = urllib.request.Request(
             WEBHOOK_URL, data=body, method="POST",
@@ -521,11 +578,16 @@ def importar_reservas_nube():
     nums_local = {str(it.get("numero", "")) for it in data["items"]}
     cambios = 0
     max_num = 0
+    borrados = set()
     for rc in remotas:
         if not isinstance(rc, dict):
             continue
         uid = str(rc.get("uid") or "")
         if not uid:
+            continue
+        # marca de borrado (tombstone): eliminar esa reserva en este equipo
+        if rc.get("_accion") == "borrar" or rc.get("borrar"):
+            borrados.add(uid)
             continue
         rc = {k: v for k, v in rc.items() if k != "tipo"}
         try:
@@ -552,6 +614,11 @@ def importar_reservas_nube():
             nums_local.add(num)
             por_uid[uid] = rc
             data["items"].append(rc); cambios += 1
+    # aplicar borrados (tombstones): quitar localmente lo que se borro en otro equipo
+    if borrados:
+        antes = len(data["items"])
+        data["items"] = [x for x in data["items"] if str(x.get("uid")) not in borrados]
+        cambios += (antes - len(data["items"]))
     # mantener el consecutivo por encima del mayor numero visto
     if max_num:
         data["seq"] = max(int(data.get("seq", RES_SEQ_INICIAL) or RES_SEQ_INICIAL), max_num)
@@ -2441,8 +2508,10 @@ def _voucher_defaults(ciudad="", hotel="", fecha_in="", fecha_out="", habitacion
 
 def eliminar_reserva(numero, uid=None):
     """Borra UNA sola reserva. Por 'uid' (identificador unico) si se conoce; si no,
-       borra solo la PRIMERA que coincida por numero (nunca todas las del mismo numero)."""
+       borra solo la PRIMERA que coincida por numero (nunca todas las del mismo numero).
+       Tambien la borra de la nube para que desaparezca en los demas equipos."""
     data = cargar_reservas()
+    quitado_uid = uid
     if uid:
         data["items"] = [it for it in data["items"] if str(it.get("uid")) != str(uid)]
     else:
@@ -2451,10 +2520,16 @@ def eliminar_reserva(numero, uid=None):
         for it in data["items"]:
             if not borrado and it.get("numero") == numero:
                 borrado = True
+                quitado_uid = it.get("uid")
                 continue
             nuevo.append(it)
         data["items"] = nuevo
     guardar_reservas(data)
+    try:
+        if quitado_uid:
+            enviar_borrado_nube("reserva", quitado_uid)
+    except Exception:
+        pass
 
 
 def reparar_reservas():
@@ -3428,6 +3503,11 @@ class VentanaCotizacionDetalle(ctk.CTkToplevel):
              "hecha": r["hecha"].get()}
             for r in self.tareas_rows if r["texto"].get().strip()]
         self.on_save()
+        # Propagar la gestion (estado, seguimiento, tareas...) a los demas equipos
+        try:
+            enviar_cotizacion_nube(self.item)
+        except Exception:
+            pass
         # ofrecer enviar recordatorio de calendario (.ics) para la fecha de seguimiento
         fseg = parse_fecha(self.item.get("fecha_seg", ""))
         if fseg and self.item.get("estado") not in ("Ganada", "Perdida"):
@@ -3886,9 +3966,14 @@ class VentanaCotizaciones(ctk.CTkToplevel):
     def _eliminar(self, it):
         if messagebox.askyesno("Quitar del historial",
                                f"¿Quitar {it.get('numero','')} del historial?\n"
-                               "(No borra el archivo PDF)", parent=self):
+                               "Se quitara tambien para los demas equipos (no borra el PDF).",
+                               parent=self):
             self.data["items"] = [x for x in self.data["items"] if x is not it]
             guardar_cotizaciones(self.data)
+            try:
+                enviar_borrado_nube("cotizacion", it.get("uid") or it.get("web_id"))
+            except Exception:
+                pass
             self._pintar()
 
 

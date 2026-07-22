@@ -1,5 +1,5 @@
 {
-  "version": "9.0",
+  "version": "9.1",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 9.0 - Reservas por asesora: (1) en el detalle de la reserva la asesora se elige de la LISTA OFICIAL (configurada en el boton Asesores), ya no se escribe a mano, para que no se troquen los nombres. (2) Nuevo filtro 'Ver: [asesora]' en la lista para que cada una vea solo sus reservas. Configura los 3 nombres oficiales (Valentina, Estefania, Maria Camila) en Asesores."
+  "notas": "Version 9.1 - Gestion compartida entre equipos: los cambios de estado (Ganada/Perdida/seguimiento), el marcar 'enviada a reserva' y el BORRADO de una cotizacion o reserva ahora se reflejan en TODOS los equipos al sincronizar (el borrado se propaga con marca en la nube, no requiere tocar el Apps Script). Una cotizacion enviada a reserva no se puede mandar dos veces y su boton queda en verde 'Reserva NNNN' en todos los equipos."
 }
