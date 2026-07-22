@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "8.4"
+VERSION = "8.5"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -440,6 +440,7 @@ def importar_reservas_nube():
         return 0
     data = cargar_reservas()
     por_uid = {str(it.get("uid")): it for it in data["items"] if it.get("uid")}
+    nums_local = {str(it.get("numero", "")) for it in data["items"]}
     cambios = 0
     max_num = 0
     for rc in remotas:
@@ -458,8 +459,20 @@ def importar_reservas_nube():
             a = json.dumps(local, sort_keys=True, ensure_ascii=False)
             b = json.dumps(rc, sort_keys=True, ensure_ascii=False)
             if a != b:
+                # conservar el numero local (ya podria haberse renumerado por choque)
+                rc["numero"] = local.get("numero", rc.get("numero", ""))
                 local.clear(); local.update(rc); cambios += 1
         else:
+            # si el numero choca con uno local de OTRA reserva, renumerar la entrante
+            num = str(rc.get("numero", "") or "")
+            if not num or num in nums_local:
+                nuevo = max(int(data.get("seq", RES_SEQ_INICIAL) or RES_SEQ_INICIAL),
+                            max_num) + 1
+                data["seq"] = nuevo
+                rc["numero"] = str(nuevo)
+                num = str(nuevo)
+            nums_local.add(num)
+            por_uid[uid] = rc
             data["items"].append(rc); cambios += 1
     # mantener el consecutivo por encima del mayor numero visto
     if max_num:
@@ -2315,10 +2328,46 @@ def _voucher_defaults(ciudad="", hotel="", fecha_in="", fecha_out="", habitacion
     }
 
 
-def eliminar_reserva(numero):
+def eliminar_reserva(numero, uid=None):
+    """Borra UNA sola reserva. Por 'uid' (identificador unico) si se conoce; si no,
+       borra solo la PRIMERA que coincida por numero (nunca todas las del mismo numero)."""
     data = cargar_reservas()
-    data["items"] = [it for it in data["items"] if it.get("numero") != numero]
+    if uid:
+        data["items"] = [it for it in data["items"] if str(it.get("uid")) != str(uid)]
+    else:
+        nuevo = []
+        borrado = False
+        for it in data["items"]:
+            if not borrado and it.get("numero") == numero:
+                borrado = True
+                continue
+            nuevo.append(it)
+        data["items"] = nuevo
     guardar_reservas(data)
+
+
+def reparar_reservas():
+    """Repara el archivo local: asigna 'uid' a las que no lo tengan y renumera las
+       reservas que tengan un numero repetido (para que cada una sea unica y borrar
+       una no afecte a las demas). Devuelve cuantas reparo."""
+    data = cargar_reservas()
+    vistos_num = set()
+    seq = int(data.get("seq", RES_SEQ_INICIAL) or RES_SEQ_INICIAL)
+    cambios = 0
+    for it in data["items"]:
+        if not it.get("uid"):
+            it["uid"] = "RES-" + uuid.uuid4().hex[:12]
+            cambios += 1
+        num = str(it.get("numero", "") or "")
+        if not num or num in vistos_num:
+            seq += 1
+            it["numero"] = str(seq)
+            cambios += 1
+        vistos_num.add(str(it.get("numero", "")))
+    if cambios:
+        data["seq"] = max(seq, int(data.get("seq", RES_SEQ_INICIAL) or RES_SEQ_INICIAL))
+        guardar_reservas(data)
+    return cambios
 
 
 def _parse_pasajeros(txt):
@@ -7102,8 +7151,9 @@ class ModuloReservas(ctk.CTkToplevel):
         self.title(f"Reservas - INNOBA Colombia DMC   v{VERSION}")
         self.configure(fg_color=BG)
         self.geometry("1180x720")
-        # Traer reservas de la nube al abrir (para ver las de otros equipos).
+        # Reparar (uid + numeros unicos) y traer reservas de la nube al abrir.
         try:
+            reparar_reservas()
             importar_reservas_nube()
         except Exception:
             pass
@@ -7260,7 +7310,7 @@ class ModuloReservas(ctk.CTkToplevel):
         if messagebox.askyesno("Eliminar reserva",
                                f"Eliminar la reserva N. {it.get('numero','')} de "
                                f"{it.get('cliente','')}?\n\nEsta accion no se puede deshacer."):
-            eliminar_reserva(it.get("numero", ""))
+            eliminar_reserva(it.get("numero", ""), it.get("uid"))
             self._pintar()
 
     def _voucher_cli(self, it):

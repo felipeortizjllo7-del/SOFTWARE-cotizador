@@ -1,5 +1,5 @@
 {
-  "version": "8.4",
+  "version": "8.5",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 8.4 - Reservas: el ITINERARIO DE VIAJE ahora se diligencia con un editor por FILAS (Fecha | Actividad | Observaciones), mucho mas facil y ordenado. Botones '+ Agregar dia' y 'Autollenar por fechas' (crea una fila por cada dia entre la llegada y la salida). Cada fila sale tal cual en la tabla DESCRIPCION DE ACTIVIDADES de la Orden de Servicio, con su columna de observaciones. Se elimino el cuadro de texto libre duplicado."
+  "notas": "Version 8.5 - Reservas (arreglo importante): (1) al borrar una reserva ahora se elimina SOLO esa (por identificador unico uid), ya no se borran las demas que tuvieran el mismo numero. (2) Reparacion automatica al abrir: asigna identificador unico a cada reserva y renumera las que tuvieran numero repetido para que cada una sea unica. (3) Al sincronizar, si llega una reserva con numero repetido de otro equipo se le asigna un numero nuevo. Esto corrige el problema de que se veian varias reservas iguales y borrar una borraba las demas."
 }
