@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "9.1"
+VERSION = "9.2"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -325,6 +325,25 @@ def respaldar_datos(cfg):
                 pass
     except Exception:
         pass
+
+
+def respaldo_antes_actualizar():
+    """Copia PERMANENTE de los datos justo antes de instalar una actualizacion, con sello
+       de fecha/hora, para que nunca se pierda nada. Devuelve la carpeta de respaldos."""
+    carpeta = os.path.join(datos_dir(), "respaldos")
+    try:
+        os.makedirs(carpeta, exist_ok=True)
+        sello = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        for nombre in ("cotizaciones.json", "reservas.json", "clientes.json",
+                       "tareas.json", "config_empresa.json"):
+            src = os.path.join(datos_dir(), nombre)
+            if os.path.exists(src):
+                base = nombre.rsplit(".", 1)[0]
+                shutil.copyfile(
+                    src, os.path.join(carpeta, f"{base}_ANTES_v{VERSION}_{sello}.json"))
+    except Exception:
+        pass
+    return carpeta
 
 def peek_numero_cotizacion():
     """Devuelve el proximo consecutivo (sin reservarlo aun), ej. COT-00001."""
@@ -4938,8 +4957,18 @@ class App(ctk.CTkToplevel):
         threading.Thread(target=worker, daemon=True).start()
 
     def _lanzar_instalador(self, ruta):
+        # RESPALDO de seguridad de los datos ANTES de actualizar (cotizaciones, reservas,
+        # clientes, tareas). Los datos viven en %APPDATA% y el instalador no los toca, pero
+        # dejamos ademas una copia permanente por si acaso.
+        try:
+            respaldar_datos(self.cfg)
+            respaldo_antes_actualizar()
+        except Exception:
+            pass
         # avisamos ANTES de abrir el instalador
         messagebox.showinfo("Actualizacion",
+                            "Tus cotizaciones y reservas estan guardadas y respaldadas; "
+                            "la actualizacion no las borra.\n\n"
                             "La aplicacion se cerrara y se abrira el instalador "
                             "para completar la actualizacion.")
         try:
