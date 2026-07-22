@@ -1,5 +1,5 @@
 {
-  "version": "8.7",
+  "version": "8.8",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 8.7 - Cotizaciones compartidas entre equipos: las cotizaciones que Felipe o Carlos hacen en el .exe ahora se SINCRONIZAN por la nube (igual que las reservas y las del HTML). En el Historial de cotizaciones se ven TODAS: las de Felipe, las de Carlos y las del HTML, en cualquier computador. Boton 'Sincronizar' (antes 'Importar del HTML'). Las del HTML se pueden ver con el boton 'Ver' (lo que cotizo el cliente). Sin duplicados: cada cotizacion tiene identificador unico."
+  "notas": "Version 8.8 - Cotizaciones -> Reserva sin duplicar: al enviar una cotizacion a reserva, el sistema revisa (incluso en otros equipos via nube) si esa cotizacion YA tiene reserva; si ya la tiene, avisa y NO la crea de nuevo salvo que se confirme. El boton cambia a 'Reserva NNNN' en verde cuando ya se creo. Las reservas y cotizaciones siguen sincronizadas entre todos los equipos."
 }

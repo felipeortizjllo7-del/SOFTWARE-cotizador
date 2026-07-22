@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "8.7"
+VERSION = "8.8"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1832,6 +1832,7 @@ def reserva_desde_cotizacion(cot):
              if items_cobro else float(cot.get("total", 0) or 0))
     rec = {
         "cot_origen": cot.get("numero", ""),
+        "cot_uid": cot.get("uid") or cot.get("web_id") or cot.get("numero", ""),
         "cliente": cot.get("cliente", ""),
         "contacto": cot.get("asesor", ""),
         "email": cot.get("email", "") or snap.get("email", ""),
@@ -3680,8 +3681,13 @@ class VentanaCotizaciones(ctk.CTkToplevel):
                           fg_color=CYAN, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
                           command=lambda x=it: self._detalle(x)).grid(row=0, column=col, padx=4)
             col += 1
-            ctk.CTkButton(fila, text="➜ Reserva", width=98, height=30, corner_radius=8,
-                          fg_color=NAVY, hover_color=NAVY2, font=("Segoe UI", 11, "bold"),
+            _en_reserva = bool(it.get("reserva_creada"))
+            ctk.CTkButton(fila,
+                          text=(f"✓ Reserva {it.get('reserva_creada')}" if _en_reserva else "➜ Reserva"),
+                          width=(120 if _en_reserva else 98), height=30, corner_radius=8,
+                          fg_color=(GREEN if _en_reserva else NAVY),
+                          hover_color=(GREEN_H if _en_reserva else NAVY2),
+                          font=("Segoe UI", 11, "bold"),
                           command=lambda x=it: self._enviar_a_reserva(x)).grid(row=0, column=col, padx=4)
             col += 1
             if it.get("pdf"):
@@ -3741,7 +3747,28 @@ class VentanaCotizaciones(ctk.CTkToplevel):
                 "Primero configura los asesores de reservas en el modulo Reservas "
                 "(boton 'Asesores') para poder asignar la reserva.", parent=self)
             return
-        if not messagebox.askyesno(
+        # Evitar duplicar: revisar si esta cotizacion YA tiene reserva (aca o en otro equipo)
+        cot_key = str(it.get("uid") or it.get("web_id") or it.get("numero", ""))
+        try:
+            importar_reservas_nube()
+        except Exception:
+            pass
+        ya = None
+        for r in cargar_reservas().get("items", []):
+            if str(r.get("cot_uid", "")) == cot_key and cot_key:
+                ya = r
+                break
+        if ya is None and it.get("reserva_creada"):
+            ya = {"numero": it.get("reserva_creada")}
+        if ya is not None:
+            if not messagebox.askyesno(
+                    "Esta cotizacion ya tiene reserva",
+                    f"La cotizacion {it.get('numero','')} ya fue enviada a reserva "
+                    f"(Reserva N. {ya.get('numero','')}).\n\n"
+                    "Si creas otra, quedara DUPLICADA. ¿Seguro que quieres crear otra reserva?",
+                    icon="warning", default="no", parent=self):
+                return
+        elif not messagebox.askyesno(
                 "Enviar a reserva",
                 f"Crear una reserva a partir de {it.get('numero','')} "
                 f"({it.get('cliente','')})?\n\nSe asignara automaticamente a una asesora "
@@ -3754,6 +3781,16 @@ class VentanaCotizaciones(ctk.CTkToplevel):
         except Exception as e:
             messagebox.showerror("No se pudo crear la reserva", str(e), parent=self)
             return
+        # Marcar la cotizacion como 'ya enviada a reserva' (se guarda y se sincroniza)
+        try:
+            it["reserva_creada"] = numero
+            it["nube_ok"] = False   # forzar re-subida con la marca
+            guardar_cotizaciones(self.data)
+            if it.get("origen", "") != "HTML (cliente)":
+                enviar_cotizacion_nube(it)
+            self._pintar()
+        except Exception:
+            pass
         ase = (guardado.get("asesor", {}) or {})
         messagebox.showinfo(
             "Reserva creada",
