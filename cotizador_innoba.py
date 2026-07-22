@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "8.3"
+VERSION = "8.4"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -2344,6 +2344,18 @@ def pasajeros_de(res):
         return [(p.get("nombre", ""), p.get("documento", ""), p.get("telefono", ""))
                 for p in lst if (p.get("nombre", "") or p.get("documento", ""))]
     return [(n, d, "") for n, d in _parse_pasajeros(res.get("os_pasajeros", ""))]
+
+
+_MESES_ES = ["", "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO",
+             "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"]
+
+
+def fecha_larga_es(d):
+    """Formatea una fecha como '30 DE AGOSTO DE 2026'."""
+    try:
+        return f"{d.day} DE {_MESES_ES[d.month]} DE {d.year}"
+    except Exception:
+        return ""
 
 
 def _parse_actividades(txt, itinerario=""):
@@ -5753,17 +5765,31 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self.v_notas = tk.StringVar(value=res.get("notas", ""))
         ctk.CTkEntry(cont, textvariable=self.v_notas, height=32).pack(fill="x", pady=(0, 8))
 
-        # Itinerario de viaje (dia por dia) - editable, sale en el voucher del cliente
-        ith = ctk.CTkFrame(cont, fg_color="transparent"); ith.pack(fill="x", pady=(4, 0))
+        # Itinerario de viaje (dia por dia) - EDITOR POR FILAS: Fecha / Actividad / Observaciones
+        # Sale tal cual en la tabla "DESCRIPCION DE ACTIVIDADES" de la Orden de Servicio.
+        ith = ctk.CTkFrame(cont, fg_color="transparent"); ith.pack(fill="x", pady=(6, 0))
         ctk.CTkLabel(ith, text="ITINERARIO DE VIAJE (dia por dia)", text_color=NAVY,
                      font=("Segoe UI", 13, "bold")).pack(side="left")
-        ctk.CTkLabel(ith, text="Aparece en el voucher del cliente", text_color=MUTED,
+        ctk.CTkLabel(ith, text="Sale en la Orden de Servicio del cliente", text_color=MUTED,
                      font=("Segoe UI", 10)).pack(side="left", padx=8)
-        self.txt_itin = ctk.CTkTextbox(cont, height=130, corner_radius=8,
-                                       border_width=1, border_color=LINE, fg_color=CARD,
-                                       font=("Segoe UI", 12))
-        self.txt_itin.pack(fill="x", pady=(2, 8))
-        self.txt_itin.insert("1.0", res.get("itinerario", "") or "")
+        ctk.CTkButton(ith, text="+ Agregar dia", width=120, height=28, corner_radius=8,
+                      fg_color=BLUE, hover_color=NAVY, font=("Segoe UI", 11, "bold"),
+                      command=self._agregar_dia).pack(side="right")
+        ctk.CTkButton(ith, text="⟳ Autollenar por fechas", width=180, height=28, corner_radius=8,
+                      fg_color=CARD2, text_color=NAVY, hover_color=LINE, border_width=1,
+                      border_color=LINE, font=("Segoe UI", 11, "bold"),
+                      command=self._autollenar_itinerario).pack(side="right", padx=(0, 6))
+        cab = ctk.CTkFrame(cont, fg_color="transparent"); cab.pack(fill="x", pady=(4, 0))
+        ctk.CTkLabel(cab, text="Fecha", text_color=MUTED, width=160, anchor="w",
+                     font=("Segoe UI", 10, "bold")).pack(side="left", padx=(6, 4))
+        ctk.CTkLabel(cab, text="Actividad", text_color=MUTED, anchor="w",
+                     font=("Segoe UI", 10, "bold")).pack(side="left", fill="x", expand=True, padx=4)
+        ctk.CTkLabel(cab, text="Observaciones", text_color=MUTED, width=210, anchor="w",
+                     font=("Segoe UI", 10, "bold")).pack(side="left", padx=4)
+        ctk.CTkLabel(cab, text="", width=34).pack(side="left", padx=(4, 6))
+        self.itin_widgets = []
+        self.itin_box = ctk.CTkFrame(cont, fg_color="transparent"); self.itin_box.pack(fill="x", pady=(0, 8))
+        self._pintar_itinerario()
 
         # ---- Datos de la ORDEN DE SERVICIO (voucher al cliente) ----
         ctk.CTkLabel(cont, text="ORDEN DE SERVICIO (datos del voucher al cliente)",
@@ -5806,14 +5832,6 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         ctk.CTkLabel(cont, text="Contacto de emergencia", text_color=MUTED,
                      font=("Segoe UI", 11)).pack(anchor="w", padx=2)
         ctk.CTkEntry(cont, textvariable=par("os_contacto_emergencia", ""), height=30).pack(fill="x", pady=(0, 6))
-
-        ctk.CTkLabel(cont, text="Actividades  (una linea:  Fecha | Actividad | Observacion. "
-                     "Si lo dejas vacio, usa el itinerario de arriba)",
-                     text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
-        self.txt_acts = ctk.CTkTextbox(cont, height=90, corner_radius=8, border_width=1,
-                                       border_color=LINE, fg_color=CARD, font=("Segoe UI", 12))
-        self.txt_acts.pack(fill="x", pady=(0, 6))
-        self.txt_acts.insert("1.0", res.get("os_actividades", "") or "")
 
         ctk.CTkLabel(cont, text="Informacion adicional", text_color=MUTED,
                      font=("Segoe UI", 11)).pack(anchor="w", padx=2)
@@ -5889,6 +5907,99 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
                 f"No se pudo enviar el correo a la asesora: {info}\n\n"
                 "Verifica el correo remitente y su contrasena en 'Datos de mi empresa'.",
                 parent=self)
+
+    # ------------------------------------------------- itinerario (editor por filas)
+    def _dias_iniciales(self):
+        d = self.res.get("itinerario_dias")
+        if isinstance(d, list) and d:
+            return [dict(x) for x in d]
+        filas = _parse_actividades(self.res.get("os_actividades", ""),
+                                   self.res.get("itinerario", ""))
+        dias = [{"fecha": f, "actividad": a, "obs": o} for f, a, o in filas]
+        return dias or [{"fecha": "", "actividad": "", "obs": ""}]
+
+    def _pintar_itinerario(self):
+        for w in self.itin_box.winfo_children():
+            w.destroy()
+        self.itin_widgets = []
+        dias = self.res.get("itinerario_dias")
+        if not isinstance(dias, list) or not dias:
+            dias = self._dias_iniciales()
+            self.res["itinerario_dias"] = dias
+        for i, d in enumerate(dias):
+            self._fila_dia(i, d)
+
+    def _fila_dia(self, i, d):
+        row = ctk.CTkFrame(self.itin_box, fg_color=CARD, corner_radius=8,
+                           border_width=1, border_color=LINE)
+        row.pack(fill="x", pady=2)
+        vf = tk.StringVar(value=d.get("fecha", ""))
+        va = tk.StringVar(value=d.get("actividad", ""))
+        vo = tk.StringVar(value=d.get("obs", ""))
+        ctk.CTkEntry(row, textvariable=vf, width=160, height=30,
+                     placeholder_text="30 DE AGOSTO DE 2026").pack(side="left", padx=(6, 4), pady=5)
+        ctk.CTkEntry(row, textvariable=va, height=30,
+                     placeholder_text="Actividad del dia (ej. City tour + comuna 13)").pack(
+            side="left", fill="x", expand=True, padx=4)
+        ctk.CTkEntry(row, textvariable=vo, width=210, height=30,
+                     placeholder_text="Hora / notas").pack(side="left", padx=4)
+        ctk.CTkButton(row, text="✕", width=28, height=28, fg_color=RED, hover_color="#9B2C22",
+                      command=lambda idx=i: self._quitar_dia(idx)).pack(side="left", padx=(4, 6))
+        self.itin_widgets.append({"fecha": vf, "actividad": va, "obs": vo})
+
+    def _sync_itinerario(self):
+        dias = []
+        for w in self.itin_widgets:
+            f = w["fecha"].get().strip(); a = w["actividad"].get().strip(); o = w["obs"].get().strip()
+            if f or a or o:
+                dias.append({"fecha": f, "actividad": a, "obs": o})
+        self.res["itinerario_dias"] = dias
+        # os_actividades alimenta la tabla del voucher; itinerario = texto legado
+        self.res["os_actividades"] = "\n".join(
+            f"{d['fecha']} | {d['actividad']} | {d['obs']}" for d in dias)
+        self.res["itinerario"] = "\n".join(
+            (f"{d['fecha']} - {d['actividad']}" + (f" ({d['obs']})" if d['obs'] else ""))
+            for d in dias)
+
+    def _agregar_dia(self):
+        self._sync_itinerario()
+        self.res.setdefault("itinerario_dias", []).append({"fecha": "", "actividad": "", "obs": ""})
+        self._pintar_itinerario()
+
+    def _quitar_dia(self, i):
+        self._sync_itinerario()
+        try:
+            del self.res["itinerario_dias"][i]
+        except Exception:
+            pass
+        self._pintar_itinerario()
+
+    def _autollenar_itinerario(self):
+        self._sync_itinerario()
+        try:
+            d1 = self.sel_llegada.get(); d2 = self.sel_salida.get()
+        except Exception:
+            d1 = d2 = None
+        if not d1 or not d2:
+            messagebox.showinfo("Fechas del viaje",
+                                "Primero elige la fecha de llegada y de salida (arriba).",
+                                parent=self)
+            return
+        if d2 < d1:
+            messagebox.showinfo("Fechas del viaje",
+                                "La fecha de salida no puede ser anterior a la de llegada.",
+                                parent=self)
+            return
+        prev = self.res.get("itinerario_dias", []) or []
+        nuevos = []
+        dact = d1; i = 0
+        while dact <= d2:
+            act = prev[i].get("actividad", "") if i < len(prev) else ""
+            obs = prev[i].get("obs", "") if i < len(prev) else ""
+            nuevos.append({"fecha": fecha_larga_es(dact), "actividad": act, "obs": obs})
+            dact += datetime.timedelta(days=1); i += 1
+        self.res["itinerario_dias"] = nuevos
+        self._pintar_itinerario()
 
     def _pintar_pasajeros(self):
         for w in self.pax_box.winfo_children():
@@ -6471,10 +6582,9 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self._sync_items()
         self.res["notas"] = self.v_notas.get().strip()
         try:
-            self.res["itinerario"] = self.txt_itin.get("1.0", "end").strip()
+            self._sync_itinerario()
             for k, v in self.os_vars.items():
                 self.res[k] = v.get().strip()
-            self.res["os_actividades"] = self.txt_acts.get("1.0", "end").strip()
             self.res["os_info_adicional"] = self.txt_info.get("1.0", "end").strip()
         except Exception:
             pass
@@ -6641,6 +6751,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
             "estado": self.res["estado"], "monto": self.res.get("monto", 0),
             "items_cobro": self.res.get("items_cobro", []),
             "notas": self.res.get("notas", ""), "itinerario": self.res.get("itinerario", ""),
+            "itinerario_dias": self.res.get("itinerario_dias", []),
             "destinos_detalle": self.res.get("destinos_detalle", []),
             "pasajeros_list": self.res.get("pasajeros_list", []),
             "vuelos_adjuntos": self.res.get("vuelos_adjuntos", []),

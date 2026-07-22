@@ -1,5 +1,5 @@
 {
-  "version": "8.3",
+  "version": "8.4",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 8.3 - Reservas en la nube: las reservas ahora se SINCRONIZAN entre los computadores del equipo por el mismo webhook. Al crear o editar una reserva se sube automaticamente; al abrir el modulo Reservas se traen las de los demas. Nuevo boton 'Sincronizar'. Cada reserva tiene un identificador unico (uid) para no duplicar y para actualizar estados/proveedores entre equipos. (Requiere actualizar el Google Apps Script una sola vez - ver instrucciones.)"
+  "notas": "Version 8.4 - Reservas: el ITINERARIO DE VIAJE ahora se diligencia con un editor por FILAS (Fecha | Actividad | Observaciones), mucho mas facil y ordenado. Botones '+ Agregar dia' y 'Autollenar por fechas' (crea una fila por cada dia entre la llegada y la salida). Cada fila sale tal cual en la tabla DESCRIPCION DE ACTIVIDADES de la Orden de Servicio, con su columna de observaciones. Se elimino el cuadro de texto libre duplicado."
 }
