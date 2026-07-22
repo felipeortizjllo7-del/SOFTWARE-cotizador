@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "9.6"
+VERSION = "9.7"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -2119,6 +2119,122 @@ def enviar_voucher_prov(cfg, res, di, cat, si):
     enviar_correo(cfg, reng["correo"], asunto, cuerpo, fn)
     s["enviado"] = True
     s["fecha_envio"] = datetime.date.today().strftime("%d/%m/%Y")
+    actualizar_reserva(res.get("numero", ""), {"destinos_detalle": res["destinos_detalle"]})
+    return fn
+
+
+# ---- Voucher CONSOLIDADO por proveedor (transporte / guia): un solo voucher con
+#      todos los servicios de ese proveedor en el destino ----
+def servicios_por_proveedor(res, di, cat):
+    """Agrupa los servicios de una categoria en un destino por proveedor.
+       Devuelve [(proveedor, correo, [(si, s), ...]), ...] en orden de aparicion.
+       Si un servicio no tiene proveedor, va en su propio grupo."""
+    try:
+        lst = res["destinos_detalle"][di].get(cat, [])
+    except Exception:
+        return []
+    grupos = {}
+    orden = []
+    for si, s in enumerate(lst):
+        if not (s.get("servicio") or "").strip():
+            continue
+        prov = (s.get("proveedor", "") or "").strip()
+        key = _nz(prov) if prov else f"__solo_{si}"
+        if key not in grupos:
+            grupos[key] = {"proveedor": prov, "correo": s.get("correo", ""), "items": []}
+            orden.append(key)
+        grupos[key]["items"].append((si, s))
+        if not grupos[key]["correo"] and s.get("correo"):
+            grupos[key]["correo"] = s.get("correo")
+    return [(grupos[k]["proveedor"], grupos[k]["correo"], grupos[k]["items"]) for k in orden]
+
+
+def generar_voucher_proveedor_multi(cfg, res, cat, dest, proveedor, servicios, ruta):
+    """Voucher con VARIOS servicios del mismo proveedor (transporte o guia)."""
+    pdf = VoucherPDF(cfg); pdf.add_page(); T = pdf._t
+    n_pax = len(pasajeros_de(res)) or res.get("pax_txt", "")
+    fdef = res.get("os_fecha_in", "") or res.get("fechas_viaje", "")
+    if cat == "guia":
+        _os_encab_prov(pdf, cfg, res, "VOUCHER RESERVA GUIA  -  ORDEN " + res.get("numero", ""))
+        _os_band(pdf, "RESERVA GUIA")
+        _os_row(pdf, "GUIA", proveedor)
+        _os_row(pdf, "DESTINO", dest)
+        _os_row(pdf, "# PASAJEROS", str(n_pax))
+        _os_band(pdf, "SERVICIOS DEL GUIA")
+        pdf.set_x(12); pdf.set_font("Helvetica", "B", 8.5); pdf.set_fill_color(*PDF_CLARO)
+        pdf.set_text_color(*PDF_PRIM)
+        pdf.cell(30, 6.5, T(" FECHA"), border=1, fill=True)
+        pdf.cell(126, 6.5, T(" SERVICIO"), border=1, fill=True)
+        pdf.cell(30, 6.5, T(" HORA"), border=1, fill=True, ln=1)
+        pdf.set_font("Helvetica", "", 8.5); pdf.set_text_color(*PDF_TXT)
+        for s in servicios:
+            f = s.get("fecha", "") or fdef
+            y0 = pdf.get_y()
+            pdf.set_x(12); pdf.multi_cell(30, 5.5, T(" " + str(f)), border=1)
+            h1 = pdf.get_y() - y0
+            pdf.set_xy(42, y0); pdf.multi_cell(126, 5.5, T(" " + str(s.get("servicio", ""))), border=1)
+            h2 = pdf.get_y() - y0
+            hh = max(h1, h2, 5.5)
+            pdf.set_xy(168, y0); pdf.cell(30, hh, T(" " + str(s.get("hora", ""))), border=1, ln=1)
+            pdf.set_y(y0 + hh)
+    else:  # transporte
+        _os_encab_prov(pdf, cfg, res, "VOUCHER TRANSPORTE  -  ORDEN " + res.get("numero", ""))
+        _os_band(pdf, "SERVICIO DE TRANSPORTE")
+        _os_row(pdf, "PROVEEDOR", proveedor)
+        _os_row(pdf, "DESTINO", dest)
+        _os_row(pdf, "# PASAJEROS", str(n_pax))
+        _os_band(pdf, "TRAYECTOS / SERVICIOS")
+        pdf.set_x(12); pdf.set_font("Helvetica", "B", 8); pdf.set_fill_color(*PDF_CLARO)
+        pdf.set_text_color(*PDF_PRIM)
+        anchos = [(26, "FECHA"), (38, "ORIGEN"), (48, "SERVICIO"), (18, "HORA"),
+                  (18, "PAX"), (38, "VEHICULO")]
+        for w, h in anchos:
+            pdf.cell(w, 6.5, T(" " + h), border=1, fill=True, align="C")
+        pdf.ln(6.5); pdf.set_font("Helvetica", "", 8); pdf.set_text_color(*PDF_TXT)
+        for s in servicios:
+            f = s.get("fecha", "") or fdef
+            vals = [str(f), s.get("origen", ""), s.get("servicio", ""), s.get("hora", ""),
+                    str(n_pax), s.get("vehiculo", "")]
+            y0 = pdf.get_y(); x = 12
+            for (w, _h), v in zip(anchos, vals):
+                pdf.set_xy(x, y0); pdf.cell(w, 7, T(" " + str(v)[:40]), border=1); x += w
+            pdf.ln(7)
+    obs = "   ".join(s.get("observacion", "") for s in servicios if s.get("observacion"))
+    if obs:
+        _os_row(pdf, "OBSERVACIONES", obs, wl=40, wv=146)
+    _os_pasajeros_tabla(pdf, res)
+    pdf.output(ruta)
+    return ruta
+
+
+def generar_voucher_consolidado_archivo(cfg, res, di, cat, proveedor, items):
+    dest = res["destinos_detalle"][di].get("nombre", "")
+    safe = re.sub(r"\W+", "", (proveedor or "prov"))[:20] or "prov"
+    fn = os.path.join(_dir_vouchers(),
+                      f"Voucher_{cat}_{res.get('numero','')}_{di+1}_{safe}.pdf")
+    generar_voucher_proveedor_multi(cfg, res, cat, dest, proveedor,
+                                    [s for _si, s in items], fn)
+    return fn
+
+
+def enviar_voucher_consolidado(cfg, res, di, cat, proveedor, correo, items):
+    fn = generar_voucher_consolidado_archivo(cfg, res, di, cat, proveedor, items)
+    if not correo:
+        raise ValueError("El proveedor no tiene correo.")
+    dest = res["destinos_detalle"][di].get("nombre", "")
+    asunto = f"Reserva {res.get('numero','')} - {cat.capitalize()} {dest} - {cfg.get('empresa','')}"
+    cuerpo = (f"Estimado {proveedor}:\n\n"
+              f"Adjuntamos el voucher de la reserva {res.get('numero','')} para "
+              f"{res.get('cliente','')}, con TODOS los servicios de {dest}.\n"
+              f"Fechas de viaje: {res.get('fechas_viaje','')}\n"
+              f"Pasajeros: {res.get('pax_txt','')}\n\n"
+              f"Favor confirmar disponibilidad y remitir la facturacion a nombre de "
+              f"{cfg.get('empresa','')}.\n\nCordialmente,\n{cfg.get('empresa','')}")
+    enviar_correo(cfg, correo, asunto, cuerpo, fn)
+    hoy = datetime.date.today().strftime("%d/%m/%Y")
+    for _si, s in items:
+        s["enviado"] = True
+        s["fecha_envio"] = hoy
     actualizar_reserva(res.get("numero", ""), {"destinos_detalle": res["destinos_detalle"]})
     return fn
 
@@ -6899,6 +7015,14 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
             ctk.CTkButton(sec, text="+ " + etiqueta.split(" ")[0], width=90, height=26,
                           fg_color=BLUE, hover_color=BLUE_H,
                           command=lambda i=di, c=cat: self._agregar_servicio(i, c)).pack(side="right")
+            # Transporte y Guia: UN solo voucher por proveedor con TODOS sus servicios
+            if cat in ("transporte", "guia"):
+                ctk.CTkButton(sec, text="✉ Enviar (todos)", width=120, height=26, fg_color=GREEN,
+                              hover_color=GREEN_H, font=("Segoe UI", 10, "bold"),
+                              command=lambda i=di, c=cat: self._enviar_grupo(i, c)).pack(side="right", padx=4)
+                ctk.CTkButton(sec, text="📄 Voucher (todos)", width=130, height=26, fg_color=NAVY,
+                              hover_color=NAVY2, font=("Segoe UI", 10, "bold"),
+                              command=lambda i=di, c=cat: self._voucher_grupo(i, c)).pack(side="right", padx=4)
             for si, s in enumerate(dest.get(cat, [])):
                 self._fila_servicio(card, di, cat, si, s)
         ctk.CTkFrame(card, fg_color="transparent", height=4).pack()
@@ -7139,6 +7263,52 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
                            {"destinos_detalle": self.res["destinos_detalle"]})
         self._refrescar_resumen()
         messagebox.showinfo("Enviado", f"Voucher enviado a {reng['correo']}.")
+
+    # ---- Voucher CONSOLIDADO por proveedor (transporte / guia) ----
+    def _voucher_grupo(self, di, cat):
+        self._sync()
+        grupos = [g for g in servicios_por_proveedor(self.res, di, cat) if g[2]]
+        if not grupos:
+            messagebox.showinfo("Voucher", "No hay servicios de esta categoria en el destino.",
+                                parent=self)
+            return
+        generados = []
+        for prov, correo, items in grupos:
+            try:
+                fn = generar_voucher_consolidado_archivo(self.cfg, self.res, di, cat, prov, items)
+                generados.append(fn)
+            except Exception as e:
+                messagebox.showerror("Error al generar el voucher", str(e), parent=self)
+                return
+        if generados:
+            try:
+                os.startfile(generados[0])
+            except Exception:
+                pass
+        messagebox.showinfo(
+            "Voucher del proveedor",
+            f"Se genero {len(generados)} voucher(s): uno por cada proveedor, con TODOS "
+            f"sus servicios de este destino.", parent=self)
+
+    def _enviar_grupo(self, di, cat):
+        self._sync()
+        grupos = [g for g in servicios_por_proveedor(self.res, di, cat) if g[2]]
+        if not grupos:
+            messagebox.showinfo("Enviar", "No hay servicios de esta categoria en el destino.",
+                                parent=self)
+            return
+        enviados = 0; errores = []
+        for prov, correo, items in grupos:
+            try:
+                enviar_voucher_consolidado(self.cfg, self.res, di, cat, prov, correo, items)
+                enviados += 1
+            except Exception as e:
+                errores.append(f"• {prov or '(sin proveedor)'}: {e}")
+        self._pintar_servicios(); self._refrescar_resumen()
+        msg = f"Vouchers enviados: {enviados} (uno por proveedor)."
+        if errores:
+            msg += "\n\nNo se pudieron enviar:\n" + "\n".join(errores)
+        messagebox.showinfo("Enviar al proveedor", msg, parent=self)
 
     def _voucher_cliente(self, abrir=True):
         self._sync()

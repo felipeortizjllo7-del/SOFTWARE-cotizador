@@ -1,5 +1,5 @@
 {
-  "version": "9.6",
+  "version": "9.7",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 9.6 - Reservas: cada servicio por destino (hotel, traslado, guia, actividad) ahora tiene su propio campo FECHA con calendario. La fecha elegida se guarda por servicio y sale en el voucher que se envia al proveedor (si el servicio no tiene fecha propia, usa la fecha de la reserva)."
+  "notas": "Version 9.7 - Reservas: voucher CONSOLIDADO por proveedor. En Transporte y Guia, botones '📄 Voucher (todos)' y '✉ Enviar (todos)' generan UN SOLO voucher por proveedor con TODOS sus servicios del destino (ej. transporte que hace traslado + city tour + Guatape = un voucher; guia que hace asistencia + city tour + Guatape = un voucher). En multidestino se separa por destino porque el proveedor cambia (Bogota != Medellin). Los hoteles siguen con un voucher por hotel. Cada servicio con su fecha y hora en la tabla."
 }
