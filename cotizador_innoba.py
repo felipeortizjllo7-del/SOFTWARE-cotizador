@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "8.6"
+VERSION = "8.7"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -331,13 +331,23 @@ def peek_numero_cotizacion():
     return f"COT-{cargar_cotizaciones().get('seq', 0) + 1:05d}"
 
 def registrar_cotizacion(rec):
-    """Asigna el consecutivo, guarda el registro y devuelve el numero asignado."""
+    """Asigna el consecutivo, guarda el registro y devuelve el numero asignado.
+       Ademas sube la cotizacion a la nube para compartirla con los demas equipos."""
     data = cargar_cotizaciones()
     data["seq"] = int(data.get("seq", 0)) + 1
     numero = f"COT-{data['seq']:05d}"
     rec = dict(rec); rec["numero"] = numero
+    if not rec.get("uid"):
+        rec["uid"] = "COTX-" + uuid.uuid4().hex[:12]
+    rec.setdefault("origen", "Escritorio")
     data["items"].append(rec)
     guardar_cotizaciones(data)
+    try:
+        if enviar_cotizacion_nube(rec):
+            rec["nube_ok"] = True
+            guardar_cotizaciones(data)
+    except Exception:
+        pass
     return numero
 
 def importar_cotizaciones_html():
@@ -359,9 +369,27 @@ def importar_cotizaciones_html():
         return 0
     data = cargar_cotizaciones()
     existentes = {str(it.get("web_id")) for it in data["items"] if it.get("web_id")}
+    uids = {str(it.get("uid")) for it in data["items"] if it.get("uid")}
     nuevas = 0
     for rc in remotas:
+        if not isinstance(rc, dict):
+            continue
+        uid = str(rc.get("uid") or "")
         wid = str(rc.get("id") or rc.get("web_id") or "")
+        # --- Cotizacion hecha en el .exe por Felipe/Carlos (sincronizada) ---
+        if uid and rc.get("origen", "") != "HTML (cliente)" and not wid.startswith("WEB-"):
+            if uid in uids:
+                continue
+            rc2 = {k: v for k, v in rc.items() if k != "tipo"}
+            data["seq"] = int(data.get("seq", 0)) + 1
+            rc2["numero"] = f"COT-{data['seq']:05d}"   # numero unico en este equipo
+            rc2.setdefault("estado", "Pendiente")
+            rc2["pdf"] = ""   # el PDF vive en el otro equipo; aca se regenera del snapshot
+            rc2["nube_ok"] = True   # ya esta en la nube: este equipo no la re-sube
+            data["items"].append(rc2)
+            uids.add(uid); nuevas += 1
+            continue
+        # --- Cotizacion del HTML (cliente/agencia) ---
         if not wid or wid in existentes:
             continue
         dests = rc.get("destinos", [])
@@ -394,6 +422,56 @@ def importar_cotizaciones_html():
     if nuevas:
         guardar_cotizaciones(data)
     return nuevas
+
+
+def enviar_cotizacion_nube(rec):
+    """Sube una cotizacion hecha en el .exe (Felipe/Carlos) al webhook para que se vea
+       en los demas equipos. Best-effort. Requiere 'uid'. No sube las del HTML."""
+    if not WEBHOOK_URL:
+        return False
+    if rec.get("origen", "") == "HTML (cliente)":
+        return False
+    try:
+        payload = {k: v for k, v in rec.items()
+                   if not str(k).startswith("_") and k not in ("pdf",)}
+        if not payload.get("uid"):
+            return False
+        payload["tipo"] = "cotizacion"          # bucket 'cotizaciones' del webhook
+        payload.setdefault("origen", "Escritorio")
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        req = urllib.request.Request(
+            WEBHOOK_URL, data=body, method="POST",
+            headers={"Content-Type": "text/plain;charset=utf-8",
+                     "User-Agent": "CotizadorInnoba"})
+        ctx = ssl.create_default_context()
+        with urllib.request.urlopen(req, context=ctx, timeout=15) as r:
+            r.read()
+        return True
+    except Exception:
+        return False
+
+
+def subir_cotizaciones_exe():
+    """Sube a la nube todas las cotizaciones locales hechas en el .exe (para compartirlas
+       con los demas equipos). Devuelve cuantas subio. Asigna 'uid' si falta."""
+    data = cargar_cotizaciones()
+    cambio = False
+    subidas = 0
+    for it in data["items"]:
+        if it.get("origen", "") == "HTML (cliente)":
+            continue
+        if it.get("nube_ok"):
+            continue   # ya subida (o importada de otro equipo): no repetir
+        if not it.get("uid"):
+            it["uid"] = "COTX-" + uuid.uuid4().hex[:12]
+            cambio = True
+        if enviar_cotizacion_nube(it):
+            it["nube_ok"] = True
+            cambio = True
+            subidas += 1
+    if cambio:
+        guardar_cotizaciones(data)
+    return subidas
 
 
 # ---- Sincronizacion de RESERVAS en la nube (mismo webhook, tipo=reserva) ----
@@ -3451,9 +3529,14 @@ class VentanaCotizaciones(ctk.CTkToplevel):
         self.title("Historial de cotizaciones")
         self.geometry("1240x660"); self.configure(fg_color=BG)
         self.transient(master); self.grab_set()
-        # traer cotizaciones nuevas hechas por clientes en el HTML
+        # Traer las de todos (HTML + otros equipos) al instante; subir las del .exe
+        # (Felipe/Carlos) en segundo plano para no congelar la ventana.
         try:
             importar_cotizaciones_html()
+        except Exception:
+            pass
+        try:
+            threading.Thread(target=subir_cotizaciones_exe, daemon=True).start()
         except Exception:
             pass
         self.data = cargar_cotizaciones()
@@ -3468,7 +3551,7 @@ class VentanaCotizaciones(ctk.CTkToplevel):
                       fg_color="#7A5AB5", hover_color="#63459A", font=("Segoe UI", 11, "bold"),
                       command=self._reporte_ventas).pack(side="left", padx=(0, 6))
         if WEBHOOK_URL:
-            ctk.CTkButton(botones_top, text="↻ Importar del HTML", width=160, height=32, corner_radius=8,
+            ctk.CTkButton(botones_top, text="☁ Sincronizar", width=150, height=32, corner_radius=8,
                           fg_color=NAVY, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
                           command=self._importar_html).pack(side="left")
         self.var_q = tk.StringVar()
@@ -3635,13 +3718,17 @@ class VentanaCotizaciones(ctk.CTkToplevel):
 
     def _importar_html(self):
         try:
+            subidas = subir_cotizaciones_exe()
             n = importar_cotizaciones_html()
         except Exception as e:
-            messagebox.showerror("Importar", str(e), parent=self); return
+            messagebox.showerror("Sincronizar", str(e), parent=self); return
         self.data = cargar_cotizaciones(); self._pintar()
-        messagebox.showinfo("Importar del HTML",
-                            (f"Se importaron {n} cotizacion(es) nueva(s) del HTML."
-                             if n else "No hay cotizaciones nuevas del HTML."), parent=self)
+        messagebox.showinfo(
+            "Sincronizacion de cotizaciones",
+            f"Cotizaciones subidas a la nube: {subidas}\n"
+            f"Cotizaciones traidas (HTML + otros equipos): {n}\n\n"
+            "Ahora se ven las cotizaciones de Felipe, de Carlos y las del HTML.",
+            parent=self)
 
     def _ver(self, it):
         VentanaVerCotizacion(self, it)

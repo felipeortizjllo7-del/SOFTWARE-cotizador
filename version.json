@@ -1,5 +1,5 @@
 {
-  "version": "8.6",
+  "version": "8.7",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 8.6 - Cotizador HTML: el % de ganancia de la agencia ahora se aplica como MARGEN SOBRE LA VENTA (dividir), no como recargo. precio_venta = costo / (1 - %/100). Ejemplo: costo USD 100 con 20% = USD 125 (la agencia gana el 20% de la venta), antes daba 120. A INNOBA le sigue llegando el precio base sin margen."
+  "notas": "Version 8.7 - Cotizaciones compartidas entre equipos: las cotizaciones que Felipe o Carlos hacen en el .exe ahora se SINCRONIZAN por la nube (igual que las reservas y las del HTML). En el Historial de cotizaciones se ven TODAS: las de Felipe, las de Carlos y las del HTML, en cualquier computador. Boton 'Sincronizar' (antes 'Importar del HTML'). Las del HTML se pueden ver con el boton 'Ver' (lo que cotizo el cliente). Sin duplicados: cada cotizacion tiene identificador unico."
 }
