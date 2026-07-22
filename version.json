@@ -1,5 +1,5 @@
 {
-  "version": "9.5",
+  "version": "9.6",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 9.5 - Liquidacion: la TRM ahora se maneja como PROMEDIO DEL MES. En la ventana de Liquidacion hay un campo 'TRM del mes' (con boton 'TRM hoy' que la trae automatica) que se aplica a TODAS las reservas de ese mes. Cada reserva puede tener un TRM propio opcional (override); si se deja vacio, usa el promedio del mes. El TRM del mes se guarda por mes."
+  "notas": "Version 9.6 - Reservas: cada servicio por destino (hotel, traslado, guia, actividad) ahora tiene su propio campo FECHA con calendario. La fecha elegida se guarda por servicio y sale en el voucher que se envia al proveedor (si el servicio no tiene fecha propia, usa la fecha de la reserva)."
 }

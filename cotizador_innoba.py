@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "9.5"
+VERSION = "9.6"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -1995,7 +1995,7 @@ _CAT_MIGRA = {"hoteles": "hotel", "traslados": "transporte", "tours": "actividad
 
 def _servicio_vacio():
     return {"servicio": "", "proveedor": "", "correo": "", "enviado": False,
-            "fecha_envio": "", "estado_prov": "Pendiente", "hora": "",
+            "fecha_envio": "", "estado_prov": "Pendiente", "fecha": "", "hora": "",
             "origen": "", "vehiculo": "", "observacion": ""}
 
 
@@ -2003,7 +2003,8 @@ def _norm_serv(s):
     """Asegura que un servicio tenga todas las claves (seguimiento + voucher)."""
     for k, v in (("servicio", ""), ("proveedor", ""), ("correo", ""),
                  ("enviado", False), ("fecha_envio", ""), ("estado_prov", "Pendiente"),
-                 ("hora", ""), ("origen", ""), ("vehiculo", ""), ("observacion", "")):
+                 ("fecha", ""), ("hora", ""), ("origen", ""), ("vehiculo", ""),
+                 ("observacion", "")):
         s.setdefault(k, v)
     return s
 
@@ -2082,7 +2083,7 @@ def renglon_de(res, di, cat, si):
     s = dest[cat][si]
     reng = {"tipo": tipo, "destino": dest.get("nombre", ""),
             "servicio": s.get("servicio", ""), "proveedor": s.get("proveedor", ""),
-            "correo": s.get("correo", ""), "hora": s.get("hora", ""),
+            "correo": s.get("correo", ""), "fecha": s.get("fecha", ""), "hora": s.get("hora", ""),
             "origen": s.get("origen", ""), "vehiculo": s.get("vehiculo", ""),
             "observacion": s.get("observacion", "")}
     return reng, s
@@ -3152,7 +3153,8 @@ def generar_voucher_proveedor(cfg, res, renglon, ruta):
     prov = renglon.get("proveedor", "")
     dest = renglon.get("destino", "")
     serv = renglon.get("servicio", "")
-    fecha = res.get("os_fecha_in", "") or res.get("fechas_viaje", "")
+    # la fecha propia del servicio manda; si no tiene, usa la de la reserva
+    fecha = renglon.get("fecha", "") or res.get("os_fecha_in", "") or res.get("fechas_viaje", "")
     hora = renglon.get("hora", "")
     obs = renglon.get("observacion", "")
     n_pax = len(pasajeros_de(res)) or res.get("pax_txt", "")
@@ -6945,8 +6947,16 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         ctk.CTkLabel(l2, text="Correo", text_color=MUTED, width=44).pack(side="left")
         ctk.CTkEntry(l2, textvariable=v["correo"], placeholder_text="correo@proveedor.com",
                      height=28).pack(side="left", padx=4, fill="x", expand=True)
-        # Linea 3: datos del voucher (hora / origen / vehiculo / observacion)
+        # Linea 3: datos del voucher (fecha / hora / origen / vehiculo / observacion)
         l3 = ctk.CTkFrame(row, fg_color="transparent"); l3.pack(fill="x", padx=6, pady=(0, 2))
+        ctk.CTkLabel(l3, text="Fecha", text_color=MUTED, width=38).pack(side="left")
+        sel_f = SelectorFecha(l3)
+        sel_f.btn.configure(height=28, font=("Segoe UI", 11))
+        sel_f.pack(side="left", padx=(0, 6))
+        f0 = parse_fecha(s.get("fecha", ""))
+        if f0:
+            sel_f._set(f0)
+        v["fecha_sel"] = sel_f
         ctk.CTkLabel(l3, text="Hora", text_color=MUTED, width=34).pack(side="left")
         ctk.CTkEntry(l3, textvariable=v["hora"], width=80, height=28,
                      placeholder_text="8:00 am").pack(side="left", padx=(0, 6))
@@ -6985,6 +6995,8 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
                 for k in ("servicio", "proveedor", "correo", "estado_prov",
                           "hora", "origen", "vehiculo", "observacion"):
                     s[k] = w[k].get().strip()
+                if w.get("fecha_sel") is not None:
+                    s["fecha"] = w["fecha_sel"].get_str()
             except Exception:
                 pass
         for di, val in self.dest_nom_vars.items():
