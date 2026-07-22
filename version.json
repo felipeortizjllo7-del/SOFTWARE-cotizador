@@ -1,5 +1,5 @@
 {
-  "version": "9.2",
+  "version": "9.3",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 9.2 - Seguridad de datos en actualizaciones: los datos (cotizaciones, reservas, clientes, tareas) viven en %APPDATA% y el instalador NUNCA los borra. Ademas, justo antes de instalar una actualizacion se guarda un respaldo permanente con fecha/hora en la carpeta 'respaldos'. Sumado a la sincronizacion en la nube, las cotizaciones y reservas quedan protegidas y no se pierden al actualizar."
+  "notas": "Version 9.3 - NUEVO MODULO MICE / EVENTOS: cotiza eventos corporativos. Cuarto boton en el inicio. Cada cotizacion tiene datos del evento (empresa, evento, pax, fechas), VARIAS OPCIONES/ciudades, cada una con su bloque de hoteles (tarifa por persona) y su tabla MINUTO A MINUTO (Dia, Item, Descripcion, Cantidad, Unitario, Total) para cenas, alquiler de salones con audiovisuales, traslados y tours. Biblioteca de items y hoteles frecuentes para insertar con un clic (y guardar los tuyos). Genera PDF profesional por opcion. Historial editable."
 }

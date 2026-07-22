@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "9.2"
+VERSION = "9.3"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -745,6 +745,15 @@ def _nz(s):
     s = "".join(ch for ch in unicodedata.normalize("NFD", str(s or ""))
                 if unicodedata.category(ch) != "Mn")
     return re.sub(r"\s+", " ", s).lower().strip()
+
+
+def _num(s, defecto=0):
+    """Convierte a numero; devuelve int si es entero (100), float si tiene decimales."""
+    try:
+        v = float(str(s).replace(",", "").strip() or defecto)
+        return int(v) if v == int(v) else v
+    except Exception:
+        return defecto
 
 def _leer_filas(ruta):
     """Lee filas de un .xlsx o .csv (detecta codificacion y delimitador)."""
@@ -8251,6 +8260,777 @@ class VentanaRankingContactos(ctk.CTkToplevel):
             messagebox.showerror("Error", str(e), parent=self)
 
 
+# ============================================================================
+# MODULO MICE / EVENTOS - cotizacion de eventos corporativos (minuto a minuto)
+# ============================================================================
+MICE_PATH = os.path.join(datos_dir(), "mice.json")
+MICE_BIB_PATH = os.path.join(datos_dir(), "mice_biblioteca.json")
+CIUDADES_MICE = ["Cartagena", "Bogota", "Medellin", "Santa Marta", "Cali",
+                 "Eje Cafetero", "San Andres", "Barranquilla", "Otra"]
+ALIMENTACION_MICE = ["Desayuno", "Media pension", "Pension completa", "Todo incluido"]
+CATEGORIAS_MICE_ITEM = ["Traslados", "Cenas", "Salones", "Audiovisuales",
+                        "Personal", "Tours", "Decoracion", "Impuestos", "Otros"]
+
+
+def cargar_mice():
+    if os.path.exists(MICE_PATH):
+        try:
+            with open(MICE_PATH, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            if isinstance(d, dict) and "items" in d:
+                return d
+        except Exception:
+            pass
+    return {"seq": 0, "items": []}
+
+
+def guardar_mice(data):
+    with open(MICE_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def registrar_mice(rec):
+    data = cargar_mice()
+    data["seq"] = int(data.get("seq", 0)) + 1
+    rec = dict(rec); rec["numero"] = f"MICE-{data['seq']:05d}"
+    if not rec.get("uid"):
+        rec["uid"] = "MICE-" + uuid.uuid4().hex[:12]
+    data["items"].append(rec); guardar_mice(data)
+    return rec["numero"]
+
+
+def actualizar_mice(numero, cambios):
+    data = cargar_mice()
+    for it in data["items"]:
+        if it.get("numero") == numero:
+            it.update(cambios); break
+    guardar_mice(data)
+
+
+def eliminar_mice(numero):
+    data = cargar_mice()
+    data["items"] = [x for x in data["items"] if x.get("numero") != numero]
+    guardar_mice(data)
+
+
+def total_opcion_mice(op):
+    t = 0.0
+    for ln in op.get("lineas", []):
+        try:
+            t += float(ln.get("cantidad", 0) or 0) * float(ln.get("unitario", 0) or 0)
+        except Exception:
+            pass
+    return round(t, 2)
+
+
+def total_mice(rec):
+    ops = rec.get("opciones", [])
+    return total_opcion_mice(ops[0]) if ops else 0.0
+
+
+# ---- Biblioteca de items y hoteles frecuentes ----
+def _mice_bib_semilla():
+    return {"items": [
+        {"categoria": "Traslados", "item": "Traslado in/out aeropuerto",
+         "descripcion": "Traslado de llegada y de salida con asistencia en los aeropuertos", "unitario": 12},
+        {"categoria": "Cenas", "item": "Cena inaugural",
+         "descripcion": "Cena de bienvenida en restaurante - entrada, plato fuerte y postre", "unitario": 0},
+        {"categoria": "Cenas", "item": "Cena de cierre",
+         "descripcion": "Cena de cierre de evento con open bar de 2 horas", "unitario": 0},
+        {"categoria": "Cenas", "item": "Cena en restaurante (3 tiempos)",
+         "descripcion": "Cena en restaurante de la ciudad: entrada, plato fuerte y postre", "unitario": 0},
+        {"categoria": "Salones", "item": "Alquiler de salon para evento",
+         "descripcion": "Montaje del salon para el evento privado", "unitario": 0},
+        {"categoria": "Audiovisuales", "item": "Video beam", "descripcion": "Alquiler de video beam", "unitario": 0},
+        {"categoria": "Audiovisuales", "item": "Papelografo", "descripcion": "Alquiler de papelografo", "unitario": 0},
+        {"categoria": "Audiovisuales", "item": "Podium", "descripcion": "Alquiler de podium", "unitario": 0},
+        {"categoria": "Audiovisuales", "item": "Sonido y microfonia",
+         "descripcion": "Equipo de sonido y microfonos para el evento", "unitario": 0},
+        {"categoria": "Personal", "item": "Meseros", "descripcion": "Servicio de meseros para el evento", "unitario": 0},
+        {"categoria": "Tours", "item": "City tour + Castillo de San Felipe",
+         "descripcion": "Recorrido en transporte climatizado con guia profesional bilingue", "unitario": 0},
+        {"categoria": "Tours", "item": "Chiva Rumbera",
+         "descripcion": "Recorrido nocturno festivo por la ciudad", "unitario": 0},
+        {"categoria": "Impuestos", "item": "Propina voluntaria 10%",
+         "descripcion": "Propina voluntaria 10% sobre alimentos y bebidas", "unitario": 0},
+    ], "hoteles": []}
+
+
+def cargar_mice_bib():
+    if os.path.exists(MICE_BIB_PATH):
+        try:
+            with open(MICE_BIB_PATH, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            if isinstance(d, dict):
+                d.setdefault("items", []); d.setdefault("hoteles", [])
+                return d
+        except Exception:
+            pass
+    d = _mice_bib_semilla()
+    try:
+        guardar_mice_bib(d)
+    except Exception:
+        pass
+    return d
+
+
+def guardar_mice_bib(d):
+    with open(MICE_BIB_PATH, "w", encoding="utf-8") as f:
+        json.dump(d, f, ensure_ascii=False, indent=2)
+
+
+def bib_agregar_item(item):
+    d = cargar_mice_bib()
+    for x in d["items"]:
+        if x.get("item", "").strip().lower() == item.get("item", "").strip().lower():
+            x.update(item); guardar_mice_bib(d); return
+    d["items"].append(item); guardar_mice_bib(d)
+
+
+def bib_agregar_hotel(h):
+    d = cargar_mice_bib()
+    for x in d["hoteles"]:
+        if x.get("hotel", "").strip().lower() == h.get("hotel", "").strip().lower():
+            x.update(h); guardar_mice_bib(d); return
+    d["hoteles"].append(h); guardar_mice_bib(d)
+
+
+# ---- PDF de la cotizacion MICE (una seccion por opcion) ----
+class MICEPDF(CotizacionPDF):
+    pass
+
+
+def generar_pdf_mice(cfg, rec, ruta):
+    pdf = MICEPDF(cfg); T = pdf._t
+    ops = rec.get("opciones", []) or [{}]
+    for i, op in enumerate(ops):
+        pdf.add_page()
+        pdf.ln(2)
+        pdf.set_fill_color(*PDF_PRIM); pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Helvetica", "B", 12)
+        tit = op.get("nombre") or op.get("ciudad") or f"OPCION {i + 1}"
+        pdf.cell(0, 9, T("COTIZACION MICE - " + tit), ln=1, fill=True, align="C")
+        pdf.set_text_color(*PDF_TXT); pdf.ln(2)
+        info = [("Empresa / Cliente", rec.get("empresa", "")), ("Contacto", rec.get("contacto", "")),
+                ("Evento", rec.get("evento", "")), ("Ciudad", op.get("ciudad", "")),
+                ("No. de pasajeros", str(rec.get("pax", "") or "")),
+                ("Fechas del evento", rec.get("fechas_evento", "")),
+                ("No. de cotizacion", rec.get("numero", "")), ("Fecha", rec.get("fecha", "")),
+                ("Asesor", rec.get("cotizado_por", ""))]
+        for et, val in info:
+            if val:
+                pdf.set_font("Helvetica", "B", 9); pdf.cell(46, 5.6, T(et + ":"), border=0)
+                pdf.set_font("Helvetica", "", 9); pdf.multi_cell(0, 5.6, T(str(val)))
+        # Hoteles
+        hoteles = op.get("hoteles", [])
+        if hoteles:
+            pdf.ln(2); pdf.set_fill_color(*PDF_CLARO); pdf.set_text_color(*PDF_PRIM)
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.cell(64, 7, T(" HOTEL"), border=1, fill=True)
+            pdf.cell(30, 7, T("ALIMENTACION"), border=1, fill=True, align="C")
+            pdf.cell(26, 7, T("CATEGORIA"), border=1, fill=True, align="C")
+            pdf.cell(20, 7, T("SENCILLA"), border=1, fill=True, align="R")
+            pdf.cell(20, 7, T("DOBLE"), border=1, fill=True, align="R")
+            pdf.cell(0, 7, T("TRIPLE"), border=1, fill=True, align="R", ln=1)
+            pdf.set_text_color(*PDF_TXT); pdf.set_font("Helvetica", "", 9)
+            for h in hoteles:
+                pdf.cell(64, 6.5, T(" " + str(h.get("hotel", ""))[:44]), border=1)
+                pdf.cell(30, 6.5, T(str(h.get("alimentacion", ""))), border=1, align="C")
+                pdf.cell(26, 6.5, T(str(h.get("categoria", ""))), border=1, align="C")
+                pdf.cell(20, 6.5, T(usd(h.get("sencilla", 0))), border=1, align="R")
+                pdf.cell(20, 6.5, T(usd(h.get("doble", 0))), border=1, align="R")
+                pdf.cell(0, 6.5, T(usd(h.get("triple", 0))), border=1, align="R", ln=1)
+            nn = hoteles[0].get("noches", "")
+            if nn:
+                pdf.set_font("Helvetica", "I", 8)
+                pdf.cell(0, 5, T(f"Tarifa por {nn} noche(s), por persona."), ln=1)
+        # Minuto a minuto
+        pdf.ln(2); pdf.set_fill_color(*PDF_PRIM); pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.cell(0, 7, T(" MINUTO A MINUTO"), ln=1, fill=True)
+        pdf.set_fill_color(*PDF_CLARO); pdf.set_text_color(*PDF_PRIM); pdf.set_font("Helvetica", "B", 8.5)
+        W = [22, 34, 66, 12, 22, 24]
+        pdf.cell(W[0], 6.5, T(" FECHA"), border=1, fill=True)
+        pdf.cell(W[1], 6.5, T("ITEM"), border=1, fill=True)
+        pdf.cell(W[2], 6.5, T("DESCRIPCION"), border=1, fill=True)
+        pdf.cell(W[3], 6.5, T("CANT"), border=1, fill=True, align="C")
+        pdf.cell(W[4], 6.5, T("UNIT."), border=1, fill=True, align="R")
+        pdf.cell(W[5], 6.5, T("TOTAL"), border=1, fill=True, align="R", ln=1)
+        pdf.set_text_color(*PDF_TXT); pdf.set_font("Helvetica", "", 8.5)
+        x0 = pdf.l_margin
+        for ln in op.get("lineas", []):
+            cant = float(ln.get("cantidad", 0) or 0); unit = float(ln.get("unitario", 0) or 0)
+            tot = cant * unit
+            y0 = pdf.get_y()
+            pdf.set_xy(x0, y0); pdf.multi_cell(W[0], 5, T(" " + str(ln.get("dia", ""))), border=1)
+            h1 = pdf.get_y() - y0
+            pdf.set_xy(x0 + W[0], y0); pdf.multi_cell(W[1], 5, T(" " + str(ln.get("item", ""))), border=1)
+            h2 = pdf.get_y() - y0
+            pdf.set_xy(x0 + W[0] + W[1], y0); pdf.multi_cell(W[2], 5, T(" " + str(ln.get("descripcion", ""))), border=1)
+            h3 = pdf.get_y() - y0
+            hh = max(h1, h2, h3, 5)
+            pdf.set_xy(x0 + W[0] + W[1] + W[2], y0); pdf.cell(W[3], hh, T(f"{cant:g}"), border=1, align="C")
+            pdf.cell(W[4], hh, T(usd(unit)), border=1, align="R")
+            pdf.cell(W[5], hh, T(usd(tot)), border=1, align="R", ln=1)
+            pdf.set_y(y0 + hh)
+        pdf.ln(1); pdf.set_font("Helvetica", "B", 11); pdf.set_text_color(*PDF_PRIM)
+        pdf.cell(0, 8, T(f"TOTAL {tit}:   {usd(total_opcion_mice(op))}"), ln=1, align="R")
+        notas = rec.get("notas", "")
+        if notas:
+            pdf.ln(1); pdf.set_font("Helvetica", "", 8.5); pdf.set_text_color(*PDF_TXT)
+            pdf.multi_cell(0, 5, T("Notas: " + notas))
+    pdf.output(ruta)
+    return ruta
+
+
+class SelectorMICEBib(ctk.CTkToplevel):
+    """Elegir un item (o hotel) de la biblioteca para insertarlo en la cotizacion."""
+    def __init__(self, master, tipo, on_pick):
+        super().__init__(master)
+        self.tipo = tipo; self.on_pick = on_pick
+        self.title("Biblioteca de " + ("hoteles" if tipo == "hoteles" else "items"))
+        self.geometry("640x560"); self.configure(fg_color=BG)
+        self.transient(master); self.grab_set()
+        ctk.CTkLabel(self, text="Biblioteca de " + ("hoteles" if tipo == "hoteles" else "items"),
+                     text_color=NAVY, font=("Segoe UI", 16, "bold")).pack(anchor="w", padx=16, pady=(14, 2))
+        self.q = tk.StringVar()
+        e = ctk.CTkEntry(self, textvariable=self.q, height=36, corner_radius=10,
+                         border_color=BLUE, border_width=2,
+                         placeholder_text="Buscar...")
+        e.pack(fill="x", padx=16, pady=(2, 8)); self.q.trace_add("write", lambda *a: self._pintar())
+        self.box = ctk.CTkScrollableFrame(self, fg_color=CARD, corner_radius=12)
+        self.box.pack(fill="both", expand=True, padx=16, pady=(0, 14))
+        self._pintar(); self.after(120, e.focus_set)
+        self.bind("<Escape>", lambda ev: self.destroy())
+
+    def _pintar(self):
+        for w in self.box.winfo_children():
+            w.destroy()
+        d = cargar_mice_bib()
+        lst = d["hoteles"] if self.tipo == "hoteles" else d["items"]
+        q = _nz(self.q.get())
+        for x in lst:
+            txt = x.get("hotel", "") if self.tipo == "hoteles" else x.get("item", "")
+            sub = (f"{x.get('ciudad','')} · {x.get('categoria','')}" if self.tipo == "hoteles"
+                   else f"{x.get('categoria','')} · {x.get('descripcion','')[:60]}")
+            if q and q not in _nz(txt + " " + sub):
+                continue
+            row = ctk.CTkFrame(self.box, fg_color=CARD2, corner_radius=8)
+            row.pack(fill="x", pady=2, padx=2)
+            izq = ctk.CTkFrame(row, fg_color="transparent"); izq.pack(side="left", fill="x", expand=True, padx=8, pady=5)
+            ctk.CTkLabel(izq, text=txt or "(sin nombre)", text_color=NAVY, anchor="w",
+                         font=("Segoe UI", 12, "bold")).pack(anchor="w")
+            ctk.CTkLabel(izq, text=sub, text_color=MUTED, anchor="w",
+                         font=("Segoe UI", 10), wraplength=440, justify="left").pack(anchor="w")
+            ctk.CTkButton(row, text="+ Insertar", width=100, height=30, fg_color=GREEN,
+                          hover_color=GREEN_H, font=("Segoe UI", 11, "bold"),
+                          command=lambda xx=x: self._pick(xx)).pack(side="right", padx=8)
+        if not self.box.winfo_children():
+            ctk.CTkLabel(self.box, text="Sin elementos. Los que guardes iran apareciendo aqui.",
+                         text_color=MUTED).pack(pady=20)
+
+    def _pick(self, x):
+        try:
+            self.on_pick(dict(x))
+        finally:
+            self.destroy()
+
+
+class VentanaMICEDetalle(ctk.CTkToplevel):
+    """Editor de una cotizacion MICE: datos del evento + varias opciones (minuto a minuto)."""
+    def __init__(self, master, rec, cfg, on_save=None):
+        super().__init__(master)
+        self.res = rec; self.cfg = cfg; self.on_save = on_save
+        self.title("Cotizacion MICE " + rec.get("numero", "nueva"))
+        self.configure(fg_color=BG); self.geometry("1120x740+40+10")
+        self.transient(master); self.grab_set()
+        self.after(60, lambda: self._safe_zoom())
+        bar = ctk.CTkFrame(self, fg_color=NAVY, corner_radius=0, height=56)
+        bar.pack(side="top", fill="x"); bar.pack_propagate(False)
+        ctk.CTkButton(bar, text="💾  Guardar", height=38, width=150, fg_color=GREEN,
+                      hover_color=GREEN_H, font=("Segoe UI", 13, "bold"),
+                      command=self._guardar).pack(side="left", padx=(16, 8), pady=9)
+        ctk.CTkButton(bar, text="📄 Generar PDF", height=38, width=160, fg_color="#FFFFFF",
+                      text_color=NAVY, hover_color="#E7EEF8", font=("Segoe UI", 12, "bold"),
+                      command=self._pdf).pack(side="left", padx=(0, 8), pady=9)
+        ctk.CTkButton(bar, text="Cerrar", height=38, width=100, fg_color=NAVY2,
+                      hover_color=NAVY, font=("Segoe UI", 12, "bold"),
+                      command=self.destroy).pack(side="right", padx=16, pady=9)
+        self.lbl_tot = ctk.CTkLabel(bar, text="", text_color="#BBD0EC", font=("Segoe UI", 12, "bold"))
+        self.lbl_tot.pack(side="right", padx=8)
+        cont = ctk.CTkScrollableFrame(self, fg_color=BG)
+        cont.pack(fill="both", expand=True, padx=16, pady=12)
+
+        ctk.CTkLabel(cont, text="Datos del evento", text_color=NAVY,
+                     font=("Segoe UI", 15, "bold")).pack(anchor="w")
+        self.v = {}
+
+        def campo(parent, clave, etq, valor=""):
+            ctk.CTkLabel(parent, text=etq, text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+            var = tk.StringVar(value=str(valor)); self.v[clave] = var
+            ctk.CTkEntry(parent, textvariable=var, height=32, corner_radius=8, border_color=LINE).pack(fill="x", pady=(0, 6))
+            return var
+
+        f1 = ctk.CTkFrame(cont, fg_color="transparent"); f1.pack(fill="x")
+        a = ctk.CTkFrame(f1, fg_color="transparent"); a.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        b = ctk.CTkFrame(f1, fg_color="transparent"); b.pack(side="left", fill="x", expand=True, padx=(6, 0))
+        campo(a, "empresa", "Empresa / Cliente", rec.get("empresa", ""))
+        campo(b, "contacto", "Contacto", rec.get("contacto", ""))
+        f2 = ctk.CTkFrame(cont, fg_color="transparent"); f2.pack(fill="x")
+        a2 = ctk.CTkFrame(f2, fg_color="transparent"); a2.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        b2 = ctk.CTkFrame(f2, fg_color="transparent"); b2.pack(side="left", fill="x", expand=True, padx=(6, 0))
+        campo(a2, "email", "Correo", rec.get("email", ""))
+        campo(b2, "evento", "Nombre del evento", rec.get("evento", ""))
+        f3 = ctk.CTkFrame(cont, fg_color="transparent"); f3.pack(fill="x")
+        a3 = ctk.CTkFrame(f3, fg_color="transparent"); a3.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        b3 = ctk.CTkFrame(f3, fg_color="transparent"); b3.pack(side="left", fill="x", expand=True, padx=(6, 0))
+        campo(a3, "pax", "No. de pasajeros", rec.get("pax", ""))
+        campo(b3, "fechas_evento", "Fechas del evento", rec.get("fechas_evento", ""))
+        f4 = ctk.CTkFrame(cont, fg_color="transparent"); f4.pack(fill="x")
+        a4 = ctk.CTkFrame(f4, fg_color="transparent"); a4.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        b4 = ctk.CTkFrame(f4, fg_color="transparent"); b4.pack(side="left", fill="x", expand=True, padx=(6, 0))
+        ctk.CTkLabel(a4, text="Cotizado por", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        self.v_cotpor = tk.StringVar(value=rec.get("cotizado_por", "") or COTIZADORES[0][0])
+        ctk.CTkOptionMenu(a4, variable=self.v_cotpor, values=[c[0] for c in COTIZADORES],
+                          height=32, fg_color=NAVY, button_color=NAVY2).pack(fill="x", pady=(0, 6))
+        ctk.CTkLabel(b4, text="Estado", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        self.v_estado = tk.StringVar(value=rec.get("estado", "Pendiente"))
+        ctk.CTkOptionMenu(b4, variable=self.v_estado, values=ESTADOS_COT,
+                          height=32, fg_color=NAVY, button_color=NAVY2).pack(fill="x", pady=(0, 6))
+        campo(cont, "notas", "Notas (salen en el PDF)", rec.get("notas", ""))
+
+        oh = ctk.CTkFrame(cont, fg_color="transparent"); oh.pack(fill="x", pady=(8, 2))
+        ctk.CTkLabel(oh, text="OPCIONES DE LA COTIZACION", text_color=NAVY,
+                     font=("Segoe UI", 15, "bold")).pack(side="left")
+        ctk.CTkButton(oh, text="+ Agregar opcion", width=150, height=30, fg_color=BLUE,
+                      hover_color=NAVY, font=("Segoe UI", 11, "bold"),
+                      command=self._agregar_opcion).pack(side="right")
+        self.ops_box = ctk.CTkFrame(cont, fg_color="transparent"); self.ops_box.pack(fill="x")
+        self.op_widgets = []
+        if not self.res.get("opciones"):
+            self.res["opciones"] = [self._opcion_vacia()]
+        self._pintar_opciones()
+
+    def _safe_zoom(self):
+        try:
+            self.state("zoomed")
+        except Exception:
+            pass
+
+    def _opcion_vacia(self):
+        return {"nombre": "", "ciudad": "Cartagena", "hoteles": [], "lineas": []}
+
+    # ---------- render de opciones ----------
+    def _pintar_opciones(self):
+        for w in self.ops_box.winfo_children():
+            w.destroy()
+        self.op_widgets = []
+        for i, op in enumerate(self.res.get("opciones", [])):
+            self._render_opcion(i, op)
+        self._recalc()
+
+    def _render_opcion(self, i, op):
+        card = ctk.CTkFrame(self.ops_box, fg_color=CARD, corner_radius=12, border_width=1, border_color=LINE)
+        card.pack(fill="x", pady=6)
+        top = ctk.CTkFrame(card, fg_color="transparent"); top.pack(fill="x", padx=10, pady=(8, 2))
+        ctk.CTkLabel(top, text=f"Opcion {i + 1}", text_color=NAVY, font=("Segoe UI", 13, "bold")).pack(side="left")
+        ctk.CTkButton(top, text="🗑 Quitar opcion", width=130, height=28, fg_color=CARD2, text_color=RED,
+                      hover_color=LINE, border_width=1, border_color=LINE, font=("Segoe UI", 11),
+                      command=lambda idx=i: self._quitar_opcion(idx)).pack(side="right")
+        fr = ctk.CTkFrame(card, fg_color="transparent"); fr.pack(fill="x", padx=10)
+        na = ctk.CTkFrame(fr, fg_color="transparent"); na.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        nc = ctk.CTkFrame(fr, fg_color="transparent"); nc.pack(side="left", padx=(6, 0))
+        ctk.CTkLabel(na, text="Nombre de la opcion", text_color=MUTED, font=("Segoe UI", 10)).pack(anchor="w")
+        v_nom = tk.StringVar(value=op.get("nombre", ""))
+        ctk.CTkEntry(na, textvariable=v_nom, height=30, placeholder_text="Ej. OPCION CARTAGENA").pack(fill="x")
+        ctk.CTkLabel(nc, text="Ciudad", text_color=MUTED, font=("Segoe UI", 10)).pack(anchor="w")
+        v_ciu = tk.StringVar(value=op.get("ciudad", "Cartagena"))
+        ctk.CTkOptionMenu(nc, variable=v_ciu, values=CIUDADES_MICE, width=160, height=30,
+                          fg_color=NAVY, button_color=NAVY2).pack()
+        ow = {"nombre": v_nom, "ciudad": v_ciu, "hoteles": [], "lineas": [],
+              "hbox": None, "lbox": None, "tot": None}
+        self.op_widgets.append(ow)
+        # Hoteles
+        hh = ctk.CTkFrame(card, fg_color="transparent"); hh.pack(fill="x", padx=10, pady=(8, 0))
+        ctk.CTkLabel(hh, text="Hoteles (tarifa por persona)", text_color=NAVY,
+                     font=("Segoe UI", 12, "bold")).pack(side="left")
+        ctk.CTkButton(hh, text="+ Hotel", width=80, height=26, fg_color=BLUE, hover_color=NAVY,
+                      font=("Segoe UI", 10, "bold"),
+                      command=lambda idx=i: self._add_hotel(idx)).pack(side="right", padx=(4, 0))
+        ctk.CTkButton(hh, text="📚 De biblioteca", width=120, height=26, fg_color=CARD2, text_color=NAVY,
+                      hover_color=LINE, border_width=1, border_color=LINE, font=("Segoe UI", 10, "bold"),
+                      command=lambda idx=i: self._hotel_bib(idx)).pack(side="right")
+        ow["hbox"] = ctk.CTkFrame(card, fg_color="transparent"); ow["hbox"].pack(fill="x", padx=10)
+        for h in op.get("hoteles", []):
+            self._fila_hotel(ow, h)
+        # Minuto a minuto
+        lh = ctk.CTkFrame(card, fg_color="transparent"); lh.pack(fill="x", padx=10, pady=(8, 0))
+        ctk.CTkLabel(lh, text="Minuto a minuto", text_color=NAVY,
+                     font=("Segoe UI", 12, "bold")).pack(side="left")
+        ctk.CTkButton(lh, text="+ Linea", width=80, height=26, fg_color=BLUE, hover_color=NAVY,
+                      font=("Segoe UI", 10, "bold"),
+                      command=lambda idx=i: self._add_linea(idx)).pack(side="right", padx=(4, 0))
+        ctk.CTkButton(lh, text="📚 De biblioteca", width=120, height=26, fg_color=CARD2, text_color=NAVY,
+                      hover_color=LINE, border_width=1, border_color=LINE, font=("Segoe UI", 10, "bold"),
+                      command=lambda idx=i: self._linea_bib(idx)).pack(side="right")
+        cab = ctk.CTkFrame(card, fg_color="transparent"); cab.pack(fill="x", padx=10)
+        for txt, w in (("Dia", 70), ("Item", 150), ("Descripcion", 0), ("Cant", 52),
+                       ("Unit.", 70), ("Total", 80), ("", 30)):
+            ctk.CTkLabel(cab, text=txt, text_color=MUTED, font=("Segoe UI", 9, "bold"),
+                         width=w, anchor="w").pack(side="left", fill=("x" if w == 0 else None),
+                                                   expand=(w == 0), padx=1)
+        ow["lbox"] = ctk.CTkFrame(card, fg_color="transparent"); ow["lbox"].pack(fill="x", padx=10)
+        for ln in op.get("lineas", []):
+            self._fila_linea(ow, ln)
+        tb = ctk.CTkFrame(card, fg_color=CARD2, corner_radius=8); tb.pack(fill="x", padx=10, pady=(6, 10))
+        ow["tot"] = ctk.CTkLabel(tb, text="Total opcion: USD 0.00", text_color=NAVY,
+                                 font=("Segoe UI", 13, "bold"))
+        ow["tot"].pack(side="right", padx=12, pady=6)
+
+    def _fila_hotel(self, ow, h):
+        row = ctk.CTkFrame(ow["hbox"], fg_color=CARD2, corner_radius=8); row.pack(fill="x", pady=2)
+        v = {}
+        v["hotel"] = tk.StringVar(value=h.get("hotel", ""))
+        v["alimentacion"] = tk.StringVar(value=h.get("alimentacion", "Desayuno"))
+        v["categoria"] = tk.StringVar(value=h.get("categoria", ""))
+        v["noches"] = tk.StringVar(value=str(h.get("noches", "") or ""))
+        v["sencilla"] = tk.StringVar(value=str(h.get("sencilla", "") or ""))
+        v["doble"] = tk.StringVar(value=str(h.get("doble", "") or ""))
+        v["triple"] = tk.StringVar(value=str(h.get("triple", "") or ""))
+        ctk.CTkEntry(row, textvariable=v["hotel"], height=28, placeholder_text="Hotel").pack(side="left", fill="x", expand=True, padx=(6, 2), pady=4)
+        ctk.CTkOptionMenu(row, variable=v["alimentacion"], values=ALIMENTACION_MICE, width=110, height=28,
+                          fg_color=NAVY, button_color=NAVY2).pack(side="left", padx=2)
+        ctk.CTkEntry(row, textvariable=v["categoria"], height=28, width=80, placeholder_text="Cat.").pack(side="left", padx=2)
+        ctk.CTkEntry(row, textvariable=v["noches"], height=28, width=44, placeholder_text="Noch").pack(side="left", padx=2)
+        ctk.CTkEntry(row, textvariable=v["sencilla"], height=28, width=60, placeholder_text="Sencilla").pack(side="left", padx=2)
+        ctk.CTkEntry(row, textvariable=v["doble"], height=28, width=60, placeholder_text="Doble").pack(side="left", padx=2)
+        ctk.CTkEntry(row, textvariable=v["triple"], height=28, width=60, placeholder_text="Triple").pack(side="left", padx=2)
+        ctk.CTkButton(row, text="✕", width=26, height=26, fg_color=RED, hover_color="#9B2C22",
+                      command=lambda: self._del_hotel(ow, v)).pack(side="left", padx=(2, 6))
+        ow["hoteles"].append(v)
+
+    def _fila_linea(self, ow, ln):
+        row = ctk.CTkFrame(ow["lbox"], fg_color=CARD2, corner_radius=8); row.pack(fill="x", pady=2)
+        v = {}
+        v["dia"] = tk.StringVar(value=ln.get("dia", ""))
+        v["item"] = tk.StringVar(value=ln.get("item", ""))
+        v["descripcion"] = tk.StringVar(value=ln.get("descripcion", ""))
+        v["cantidad"] = tk.StringVar(value=str(ln.get("cantidad", "") or ""))
+        v["unitario"] = tk.StringVar(value=str(ln.get("unitario", "") or ""))
+        ctk.CTkEntry(row, textvariable=v["dia"], height=28, width=70, placeholder_text="DIA 1").pack(side="left", padx=(6, 1), pady=4)
+        ctk.CTkEntry(row, textvariable=v["item"], height=28, width=150, placeholder_text="Item").pack(side="left", padx=1)
+        ctk.CTkEntry(row, textvariable=v["descripcion"], height=28, placeholder_text="Descripcion").pack(side="left", fill="x", expand=True, padx=1)
+        ec = ctk.CTkEntry(row, textvariable=v["cantidad"], height=28, width=52, placeholder_text="Cant")
+        ec.pack(side="left", padx=1); ec.bind("<KeyRelease>", lambda e: self._recalc())
+        eu = ctk.CTkEntry(row, textvariable=v["unitario"], height=28, width=70, placeholder_text="Unit")
+        eu.pack(side="left", padx=1); eu.bind("<KeyRelease>", lambda e: self._recalc())
+        v["tot_lbl"] = ctk.CTkLabel(row, text="0.00", text_color=GREEN_H, width=80, anchor="e",
+                                    font=("Segoe UI", 11, "bold"))
+        v["tot_lbl"].pack(side="left", padx=2)
+        b = ctk.CTkFrame(row, fg_color="transparent"); b.pack(side="left", padx=(2, 6))
+        ctk.CTkButton(b, text="★", width=26, height=26, fg_color="#D9A400", hover_color="#B7791F",
+                      command=lambda: self._guardar_linea_bib(v)).pack(side="left", padx=1)
+        ctk.CTkButton(b, text="✕", width=26, height=26, fg_color=RED, hover_color="#9B2C22",
+                      command=lambda: self._del_linea(ow, v)).pack(side="left", padx=1)
+        ow["lineas"].append(v)
+
+    # ---------- acciones ----------
+    def _sync(self):
+        ops = []
+        for ow in self.op_widgets:
+            hoteles = []
+            for h in ow["hoteles"]:
+                hoteles.append({"hotel": h["hotel"].get().strip(),
+                                "alimentacion": h["alimentacion"].get(),
+                                "categoria": h["categoria"].get().strip(),
+                                "noches": _num(h["noches"].get()),
+                                "sencilla": _num(h["sencilla"].get()),
+                                "doble": _num(h["doble"].get()),
+                                "triple": _num(h["triple"].get())})
+            lineas = []
+            for l in ow["lineas"]:
+                lineas.append({"dia": l["dia"].get().strip(), "item": l["item"].get().strip(),
+                               "descripcion": l["descripcion"].get().strip(),
+                               "cantidad": _num(l["cantidad"].get()),
+                               "unitario": _num(l["unitario"].get())})
+            ops.append({"nombre": ow["nombre"].get().strip(), "ciudad": ow["ciudad"].get(),
+                        "hoteles": hoteles, "lineas": lineas})
+        self.res["opciones"] = ops
+        self.res["empresa"] = self.v["empresa"].get().strip()
+        self.res["contacto"] = self.v["contacto"].get().strip()
+        self.res["email"] = self.v["email"].get().strip()
+        self.res["evento"] = self.v["evento"].get().strip()
+        self.res["pax"] = _num(self.v["pax"].get())
+        self.res["fechas_evento"] = self.v["fechas_evento"].get().strip()
+        self.res["notas"] = self.v["notas"].get().strip()
+        self.res["cotizado_por"] = self.v_cotpor.get()
+        self.res["estado"] = self.v_estado.get()
+
+    def _recalc(self):
+        gran = 0.0
+        for ow in self.op_widgets:
+            t = 0.0
+            for l in ow["lineas"]:
+                sub = _num(l["cantidad"].get()) * _num(l["unitario"].get())
+                t += sub
+                try:
+                    l["tot_lbl"].configure(text=f"{sub:,.2f}")
+                except Exception:
+                    pass
+            try:
+                ow["tot"].configure(text=f"Total opcion: {usd(t)}")
+            except Exception:
+                pass
+            if gran == 0.0:
+                gran = t
+        try:
+            self.lbl_tot.configure(text="Total 1a opcion: " + usd(gran))
+        except Exception:
+            pass
+
+    def _agregar_opcion(self):
+        self._sync()
+        self.res["opciones"].append(self._opcion_vacia())
+        self._pintar_opciones()
+
+    def _quitar_opcion(self, i):
+        self._sync()
+        try:
+            del self.res["opciones"][i]
+        except Exception:
+            pass
+        if not self.res["opciones"]:
+            self.res["opciones"] = [self._opcion_vacia()]
+        self._pintar_opciones()
+
+    def _add_hotel(self, i):
+        self._sync()
+        self.res["opciones"][i].setdefault("hoteles", []).append(
+            {"hotel": "", "alimentacion": "Desayuno", "categoria": "", "noches": "",
+             "sencilla": "", "doble": "", "triple": ""})
+        self._pintar_opciones()
+
+    def _del_hotel(self, ow, v):
+        ow["hoteles"] = [x for x in ow["hoteles"] if x is not v]
+        self._sync(); self._pintar_opciones()
+
+    def _hotel_bib(self, i):
+        def pick(h):
+            self._sync()
+            self.res["opciones"][i].setdefault("hoteles", []).append({
+                "hotel": h.get("hotel", ""), "alimentacion": h.get("alimentacion", "Desayuno"),
+                "categoria": h.get("categoria", ""), "noches": h.get("noches", ""),
+                "sencilla": h.get("sencilla", ""), "doble": h.get("doble", ""),
+                "triple": h.get("triple", "")})
+            self._pintar_opciones()
+        SelectorMICEBib(self, "hoteles", pick)
+
+    def _add_linea(self, i):
+        self._sync()
+        self.res["opciones"][i].setdefault("lineas", []).append(
+            {"dia": "", "item": "", "descripcion": "", "cantidad": self.res.get("pax", "") or "", "unitario": ""})
+        self._pintar_opciones()
+
+    def _del_linea(self, ow, v):
+        ow["lineas"] = [x for x in ow["lineas"] if x is not v]
+        self._sync(); self._pintar_opciones()
+
+    def _linea_bib(self, i):
+        def pick(it):
+            self._sync()
+            self.res["opciones"][i].setdefault("lineas", []).append({
+                "dia": "", "item": it.get("item", ""), "descripcion": it.get("descripcion", ""),
+                "cantidad": self.res.get("pax", "") or "", "unitario": it.get("unitario", "")})
+            self._pintar_opciones()
+        SelectorMICEBib(self, "items", pick)
+
+    def _guardar_linea_bib(self, v):
+        it = {"categoria": "Otros", "item": v["item"].get().strip(),
+              "descripcion": v["descripcion"].get().strip(),
+              "unitario": _num(v["unitario"].get())}
+        if not it["item"]:
+            messagebox.showinfo("Biblioteca", "Escribe el nombre del item antes de guardarlo.", parent=self)
+            return
+        bib_agregar_item(it)
+        messagebox.showinfo("Biblioteca", f"'{it['item']}' guardado en la biblioteca.", parent=self)
+
+    def _guardar(self):
+        self._sync()
+        if self.res.get("numero"):
+            actualizar_mice(self.res["numero"], self.res)
+        else:
+            self.res["fecha"] = datetime.date.today().strftime("%d/%m/%Y")
+            registrar_mice(self.res)
+        if self.on_save:
+            self.on_save()
+        messagebox.showinfo("Guardado", "Cotizacion MICE guardada.", parent=self)
+        self.destroy()
+
+    def _pdf(self):
+        self._sync()
+        if not self.res.get("numero"):
+            self.res["fecha"] = datetime.date.today().strftime("%d/%m/%Y")
+            registrar_mice(self.res)
+            if self.on_save:
+                self.on_save()
+        ruta = filedialog.asksaveasfilename(
+            title="Guardar cotizacion MICE (PDF)", defaultextension=".pdf",
+            initialfile=f"MICE_{self.res.get('numero','')}_{_nz(self.res.get('empresa',''))[:20]}.pdf",
+            filetypes=[("PDF", "*.pdf")])
+        if not ruta:
+            return
+        try:
+            generar_pdf_mice(self.cfg, self.res, ruta)
+            os.startfile(ruta)
+        except Exception as e:
+            messagebox.showerror("Error al generar PDF", str(e), parent=self)
+
+
+class ModuloMICE(ctk.CTkToplevel):
+    """Ventana principal del modulo MICE / Eventos."""
+    def __init__(self, master=None):
+        super().__init__(master)
+        ctk.set_appearance_mode("light")
+        try:
+            ctk.set_widget_scaling(0.85)
+        except Exception:
+            pass
+        self.cfg = cargar_config()
+        try:
+            self.iconbitmap(recurso("app.ico"))
+        except Exception:
+            pass
+        self.title(f"MICE / Eventos - INNOBA Colombia DMC   v{VERSION}")
+        self.configure(fg_color=BG); self.geometry("1180x720")
+        self._build()
+        self.after(60, self._max)
+
+    def _max(self):
+        try:
+            self.state("zoomed")
+        except Exception:
+            pass
+
+    def _volver(self):
+        lanz = self.master
+        try:
+            if lanz is not None and hasattr(lanz, "mice"):
+                lanz.mice = None
+        except Exception:
+            pass
+        try:
+            self.destroy()
+        except Exception:
+            pass
+        try:
+            if lanz is not None:
+                lanz.deiconify(); lanz.lift(); lanz.focus_force()
+        except Exception:
+            pass
+
+    def _build(self):
+        head = ctk.CTkFrame(self, fg_color=CARD, corner_radius=0, height=60)
+        head.pack(fill="x"); head.pack_propagate(False)
+        try:
+            img = Image.open(recurso("logo_innoba.png")); w, h = img.size; hh = 38
+            self.logo_img = ctk.CTkImage(light_image=img, size=(int(w * hh / h), hh))
+            ctk.CTkLabel(head, image=self.logo_img, text="").pack(side="left", padx=(18, 12), pady=8)
+        except Exception:
+            ctk.CTkLabel(head, text="INNOBA", font=("Segoe UI", 20, "bold"), text_color=NAVY).pack(side="left", padx=18)
+        tit = ctk.CTkFrame(head, fg_color="transparent"); tit.pack(side="left")
+        ctk.CTkLabel(tit, text="Modulo MICE / Eventos", text_color=NAVY,
+                     font=("Segoe UI", 17, "bold"), height=20).pack(anchor="w")
+        ctk.CTkLabel(tit, text=f"Eventos corporativos  ·  v{VERSION}", text_color=MUTED,
+                     font=("Segoe UI", 11), height=15).pack(anchor="w")
+        hb = ctk.CTkFrame(head, fg_color="transparent"); hb.pack(side="right", padx=18)
+        ctk.CTkButton(hb, text="⌂ Modulos", width=100, height=36, corner_radius=10, fg_color=NAVY,
+                      hover_color=NAVY2, font=("Segoe UI", 12, "bold"), command=self._volver).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(hb, text="+ Nueva cotizacion", width=170, height=36, corner_radius=10, fg_color=GREEN,
+                      hover_color=GREEN_H, font=("Segoe UI", 12, "bold"), command=self._nueva).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(hb, text="📚 Biblioteca", width=120, height=36, corner_radius=10, fg_color=CYAN,
+                      hover_color=BLUE, font=("Segoe UI", 12, "bold"), command=self._biblioteca).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(hb, text="Datos de mi empresa", width=170, height=36, corner_radius=10, fg_color=NAVY2,
+                      hover_color=NAVY, font=("Segoe UI", 12, "bold"), command=self._config_empresa).pack(side="left")
+
+        bar = ctk.CTkFrame(self, fg_color="transparent"); bar.pack(fill="x", padx=18, pady=(10, 4))
+        self.q = tk.StringVar()
+        e = ctk.CTkEntry(bar, textvariable=self.q, height=36, corner_radius=10,
+                         placeholder_text="Buscar por numero, empresa o evento...")
+        e.pack(side="left", fill="x", expand=True); e.bind("<KeyRelease>", lambda ev: self._pintar())
+        self.lbl_tot = ctk.CTkLabel(bar, text="", text_color=MUTED, font=("Segoe UI", 11)); self.lbl_tot.pack(side="right", padx=10)
+        self.lista = ctk.CTkScrollableFrame(self, fg_color=BG); self.lista.pack(fill="both", expand=True, padx=18, pady=(4, 14))
+        self._pintar()
+
+    def _pintar(self):
+        for w in self.lista.winfo_children():
+            w.destroy()
+        items = list(reversed(cargar_mice().get("items", [])))
+        q = self.q.get().lower().strip()
+        if q:
+            items = [it for it in items if q in json.dumps(it, ensure_ascii=False).lower()]
+        self.lbl_tot.configure(text=f"{len(items)} cotizacion(es) MICE")
+        if not items:
+            ctk.CTkLabel(self.lista, text="Aun no hay cotizaciones MICE. Crea una con '+ Nueva cotizacion'.",
+                         text_color=MUTED).pack(pady=24)
+            return
+        for it in items:
+            self._fila(it)
+
+    def _fila(self, it):
+        fila = ctk.CTkFrame(self.lista, fg_color=CARD, corner_radius=10, border_width=1, border_color=LINE)
+        fila.pack(fill="x", pady=4, padx=2); fila.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(fila, text=it.get("numero", ""), text_color=NAVY, font=("Segoe UI", 13, "bold"),
+                     width=110).grid(row=0, column=0, rowspan=2, padx=(12, 6), pady=8)
+        info = ctk.CTkFrame(fila, fg_color="transparent"); info.grid(row=0, column=1, rowspan=2, sticky="w")
+        ctk.CTkLabel(info, text=(it.get("empresa", "") or "(sin empresa)"), text_color=TEXT,
+                     font=("Segoe UI", 13, "bold")).pack(anchor="w")
+        ctk.CTkLabel(info, text=f"{it.get('evento','')}  ·  {it.get('pax','')} pax  ·  "
+                     f"{len(it.get('opciones', []))} opcion(es)", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w")
+        ctk.CTkLabel(fila, text=usd(total_mice(it)), text_color=NAVY,
+                     font=("Segoe UI", 13, "bold")).grid(row=0, column=2, rowspan=2, padx=10)
+        ctk.CTkLabel(fila, text=it.get("estado", "Pendiente"),
+                     fg_color=ESTADO_COLOR.get(it.get("estado", "Pendiente"), MUTED), text_color="#FFFFFF",
+                     corner_radius=6, font=("Segoe UI", 10, "bold")).grid(row=0, column=3, rowspan=2, padx=8, ipadx=8, ipady=3)
+        btns = ctk.CTkFrame(fila, fg_color="transparent"); btns.grid(row=0, column=4, rowspan=2, padx=10)
+        ctk.CTkButton(btns, text="Abrir", width=80, height=32, fg_color=NAVY, hover_color=NAVY2,
+                      command=lambda x=it: self._abrir(x)).pack(side="left", padx=2)
+        ctk.CTkButton(btns, text="PDF", width=64, height=32, fg_color=BLUE, hover_color=NAVY,
+                      command=lambda x=it: self._pdf(x)).pack(side="left", padx=2)
+        ctk.CTkButton(btns, text="🗑", width=36, height=32, fg_color=RED, hover_color="#9B2C22",
+                      command=lambda x=it: self._eliminar(x)).pack(side="left", padx=2)
+
+    def _nueva(self):
+        rec = {"empresa": "", "contacto": "", "email": "", "evento": "", "pax": "",
+               "fechas_evento": "", "cotizado_por": COTIZADORES[0][0], "moneda": "USD",
+               "estado": "Pendiente", "notas": "", "opciones": []}
+        VentanaMICEDetalle(self, rec, self.cfg, on_save=self._pintar)
+
+    def _abrir(self, it):
+        VentanaMICEDetalle(self, dict(it), self.cfg, on_save=self._pintar)
+
+    def _pdf(self, it):
+        ruta = filedialog.asksaveasfilename(
+            title="Guardar cotizacion MICE (PDF)", defaultextension=".pdf",
+            initialfile=f"MICE_{it.get('numero','')}.pdf", filetypes=[("PDF", "*.pdf")])
+        if not ruta:
+            return
+        try:
+            generar_pdf_mice(self.cfg, it, ruta); os.startfile(ruta)
+        except Exception as e:
+            messagebox.showerror("Error al generar PDF", str(e), parent=self)
+
+    def _eliminar(self, it):
+        if messagebox.askyesno("Eliminar", f"¿Eliminar la cotizacion MICE {it.get('numero','')}?", parent=self):
+            eliminar_mice(it.get("numero", "")); self._pintar()
+
+    def _biblioteca(self):
+        SelectorMICEBib(self, "items", lambda x: None)
+
+    def _config_empresa(self):
+        VentanaEmpresa(self, self.cfg, lambda cfg: setattr(self, "cfg", cfg))
+
+
 class Launcher(ctk.CTk):
     """Pantalla de inicio del .exe: permite elegir uno de los tres modulos
     (Cotizacion, Reservas, Comercial). Solo Cotizacion esta desarrollado; los
@@ -8266,6 +9046,9 @@ class Launcher(ctk.CTk):
         ("Comercial", "📊",
          "Tareas de gestion comercial (con checklist, cliente y responsable) e\n"
          "indicadores: ventas del mes, conversion y reservas.", CYAN, BLUE_H, True),
+        ("MICE / Eventos", "🎤",
+         "Cotizar eventos corporativos (MICE): hoteles, cenas, alquiler de salones\n"
+         "con audiovisuales y tours, minuto a minuto y con varias opciones.", "#7A5AB5", "#63459A", True),
     ]
 
     def __init__(self):
@@ -8277,8 +9060,8 @@ class Launcher(ctk.CTk):
             pass
         self.title("INNOBA Colombia DMC  ·  Sistema de Gestion")
         self.configure(fg_color=BG)
-        self.geometry("980x620")
-        self.minsize(860, 560)
+        self.geometry("1220x640")
+        self.minsize(1000, 560)
         try:
             self.iconbitmap(recurso("app.ico"))
         except Exception:
@@ -8286,13 +9069,14 @@ class Launcher(ctk.CTk):
         self.cotizador = None
         self.reservas = None
         self.comercial = None
+        self.mice = None
         self._construir()
         self._centrar()
 
     def _centrar(self):
         try:
             self.update_idletasks()
-            w, h = 980, 620
+            w, h = 1220, 640
             x = (self.winfo_screenwidth() - w) // 2
             y = (self.winfo_screenheight() - h) // 2
             self.geometry(f"{w}x{h}+{max(0,x)}+{max(0,y)}")
@@ -8327,8 +9111,8 @@ class Launcher(ctk.CTk):
 
         # Tarjetas de modulo
         cont = ctk.CTkFrame(self, fg_color="transparent")
-        cont.pack(fill="both", expand=True, padx=40, pady=(0, 18))
-        for i in range(3):
+        cont.pack(fill="both", expand=True, padx=30, pady=(0, 18))
+        for i in range(len(self.MODULOS)):
             cont.grid_columnconfigure(i, weight=1, uniform="mod")
         cont.grid_rowconfigure(0, weight=1)
         for i, (nombre, icono, desc, col, colh, activo) in enumerate(self.MODULOS):
@@ -8397,11 +9181,34 @@ class Launcher(ctk.CTk):
             self._abrir_reservas()
         elif nombre == "Comercial":
             self._abrir_comercial()
+        elif nombre == "MICE / Eventos":
+            self._abrir_mice()
         else:
             messagebox.showinfo(
                 nombre,
                 f"El modulo '{nombre}' esta en desarrollo.\n\n"
                 "Pronto podras usarlo desde aqui.")
+
+    def _abrir_mice(self):
+        try:
+            if self.mice is not None and self.mice.winfo_exists():
+                self.mice.deiconify(); self.mice.lift(); return
+        except Exception:
+            self.mice = None
+        try:
+            self.mice = ModuloMICE(self)
+            self.mice.protocol("WM_DELETE_WINDOW", self._cerrar_mice)
+        except Exception as e:
+            self.mice = None
+            messagebox.showerror("Error", f"No se pudo abrir MICE:\n{e}")
+
+    def _cerrar_mice(self):
+        try:
+            if self.mice is not None:
+                self.mice.destroy()
+        except Exception:
+            pass
+        self.mice = None
 
     def _abrir_cotizacion(self):
         try:
