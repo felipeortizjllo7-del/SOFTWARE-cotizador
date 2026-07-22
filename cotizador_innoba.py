@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "9.4"
+VERSION = "9.5"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -2433,9 +2433,23 @@ def tasas_liq(cfg):
     return t
 
 
-def liquidar_reserva(res, cfg):
+def trm_del_mes(cfg, mes):
+    """TRM promedio guardado para ese mes (o el ultimo/general/4000 por defecto)."""
+    tm = cfg.get("trm_mensual", {}) or {}
+    try:
+        v = float(tm.get(mes, 0) or 0)
+        if v > 0:
+            return v
+    except Exception:
+        pass
+    return float(cfg.get("trm_liq", 4000) or 4000)
+
+
+def liquidar_reserva(res, cfg, trm_default=None):
     """Liquida una orden de servicio: ventas (USD*TRM) - gastos operativos - gastos
-       financieros = utilidad; rentabilidad % y bonificacion (3% de la utilidad)."""
+       financieros = utilidad; rentabilidad % y bonificacion (3% de la utilidad).
+       El TRM es: el de la reserva (override) si lo tiene; si no, el promedio del mes
+       (trm_default); si no, el general de la config."""
     t = tasas_liq(cfg)
     liq = res.get("liq", {}) or {}
     monto_usd = float(res.get("monto", 0) or 0)
@@ -2443,6 +2457,11 @@ def liquidar_reserva(res, cfg):
         trm = float(liq.get("trm", 0) or 0)
     except Exception:
         trm = 0.0
+    if not trm:
+        try:
+            trm = float(trm_default or 0)
+        except Exception:
+            trm = 0.0
     if not trm:
         trm = float(cfg.get("trm_liq", 4000) or 4000)
     ventas = monto_usd * trm
@@ -8333,6 +8352,7 @@ class VentanaRankingContactos(ctk.CTkToplevel):
 # ============================================================================
 def exportar_liquidacion_excel(ruta, mes, cfg):
     from openpyxl import Workbook
+    trm_mes = trm_del_mes(cfg, mes)
     reservas = [r for r in cargar_reservas().get("items", [])
                 if _mes_de_iso(r.get("fecha_creacion", "")) == mes
                 and r.get("estado") != "Anulada"]
@@ -8345,7 +8365,7 @@ def exportar_liquidacion_excel(ruta, mes, cfg):
     tot = {"ventas": 0.0, "total_gasto": 0.0, "utilidad": 0.0, "bonif": 0.0}
     porase = {}
     for r in reservas:
-        L = liquidar_reserva(r, cfg); liq = r.get("liq", {}) or {}
+        L = liquidar_reserva(r, cfg, trm_default=trm_mes); liq = r.get("liq", {}) or {}
         ase = (r.get("asesor", {}) or {}).get("nombre", "") if isinstance(r.get("asesor"), dict) else str(r.get("asesor", ""))
         fila = [r.get("numero", ""), r.get("cliente", ""), ase,
                 float(r.get("monto", 0) or 0), round(L["trm"], 2), round(L["ventas"])]
@@ -8371,9 +8391,10 @@ def exportar_liquidacion_excel(ruta, mes, cfg):
 
 class DialogoGastosReserva(ctk.CTkToplevel):
     """Editar el TRM y los gastos operativos de una reserva y ver su liquidacion en vivo."""
-    def __init__(self, master, res, cfg, on_save=None):
+    def __init__(self, master, res, cfg, on_save=None, trm_default=None):
         super().__init__(master)
         self.res = res; self.cfg = cfg; self.on_save = on_save
+        self.trm_default = trm_default
         self.title("Liquidacion reserva " + res.get("numero", ""))
         self.geometry("560x680"); self.configure(fg_color=BG)
         self.transient(master); self.grab_set()
@@ -8385,16 +8406,19 @@ class DialogoGastosReserva(ctk.CTkToplevel):
         liq = res.get("liq", {}) or {}
         self.vars = {}
 
-        def campo(clave, etq, val):
+        def campo(clave, etq, val, ph=None):
             f = ctk.CTkFrame(cont, fg_color="transparent"); f.pack(fill="x", pady=2)
             ctk.CTkLabel(f, text=etq, text_color=TEXT, width=170, anchor="w",
                          font=("Segoe UI", 11)).pack(side="left")
-            v = tk.StringVar(value=str(val or "")); self.vars[clave] = v
-            e = ctk.CTkEntry(f, textvariable=v, height=30, width=160)
+            v = tk.StringVar(value=str(val if val not in (None, "") else "")); self.vars[clave] = v
+            e = ctk.CTkEntry(f, textvariable=v, height=30, width=160,
+                             placeholder_text=(ph or ""))
             e.pack(side="left"); e.bind("<KeyRelease>", lambda ev: self._recalc())
             return v
 
-        campo("trm", "TRM (Dolar del dia)", liq.get("trm", "") or cfg.get("trm_liq", 4000))
+        trm_prom = self.trm_default or cfg.get("trm_liq", 4000)
+        campo("trm", "TRM (vacio = prom. mes)", liq.get("trm", ""),
+              ph=f"Prom. mes: {trm_prom:g}")
         ctk.CTkLabel(cont, text="GASTOS OPERATIVOS (en pesos)", text_color=NAVY,
                      font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(8, 2))
         for k, lbl in GASTOS_OPER:
@@ -8428,7 +8452,7 @@ class DialogoGastosReserva(ctk.CTkToplevel):
 
     def _recalc(self):
         tmp = dict(self.res); tmp["liq"] = self._leer()
-        L = liquidar_reserva(tmp, self.cfg)
+        L = liquidar_reserva(tmp, self.cfg, trm_default=self.trm_default)
         self.lbls["ventas"].configure(text=_cop(L["ventas"]))
         self.lbls["operativos"].configure(text=_cop(L["operativos"]))
         self.lbls["financieros"].configure(text=_cop(L["financieros"]))
@@ -8466,7 +8490,14 @@ class VentanaLiquidacion(ctk.CTkToplevel):
             meses = [datetime.date.today().strftime("%Y-%m")]
         self.v_mes = tk.StringVar(value=meses[0])
         ctk.CTkOptionMenu(head, variable=self.v_mes, values=meses, width=140, height=34,
-                          fg_color=NAVY, button_color=NAVY2, command=lambda *_: self._pintar()).pack(side="left")
+                          fg_color=NAVY, button_color=NAVY2, command=lambda *_: self._cambiar_mes()).pack(side="left")
+        ctk.CTkLabel(head, text="TRM del mes:", text_color=MUTED,
+                     font=("Segoe UI", 12)).pack(side="left", padx=(18, 4))
+        self.v_trm = tk.StringVar(value=str(trm_del_mes(cfg, self.v_mes.get())))
+        et = ctk.CTkEntry(head, textvariable=self.v_trm, width=90, height=34)
+        et.pack(side="left"); et.bind("<KeyRelease>", lambda e: self._guardar_trm())
+        ctk.CTkButton(head, text="↻ TRM hoy", width=90, height=34, fg_color=CYAN, hover_color=BLUE,
+                      font=("Segoe UI", 11, "bold"), command=self._trm_hoy).pack(side="left", padx=(4, 0))
         ctk.CTkButton(head, text="⬇ Exportar Excel", height=34, fg_color=GREEN, hover_color=GREEN_H,
                       font=("Segoe UI", 12, "bold"), command=self._exportar).pack(side="right", padx=18)
         self.kpis = ctk.CTkFrame(self, fg_color="transparent"); self.kpis.pack(fill="x", padx=16, pady=(10, 2))
@@ -8479,6 +8510,36 @@ class VentanaLiquidacion(ctk.CTkToplevel):
             self.state("zoomed")
         except Exception:
             pass
+
+    def _cambiar_mes(self):
+        self.v_trm.set(str(trm_del_mes(self.cfg, self.v_mes.get())))
+        self._pintar()
+
+    def _guardar_trm(self):
+        tm = self.cfg.setdefault("trm_mensual", {})
+        tm[self.v_mes.get()] = _num(self.v_trm.get())
+        try:
+            guardar_config(self.cfg)
+        except Exception:
+            pass
+        self._pintar()
+
+    def _trm_hoy(self):
+        try:
+            v = obtener_trm()
+        except Exception:
+            v = None
+        if v:
+            self.v_trm.set(str(int(round(v))))
+            self._guardar_trm()
+        else:
+            messagebox.showinfo("TRM", "No se pudo consultar la TRM de hoy. Escribela a mano.", parent=self)
+
+    def _trm_mes(self):
+        try:
+            return float(_num(self.v_trm.get())) or trm_del_mes(self.cfg, self.v_mes.get())
+        except Exception:
+            return trm_del_mes(self.cfg, self.v_mes.get())
 
     def _reservas_mes(self):
         mes = self.v_mes.get()
@@ -8493,6 +8554,7 @@ class VentanaLiquidacion(ctk.CTkToplevel):
         for w in self.bonif_box.winfo_children():
             w.destroy()
         reservas = self._reservas_mes()
+        trm_mes = self._trm_mes()
         tot_v = tot_g = tot_u = tot_b = 0.0
         porase = {}
         # encabezado de tabla
@@ -8503,7 +8565,7 @@ class VentanaLiquidacion(ctk.CTkToplevel):
             ctk.CTkLabel(cab, text=txt, text_color="#FFFFFF", font=("Segoe UI", 10, "bold"),
                          width=w, anchor="w").pack(side="left", padx=3, pady=5)
         for r in reservas:
-            L = liquidar_reserva(r, self.cfg)
+            L = liquidar_reserva(r, self.cfg, trm_default=trm_mes)
             tot_v += L["ventas"]; tot_g += L["total_gasto"]; tot_u += L["utilidad"]; tot_b += L["bonif"]
             ase = (r.get("asesor", {}) or {}).get("nombre", "") if isinstance(r.get("asesor"), dict) else str(r.get("asesor", ""))
             porase[ase] = porase.get(ase, 0.0) + L["bonif"]
@@ -8544,7 +8606,7 @@ class VentanaLiquidacion(ctk.CTkToplevel):
                          font=("Segoe UI", 13, "bold")).pack(padx=10, pady=(0, 5))
 
     def _editar(self, r):
-        DialogoGastosReserva(self, r, self.cfg, on_save=self._pintar)
+        DialogoGastosReserva(self, r, self.cfg, on_save=self._pintar, trm_default=self._trm_mes())
 
     def _exportar(self):
         ruta = filedialog.asksaveasfilename(

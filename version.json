@@ -1,5 +1,5 @@
 {
-  "version": "9.4",
+  "version": "9.5",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 9.4 - NUEVO: Liquidacion de rentabilidad (dentro de Reservas, boton 'Liquidacion'). Por mes muestra cada orden de servicio: Ventas (USD x TRM) menos gastos operativos (hotel, traslados, transportes, guia, compartido, actividades, poliza) menos gastos financieros (comision 2.65%, IVA comision 19%, retefuente 1.5%, reteica 0.2%, 4x1000 0.4%) = Utilidad, con % de rentabilidad y bonificacion del 3% de la utilidad por reserva. Totales del mes y bonificacion por asesora. Se alimenta de las reservas (solo agregas TRM y gastos) y exporta a Excel. Formula verificada contra el Excel de INNOBA."
+  "notas": "Version 9.5 - Liquidacion: la TRM ahora se maneja como PROMEDIO DEL MES. En la ventana de Liquidacion hay un campo 'TRM del mes' (con boton 'TRM hoy' que la trae automatica) que se aplica a TODAS las reservas de ese mes. Cada reserva puede tener un TRM propio opcional (override); si se deja vacio, usa el promedio del mes. El TRM del mes se guarda por mes."
 }
