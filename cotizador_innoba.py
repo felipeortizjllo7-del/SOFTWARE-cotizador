@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "9.3"
+VERSION = "9.4"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -2412,6 +2412,68 @@ def indicadores_reservas():
     ind["serv_total"] = tot_serv; ind["serv_enviados"] = env
     ind["serv_pendientes"] = tot_serv - env
     return ind
+
+
+# ---- Liquidacion de rentabilidad por orden de servicio (reserva) ----
+# Tasas por defecto (sobre las VENTAS en pesos), tomadas del Excel de INNOBA.
+TASAS_LIQ_DEF = {"comision": 0.0265, "iva_comision": 0.19, "retefuente": 0.015,
+                 "reteica": 0.002, "cuatromil": 0.004, "bonificacion": 0.03}
+GASTOS_OPER = [("hotel", "Hotel"), ("tld_in", "Traslado IN"), ("tld_out", "Traslado OUT"),
+               ("transportes", "Transportes"), ("guia", "Guia"), ("compartido", "Compartido"),
+               ("actividades", "Actividades"), ("poliza", "Poliza")]
+
+
+def tasas_liq(cfg):
+    t = dict(TASAS_LIQ_DEF)
+    for k, v in (cfg.get("tasas_liq", {}) or {}).items():
+        try:
+            t[k] = float(v)
+        except Exception:
+            pass
+    return t
+
+
+def liquidar_reserva(res, cfg):
+    """Liquida una orden de servicio: ventas (USD*TRM) - gastos operativos - gastos
+       financieros = utilidad; rentabilidad % y bonificacion (3% de la utilidad)."""
+    t = tasas_liq(cfg)
+    liq = res.get("liq", {}) or {}
+    monto_usd = float(res.get("monto", 0) or 0)
+    try:
+        trm = float(liq.get("trm", 0) or 0)
+    except Exception:
+        trm = 0.0
+    if not trm:
+        trm = float(cfg.get("trm_liq", 4000) or 4000)
+    ventas = monto_usd * trm
+    operativos = 0.0
+    for k, _ in GASTOS_OPER:
+        try:
+            operativos += float(liq.get(k, 0) or 0)
+        except Exception:
+            pass
+    comision = ventas * t["comision"]
+    iva_comision = comision * t["iva_comision"]
+    retefuente = ventas * t["retefuente"]
+    reteica = ventas * t["reteica"]
+    cuatromil = ventas * t["cuatromil"]
+    financieros = comision + iva_comision + retefuente + reteica + cuatromil
+    total_gasto = operativos + financieros
+    utilidad = ventas - total_gasto
+    rent = (utilidad / ventas) if ventas else 0.0
+    bonif = utilidad * t["bonificacion"] if utilidad > 0 else 0.0
+    return {"trm": trm, "ventas": ventas, "operativos": operativos, "comision": comision,
+            "iva_comision": iva_comision, "retefuente": retefuente, "reteica": reteica,
+            "cuatromil": cuatromil, "financieros": financieros, "total_gasto": total_gasto,
+            "utilidad": utilidad, "rent": rent, "bonif": bonif}
+
+
+def _cop(v):
+    """Formatea un valor en pesos colombianos: $ 1.426.746"""
+    try:
+        return "$ " + f"{float(v):,.0f}".replace(",", ".")
+    except Exception:
+        return "$ 0"
 
 
 def _kpi_card(parent, titulo, valor, color, ancho=140, alto=66, on_click=None, active=False):
@@ -7512,6 +7574,9 @@ class ModuloReservas(ctk.CTkToplevel):
         ctk.CTkButton(hb, text="🔢 Reordenar N°", width=140, height=36, corner_radius=10,
                       fg_color="#0E7C6B", hover_color="#0A5C50", font=("Segoe UI", 12, "bold"),
                       command=self._reordenar).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(hb, text="💰 Liquidacion", width=140, height=36, corner_radius=10,
+                      fg_color="#0E7C6B", hover_color="#0A5C50", font=("Segoe UI", 12, "bold"),
+                      command=self._liquidacion).pack(side="left", padx=(0, 8))
         ctk.CTkButton(hb, text="📊 Reporte", width=110, height=36, corner_radius=10,
                       fg_color="#7A5AB5", hover_color="#63459A", font=("Segoe UI", 12, "bold"),
                       command=self._reporte).pack(side="left", padx=(0, 8))
@@ -7665,6 +7730,9 @@ class ModuloReservas(ctk.CTkToplevel):
             f"Reservas traidas/actualizadas: {importadas}\n\n"
             "Las reservas ahora se comparten entre los equipos que usan el sistema.",
             parent=self)
+
+    def _liquidacion(self):
+        VentanaLiquidacion(self, self.cfg)
 
     def _reordenar(self):
         if not messagebox.askyesno(
@@ -8255,6 +8323,237 @@ class VentanaRankingContactos(ctk.CTkToplevel):
             return
         try:
             exportar_reporte_contactos(ruta)
+            os.startfile(ruta)
+        except Exception as e:
+            messagebox.showerror("Error", str(e), parent=self)
+
+
+# ============================================================================
+# LIQUIDACION DE RENTABILIDAD (dentro de Reservas)
+# ============================================================================
+def exportar_liquidacion_excel(ruta, mes, cfg):
+    from openpyxl import Workbook
+    reservas = [r for r in cargar_reservas().get("items", [])
+                if _mes_de_iso(r.get("fecha_creacion", "")) == mes
+                and r.get("estado") != "Anulada"]
+    wb = Workbook(); ws = wb.active; ws.title = "Liquidacion"
+    heads = (["N. Reserva", "Cliente", "Responsable", "Monto USD", "TRM", "Ventas (pesos)"]
+             + [lbl for _, lbl in GASTOS_OPER]
+             + ["Comision", "IVA Comision", "Retefuente", "ReteICA", "4x1000",
+                "Total Gasto", "Utilidad", "Rent %", "Bonif 3%"])
+    ws.append(heads)
+    tot = {"ventas": 0.0, "total_gasto": 0.0, "utilidad": 0.0, "bonif": 0.0}
+    porase = {}
+    for r in reservas:
+        L = liquidar_reserva(r, cfg); liq = r.get("liq", {}) or {}
+        ase = (r.get("asesor", {}) or {}).get("nombre", "") if isinstance(r.get("asesor"), dict) else str(r.get("asesor", ""))
+        fila = [r.get("numero", ""), r.get("cliente", ""), ase,
+                float(r.get("monto", 0) or 0), round(L["trm"], 2), round(L["ventas"])]
+        fila += [float(liq.get(k, 0) or 0) for k, _ in GASTOS_OPER]
+        fila += [round(L["comision"]), round(L["iva_comision"]), round(L["retefuente"]),
+                 round(L["reteica"]), round(L["cuatromil"]), round(L["total_gasto"]),
+                 round(L["utilidad"]), round(L["rent"] * 100, 2), round(L["bonif"])]
+        ws.append(fila)
+        for k in tot:
+            tot[k] += L[k]
+        porase[ase] = porase.get(ase, 0.0) + L["bonif"]
+    ws.append([])
+    fila_tot = ["TOTALES", "", "", "", "", round(tot["ventas"])] + [""] * len(GASTOS_OPER)
+    fila_tot += ["", "", "", "", "", round(tot["total_gasto"]), round(tot["utilidad"]), "", round(tot["bonif"])]
+    ws.append(fila_tot)
+    ws.append([])
+    ws.append(["BONIFICACION POR ASESORA (3% de la utilidad)"])
+    for ase, b in sorted(porase.items(), key=lambda x: -x[1]):
+        ws.append([ase or "(sin asignar)", round(b)])
+    wb.save(ruta)
+    return ruta
+
+
+class DialogoGastosReserva(ctk.CTkToplevel):
+    """Editar el TRM y los gastos operativos de una reserva y ver su liquidacion en vivo."""
+    def __init__(self, master, res, cfg, on_save=None):
+        super().__init__(master)
+        self.res = res; self.cfg = cfg; self.on_save = on_save
+        self.title("Liquidacion reserva " + res.get("numero", ""))
+        self.geometry("560x680"); self.configure(fg_color=BG)
+        self.transient(master); self.grab_set()
+        cont = ctk.CTkScrollableFrame(self, fg_color=BG); cont.pack(fill="both", expand=True, padx=16, pady=14)
+        ctk.CTkLabel(cont, text=f"Reserva N. {res.get('numero','')}  ·  {res.get('cliente','')}",
+                     text_color=NAVY, font=("Segoe UI", 15, "bold")).pack(anchor="w")
+        ctk.CTkLabel(cont, text=f"Monto de venta: {usd(res.get('monto',0))}",
+                     text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", pady=(0, 8))
+        liq = res.get("liq", {}) or {}
+        self.vars = {}
+
+        def campo(clave, etq, val):
+            f = ctk.CTkFrame(cont, fg_color="transparent"); f.pack(fill="x", pady=2)
+            ctk.CTkLabel(f, text=etq, text_color=TEXT, width=170, anchor="w",
+                         font=("Segoe UI", 11)).pack(side="left")
+            v = tk.StringVar(value=str(val or "")); self.vars[clave] = v
+            e = ctk.CTkEntry(f, textvariable=v, height=30, width=160)
+            e.pack(side="left"); e.bind("<KeyRelease>", lambda ev: self._recalc())
+            return v
+
+        campo("trm", "TRM (Dolar del dia)", liq.get("trm", "") or cfg.get("trm_liq", 4000))
+        ctk.CTkLabel(cont, text="GASTOS OPERATIVOS (en pesos)", text_color=NAVY,
+                     font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(8, 2))
+        for k, lbl in GASTOS_OPER:
+            campo(k, lbl, liq.get(k, ""))
+        ctk.CTkLabel(cont, text="RESULTADO", text_color=NAVY,
+                     font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(10, 2))
+        self.box_res = ctk.CTkFrame(cont, fg_color=CARD2, corner_radius=10)
+        self.box_res.pack(fill="x", pady=(0, 6))
+        self.lbls = {}
+        for k, lbl in [("ventas", "Ventas"), ("operativos", "Gastos operativos"),
+                       ("financieros", "Gastos financieros"), ("total_gasto", "Total gasto"),
+                       ("utilidad", "UTILIDAD"), ("rent", "Rentabilidad"), ("bonif", "Bonificacion 3%")]:
+            f = ctk.CTkFrame(self.box_res, fg_color="transparent"); f.pack(fill="x", padx=10, pady=1)
+            ctk.CTkLabel(f, text=lbl, text_color=TEXT, width=180, anchor="w",
+                         font=("Segoe UI", 11, "bold" if k in ("utilidad", "bonif") else "normal")).pack(side="left")
+            self.lbls[k] = ctk.CTkLabel(f, text="", text_color=(GREEN_H if k in ("utilidad", "bonif") else NAVY),
+                                        anchor="e", font=("Segoe UI", 12, "bold"))
+            self.lbls[k].pack(side="right", padx=8)
+        bts = ctk.CTkFrame(cont, fg_color="transparent"); bts.pack(fill="x", pady=10)
+        ctk.CTkButton(bts, text="💾 Guardar", fg_color=GREEN, hover_color=GREEN_H,
+                      font=("Segoe UI", 13, "bold"), command=self._guardar).pack(side="right")
+        ctk.CTkButton(bts, text="Cancelar", fg_color=CARD2, text_color=NAVY, hover_color=LINE,
+                      command=self.destroy).pack(side="right", padx=8)
+        self._recalc()
+
+    def _leer(self):
+        liq = {}
+        for k, v in self.vars.items():
+            liq[k] = _num(v.get())
+        return liq
+
+    def _recalc(self):
+        tmp = dict(self.res); tmp["liq"] = self._leer()
+        L = liquidar_reserva(tmp, self.cfg)
+        self.lbls["ventas"].configure(text=_cop(L["ventas"]))
+        self.lbls["operativos"].configure(text=_cop(L["operativos"]))
+        self.lbls["financieros"].configure(text=_cop(L["financieros"]))
+        self.lbls["total_gasto"].configure(text=_cop(L["total_gasto"]))
+        self.lbls["utilidad"].configure(text=_cop(L["utilidad"]),
+                                         text_color=(GREEN_H if L["utilidad"] >= 0 else RED))
+        self.lbls["rent"].configure(text=f"{L['rent'] * 100:,.2f}%")
+        self.lbls["bonif"].configure(text=_cop(L["bonif"]))
+
+    def _guardar(self):
+        self.res["liq"] = self._leer()
+        actualizar_reserva(self.res.get("numero", ""), {"liq": self.res["liq"]})
+        if self.on_save:
+            self.on_save()
+        self.destroy()
+
+
+class VentanaLiquidacion(ctk.CTkToplevel):
+    """Liquidacion de rentabilidad por mes: ventas - gastos - financieros = utilidad,
+       rentabilidad % y bonificacion (3%). Alimentada por las reservas."""
+    def __init__(self, master, cfg):
+        super().__init__(master)
+        self.cfg = cfg
+        self.title("Liquidacion de rentabilidad"); self.configure(fg_color=BG)
+        self.geometry("1200x720+30+10"); self.transient(master); self.grab_set()
+        self.after(60, self._max)
+        head = ctk.CTkFrame(self, fg_color=CARD, corner_radius=0, height=56)
+        head.pack(fill="x"); head.pack_propagate(False)
+        ctk.CTkLabel(head, text="Liquidacion de rentabilidad", text_color=NAVY,
+                     font=("Segoe UI", 16, "bold")).pack(side="left", padx=18)
+        ctk.CTkLabel(head, text="Mes:", text_color=MUTED, font=("Segoe UI", 12)).pack(side="left", padx=(20, 4))
+        meses = sorted({_mes_de_iso(r.get("fecha_creacion", "")) for r in cargar_reservas().get("items", [])
+                        if r.get("fecha_creacion")}, reverse=True)
+        if not meses:
+            meses = [datetime.date.today().strftime("%Y-%m")]
+        self.v_mes = tk.StringVar(value=meses[0])
+        ctk.CTkOptionMenu(head, variable=self.v_mes, values=meses, width=140, height=34,
+                          fg_color=NAVY, button_color=NAVY2, command=lambda *_: self._pintar()).pack(side="left")
+        ctk.CTkButton(head, text="⬇ Exportar Excel", height=34, fg_color=GREEN, hover_color=GREEN_H,
+                      font=("Segoe UI", 12, "bold"), command=self._exportar).pack(side="right", padx=18)
+        self.kpis = ctk.CTkFrame(self, fg_color="transparent"); self.kpis.pack(fill="x", padx=16, pady=(10, 2))
+        self.lista = ctk.CTkScrollableFrame(self, fg_color=BG); self.lista.pack(fill="both", expand=True, padx=16, pady=(4, 6))
+        self.bonif_box = ctk.CTkFrame(self, fg_color=CARD, corner_radius=10); self.bonif_box.pack(fill="x", padx=16, pady=(0, 12))
+        self._pintar()
+
+    def _max(self):
+        try:
+            self.state("zoomed")
+        except Exception:
+            pass
+
+    def _reservas_mes(self):
+        mes = self.v_mes.get()
+        return [r for r in cargar_reservas().get("items", [])
+                if _mes_de_iso(r.get("fecha_creacion", "")) == mes and r.get("estado") != "Anulada"]
+
+    def _pintar(self):
+        for w in self.lista.winfo_children():
+            w.destroy()
+        for w in self.kpis.winfo_children():
+            w.destroy()
+        for w in self.bonif_box.winfo_children():
+            w.destroy()
+        reservas = self._reservas_mes()
+        tot_v = tot_g = tot_u = tot_b = 0.0
+        porase = {}
+        # encabezado de tabla
+        cab = ctk.CTkFrame(self.lista, fg_color=NAVY, corner_radius=6); cab.pack(fill="x", pady=(0, 3))
+        for txt, w in (("N.", 70), ("Cliente", 150), ("Responsable", 120), ("USD", 70),
+                       ("Ventas", 110), ("Total gasto", 110), ("Utilidad", 110), ("Rent%", 60),
+                       ("Bonif 3%", 100), ("", 90)):
+            ctk.CTkLabel(cab, text=txt, text_color="#FFFFFF", font=("Segoe UI", 10, "bold"),
+                         width=w, anchor="w").pack(side="left", padx=3, pady=5)
+        for r in reservas:
+            L = liquidar_reserva(r, self.cfg)
+            tot_v += L["ventas"]; tot_g += L["total_gasto"]; tot_u += L["utilidad"]; tot_b += L["bonif"]
+            ase = (r.get("asesor", {}) or {}).get("nombre", "") if isinstance(r.get("asesor"), dict) else str(r.get("asesor", ""))
+            porase[ase] = porase.get(ase, 0.0) + L["bonif"]
+            row = ctk.CTkFrame(self.lista, fg_color=CARD, corner_radius=6); row.pack(fill="x", pady=1)
+            def cel(txt, w, color=TEXT, bold=False):
+                ctk.CTkLabel(row, text=txt, text_color=color, width=w, anchor="w",
+                             font=("Segoe UI", 10, "bold" if bold else "normal")).pack(side="left", padx=3, pady=4)
+            cel(r.get("numero", ""), 70, NAVY, True)
+            cel((r.get("cliente", "") or "")[:22], 150)
+            cel((ase or "-")[:18], 120, BLUE)
+            cel(f"{float(r.get('monto',0) or 0):,.0f}", 70)
+            cel(_cop(L["ventas"]), 110)
+            cel(_cop(L["total_gasto"]), 110, "#B7791F")
+            cel(_cop(L["utilidad"]), 110, GREEN_H if L["utilidad"] >= 0 else RED, True)
+            cel(f"{L['rent']*100:,.1f}%", 60)
+            cel(_cop(L["bonif"]), 100, "#7A5AB5", True)
+            ctk.CTkButton(row, text="Editar gastos", width=90, height=26, fg_color=CYAN,
+                          hover_color=BLUE, font=("Segoe UI", 10),
+                          command=lambda x=r: self._editar(x)).pack(side="left", padx=3)
+        if not reservas:
+            ctk.CTkLabel(self.lista, text="No hay reservas en este mes.", text_color=MUTED).pack(pady=20)
+        # KPIs
+        fila = ctk.CTkFrame(self.kpis, fg_color="transparent"); fila.pack(fill="x")
+        _kpi_card(fila, "Reservas del mes", len(reservas), NAVY)
+        _kpi_card(fila, "Ventas (pesos)", _cop(tot_v), NAVY, ancho=170)
+        _kpi_card(fila, "Utilidad (pesos)", _cop(tot_u), GREEN_H, ancho=170)
+        _kpi_card(fila, "Rentabilidad prom.", f"{(tot_u/tot_v*100) if tot_v else 0:,.1f}%", BLUE, ancho=150)
+        _kpi_card(fila, "Bonificacion total", _cop(tot_b), "#7A5AB5", ancho=170)
+        # bonificacion por asesora
+        ctk.CTkLabel(self.bonif_box, text="Bonificacion por asesora (3% de la utilidad)",
+                     text_color=NAVY, font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=12, pady=(8, 2))
+        fb = ctk.CTkFrame(self.bonif_box, fg_color="transparent"); fb.pack(fill="x", padx=12, pady=(0, 10))
+        for ase, b in sorted(porase.items(), key=lambda x: -x[1]):
+            chip = ctk.CTkFrame(fb, fg_color=CARD2, corner_radius=8); chip.pack(side="left", padx=4)
+            ctk.CTkLabel(chip, text=(ase or "(sin asignar)"), text_color=NAVY,
+                         font=("Segoe UI", 11, "bold")).pack(padx=10, pady=(5, 0))
+            ctk.CTkLabel(chip, text=_cop(b), text_color="#7A5AB5",
+                         font=("Segoe UI", 13, "bold")).pack(padx=10, pady=(0, 5))
+
+    def _editar(self, r):
+        DialogoGastosReserva(self, r, self.cfg, on_save=self._pintar)
+
+    def _exportar(self):
+        ruta = filedialog.asksaveasfilename(
+            title="Guardar liquidacion", defaultextension=".xlsx",
+            initialfile=f"Liquidacion_{self.v_mes.get()}.xlsx", filetypes=[("Excel", "*.xlsx")])
+        if not ruta:
+            return
+        try:
+            exportar_liquidacion_excel(ruta, self.v_mes.get(), self.cfg)
             os.startfile(ruta)
         except Exception as e:
             messagebox.showerror("Error", str(e), parent=self)

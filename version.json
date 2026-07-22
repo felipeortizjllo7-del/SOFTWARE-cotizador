@@ -1,5 +1,5 @@
 {
-  "version": "9.3",
+  "version": "9.4",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 9.3 - NUEVO MODULO MICE / EVENTOS: cotiza eventos corporativos. Cuarto boton en el inicio. Cada cotizacion tiene datos del evento (empresa, evento, pax, fechas), VARIAS OPCIONES/ciudades, cada una con su bloque de hoteles (tarifa por persona) y su tabla MINUTO A MINUTO (Dia, Item, Descripcion, Cantidad, Unitario, Total) para cenas, alquiler de salones con audiovisuales, traslados y tours. Biblioteca de items y hoteles frecuentes para insertar con un clic (y guardar los tuyos). Genera PDF profesional por opcion. Historial editable."
+  "notas": "Version 9.4 - NUEVO: Liquidacion de rentabilidad (dentro de Reservas, boton 'Liquidacion'). Por mes muestra cada orden de servicio: Ventas (USD x TRM) menos gastos operativos (hotel, traslados, transportes, guia, compartido, actividades, poliza) menos gastos financieros (comision 2.65%, IVA comision 19%, retefuente 1.5%, reteica 0.2%, 4x1000 0.4%) = Utilidad, con % de rentabilidad y bonificacion del 3% de la utilidad por reserva. Totales del mes y bonificacion por asesora. Se alimenta de las reservas (solo agregas TRM y gastos) y exporta a Excel. Formula verificada contra el Excel de INNOBA."
 }
