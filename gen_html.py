@@ -165,10 +165,10 @@ display:flex;align-items:center;gap:16px;margin-top:6px}
 
  <div class="card" style="border:2px solid var(--green)">
   <h3 style="margin:0 0 6px">Configuracion de la agencia</h3>
-  <div class="mut" style="font-size:12px;margin-bottom:8px">Los precios que ves son la tarifa para la agencia. Aqui puedes sumar tu <b>% de ganancia</b> (se aplica a toda la cotizacion y al PDF) y elegir el <b>logo del PDF</b>. Si eliges <b>tu logo</b>, el PDF sale a nombre de tu agencia: se quita todo lo de INNOBA y la firma del asesor.</div>
+  <div class="mut" style="font-size:12px;margin-bottom:8px">Los precios que ves son la tarifa para la agencia. Aqui puedes sumar tu <b>% de ganancia sobre la venta</b> (se aplica a toda la cotizacion y al PDF) y elegir el <b>logo del PDF</b>. El precio de venta se calcula como <b>costo / (1 - %/100)</b>: ej. costo 100 con 20% da 125 (ganas el 20% de la venta). Si eliges <b>tu logo</b>, el PDF sale a nombre de tu agencia: se quita todo lo de INNOBA y la firma del asesor.</div>
   <div class="row">
-   <div class="col"><label class="lb">% de ganancia de la agencia</label>
-    <input id="ganancia" type="number" min="0" step="1" placeholder="ej. 15" oninput="setGanancia()"></div>
+   <div class="col"><label class="lb">% de ganancia sobre la venta (0-99)</label>
+    <input id="ganancia" type="number" min="0" max="99" step="1" placeholder="ej. 20" oninput="setGanancia()"></div>
    <div class="col"><label class="lb">Logo del PDF</label>
     <select id="logoSel" onchange="setLogoSel()">
      <option value="innoba">Logo INNOBA (nuestro)</option>
@@ -236,7 +236,9 @@ const DEF_CFG = {empresa:"INNOBA Colombia DMC",nit:"",direccion:"",telefono:"",e
  firma_nombre:"Felipe Ortiz",firma_cargo:"Gerente - INNOBA Colombia DMC",trm_hoy:"",
  ganancia:"",agencia_logo:"",usar_logo_agencia:false,agencia_nombre:"",
  notas:"Tarifas sujetas a disponibilidad al momento de la reserva. Precios en dolares americanos (USD) por el total indicado."};
-function factorG(){const g=parseFloat((cfg.ganancia||"").toString().replace(/,/g,""));return (g>0)?(1+g/100):1;}
+/* Margen sobre el PRECIO DE VENTA: precio_venta = costo / (1 - g/100).
+   Ej: costo 100, margen 20% -> 100/0.8 = 125 (la agencia gana el 20% de la venta). */
+function factorG(){const g=parseFloat((cfg.ganancia||"").toString().replace(/,/g,""));return (g>0&&g<100)?(1/(1-g/100)):1;}
 function logoPDF(){return (cfg.usar_logo_agencia&&cfg.agencia_logo)?cfg.agencia_logo:LOGO;}
 function marcaAgencia(){return !!(cfg.usar_logo_agencia&&cfg.agencia_logo);}
 

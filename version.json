@@ -1,5 +1,5 @@
 {
-  "version": "8.5",
+  "version": "8.6",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 8.5 - Reservas (arreglo importante): (1) al borrar una reserva ahora se elimina SOLO esa (por identificador unico uid), ya no se borran las demas que tuvieran el mismo numero. (2) Reparacion automatica al abrir: asigna identificador unico a cada reserva y renumera las que tuvieran numero repetido para que cada una sea unica. (3) Al sincronizar, si llega una reserva con numero repetido de otro equipo se le asigna un numero nuevo. Esto corrige el problema de que se veian varias reservas iguales y borrar una borraba las demas."
+  "notas": "Version 8.6 - Cotizador HTML: el % de ganancia de la agencia ahora se aplica como MARGEN SOBRE LA VENTA (dividir), no como recargo. precio_venta = costo / (1 - %/100). Ejemplo: costo USD 100 con 20% = USD 125 (la agencia gana el 20% de la venta), antes daba 120. A INNOBA le sigue llegando el precio base sin margen."
 }
