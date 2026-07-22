@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "8.9"
+VERSION = "9.0"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -5844,11 +5844,21 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         ase = res.get("asesor", {}) or {}
         ctk.CTkLabel(cont, text=f"Reserva N. {res.get('numero','')}",
                      font=("Segoe UI", 19, "bold"), text_color=NAVY).pack(anchor="w")
-        aso_txt = ase.get("nombre", "(sin asignar)")
-        if ase.get("email"):
-            aso_txt += "  ·  " + ase["email"]
-        ctk.CTkLabel(cont, text="Asesor asignado: " + aso_txt, text_color=BLUE,
-                     font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(2, 2))
+        # Asesora asignada: selector de la LISTA OFICIAL (no se escribe a mano)
+        self._ases_ofic = asesores_reservas(self.cfg)
+        nombres = [a.get("nombre", "") for a in self._ases_ofic if a.get("nombre")]
+        opciones = ["(sin asignar)"] + nombres
+        actual = ase.get("nombre", "") or "(sin asignar)"
+        if actual not in opciones:
+            opciones.append(actual)   # conservar el nombre viejo aunque no este en la lista
+        fa = ctk.CTkFrame(cont, fg_color="transparent"); fa.pack(anchor="w", fill="x", pady=(2, 2))
+        ctk.CTkLabel(fa, text="Asesora asignada:", text_color=BLUE,
+                     font=("Segoe UI", 12, "bold")).pack(side="left")
+        self.v_asesora = tk.StringVar(value=actual)
+        ctk.CTkOptionMenu(fa, variable=self.v_asesora, values=opciones, width=240, height=30,
+                          fg_color=NAVY, button_color=NAVY2, button_hover_color=BLUE,
+                          dropdown_fg_color=CARD, dropdown_text_color=TEXT,
+                          command=self._set_asesora).pack(side="left", padx=8)
         origen = ("cotizacion " + res["cot_origen"]) if res.get("cot_origen") else "manual"
         ctk.CTkLabel(cont, text="Origen: " + origen, text_color=MUTED,
                      font=("Segoe UI", 10)).pack(anchor="w", pady=(0, 6))
@@ -6082,6 +6092,15 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
                       command=self._enviar_asesora).pack(side="left", padx=(8, 0), pady=9)
         ctk.CTkLabel(self.footer, text="Acciones de la reserva", text_color="#BBD0EC",
                      font=("Segoe UI", 11)).pack(side="right", padx=16)
+
+    def _set_asesora(self, nombre):
+        """Asigna la asesora (de la lista oficial) al registro de la reserva."""
+        if nombre == "(sin asignar)":
+            self.res["asesor"] = {}
+            return
+        info = next((a for a in getattr(self, "_ases_ofic", [])
+                     if a.get("nombre") == nombre), None)
+        self.res["asesor"] = dict(info) if info else {"nombre": nombre, "email": ""}
 
     def _enviar_asesora(self):
         # Sincroniza lo editado y notifica por correo a la asesora asignada.
@@ -6954,6 +6973,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
             "fechas_viaje": self.res.get("fechas_viaje", ""),
             "pax_txt": self.res.get("pax_txt", ""), "hab": self.res.get("hab", ""),
             "estado": self.res["estado"], "monto": self.res.get("monto", 0),
+            "asesor": self.res.get("asesor", {}),
             "items_cobro": self.res.get("items_cobro", []),
             "notas": self.res.get("notas", ""), "itinerario": self.res.get("itinerario", ""),
             "itinerario_dias": self.res.get("itinerario_dias", []),
@@ -7388,6 +7408,16 @@ class ModuloReservas(ctk.CTkToplevel):
                          placeholder_text="Buscar reserva por numero, cliente, asesor, estado...")
         e.pack(side="left", fill="x", expand=True)
         e.bind("<KeyRelease>", lambda ev: self._pintar())
+        # Filtro por asesora (para que cada una vea solo sus reservas)
+        nombres_ase = [a.get("nombre", "") for a in asesores_reservas(self.cfg) if a.get("nombre")]
+        self.v_filtro_ase = tk.StringVar(value="Todas")
+        ctk.CTkLabel(bar, text="Ver:", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(side="left", padx=(10, 2))
+        ctk.CTkOptionMenu(bar, variable=self.v_filtro_ase, values=["Todas"] + nombres_ase,
+                          width=200, height=36, fg_color=NAVY, button_color=NAVY2,
+                          button_hover_color=BLUE, dropdown_fg_color=CARD,
+                          dropdown_text_color=TEXT,
+                          command=lambda *_: self._pintar()).pack(side="left", padx=(0, 6))
         self.lbl_tot = ctk.CTkLabel(bar, text="", text_color=MUTED, font=("Segoe UI", 11))
         self.lbl_tot.pack(side="right", padx=10)
 
@@ -7421,6 +7451,10 @@ class ModuloReservas(ctk.CTkToplevel):
             except Exception:
                 return 0
         items = sorted(cargar_reservas().get("items", []), key=_num_res, reverse=True)
+        fase = self.v_filtro_ase.get() if hasattr(self, "v_filtro_ase") else "Todas"
+        if fase and fase != "Todas":
+            items = [it for it in items
+                     if (it.get("asesor", {}) or {}).get("nombre", "") == fase]
         q = self.q.get().lower().strip()
         if q:
             items = [it for it in items if q in json.dumps(it, ensure_ascii=False).lower()]

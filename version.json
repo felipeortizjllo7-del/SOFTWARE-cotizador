@@ -1,5 +1,5 @@
 {
-  "version": "8.9",
+  "version": "9.0",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 8.9 - Reservas: (1) la lista se ordena por consecutivo DESCENDENTE (la ultima de primero). (2) Nuevo boton 'Reordenar N°' que renumera las reservas de forma continua (quita saltos como 2993 -> 3015) y las re-sincroniza para que todos los equipos adopten los mismos numeros. (3) El asesor asignado por rotacion se conserva y viaja igual a todos los equipos (no se cambia ni se troca al sincronizar)."
+  "notas": "Version 9.0 - Reservas por asesora: (1) en el detalle de la reserva la asesora se elige de la LISTA OFICIAL (configurada en el boton Asesores), ya no se escribe a mano, para que no se troquen los nombres. (2) Nuevo filtro 'Ver: [asesora]' en la lista para que cada una vea solo sus reservas. Configura los 3 nombres oficiales (Valentina, Estefania, Maria Camila) en Asesores."
 }
