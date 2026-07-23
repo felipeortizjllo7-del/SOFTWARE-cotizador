@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "9.9"
+VERSION = "10.0"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -505,6 +505,37 @@ def enviar_cotizacion_nube(rec):
         return True
     except Exception:
         return False
+
+
+def depurar_cotizaciones_vencidas():
+    """Elimina las cotizaciones que pasado 1 MES desde su fecha de elaboracion NO se
+       convirtieron en reserva. Respeta las 'Ganada' y las 'En seguimiento' (gestion
+       activa). Tambien las borra de la nube. Devuelve la lista de las eliminadas."""
+    data = cargar_cotizaciones()
+    hoy = datetime.date.today()
+    quitar = []
+    for it in data["items"]:
+        if it.get("reserva_creada"):
+            continue                       # ya se convirtio en reserva
+        if it.get("estado") in ("Ganada", "En seguimiento"):
+            continue                       # gestion activa / ganada -> respetar
+        f = parse_fecha(it.get("fecha", ""))
+        if not f:
+            continue
+        if add_months(f, 1) < hoy:         # ya paso 1 mes desde la elaboracion
+            quitar.append(it)
+    if not quitar:
+        return []
+    claves = [(it.get("uid") or it.get("web_id")) for it in quitar]
+    ids_quitar = {id(it) for it in quitar}
+    data["items"] = [it for it in data["items"] if id(it) not in ids_quitar]
+    guardar_cotizaciones(data)
+    for k in claves:
+        try:
+            enviar_borrado_nube("cotizacion", k)
+        except Exception:
+            pass
+    return quitar
 
 
 def enviar_borrado_nube(tipo, clave):
@@ -3875,6 +3906,12 @@ class VentanaCotizaciones(ctk.CTkToplevel):
             importar_cotizaciones_html()
         except Exception:
             pass
+        # Depurar: eliminar las cotizaciones que pasado 1 mes no se convirtieron en reserva
+        self._vencidas_borradas = []
+        try:
+            self._vencidas_borradas = depurar_cotizaciones_vencidas()
+        except Exception:
+            pass
         try:
             threading.Thread(target=subir_cotizaciones_exe, daemon=True).start()
         except Exception:
@@ -3908,6 +3945,15 @@ class VentanaCotizaciones(ctk.CTkToplevel):
         self.after(120, e.focus_set)
         self.bind("<Escape>", lambda ev: self.destroy())
         self._pintar()
+        if self._vencidas_borradas:
+            nums = ", ".join(x.get("numero", "") for x in self._vencidas_borradas[:12])
+            extra = "..." if len(self._vencidas_borradas) > 12 else ""
+            self.after(250, lambda: messagebox.showinfo(
+                "Cotizaciones vencidas eliminadas",
+                f"Se eliminaron {len(self._vencidas_borradas)} cotizacion(es) con mas de 1 mes "
+                "desde su elaboracion que no se convirtieron en reserva.\n\n"
+                f"({nums}{extra})\n\n"
+                "No se tocaron las marcadas 'Ganada' ni 'En seguimiento'.", parent=self))
 
     def _toggle_filtro(self, f):
         self.filtro_seg = None if self.filtro_seg == f else f
