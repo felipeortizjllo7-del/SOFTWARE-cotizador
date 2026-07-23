@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "10.6"
+VERSION = "10.7"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -2575,10 +2575,15 @@ def indicadores_reservas():
 # ---- Liquidacion de rentabilidad por orden de servicio (reserva) ----
 # Tasas por defecto (sobre las VENTAS en pesos), tomadas del Excel de INNOBA.
 TASAS_LIQ_DEF = {"comision": 0.0265, "iva_comision": 0.19, "retefuente": 0.015,
-                 "reteica": 0.002, "cuatromil": 0.004, "bonificacion": 0.03}
+                 "reteica": 0.002, "cuatromil": 0.004, "bonificacion": 0.03,
+                 "swift_usd": 75}
 GASTOS_OPER = [("hotel", "Hotel"), ("tld_in", "Traslado IN"), ("tld_out", "Traslado OUT"),
                ("transportes", "Transportes"), ("guia", "Guia"), ("compartido", "Compartido"),
                ("actividades", "Actividades"), ("poliza", "Poliza")]
+# Forma de pago -> que gastos financieros aplican (el 4x1000 SIEMPRE va)
+FORMAS_PAGO = [("TC", "Tarjeta de credito"),
+               ("SWIFT", "Giro internacional (SWIFT) - 75 USD"),
+               ("TRANSFER", "Transferencia bancaria (Panama)")]
 
 
 def tasas_liq(cfg):
@@ -2629,19 +2634,27 @@ def liquidar_reserva(res, cfg, trm_default=None):
             operativos += float(liq.get(k, 0) or 0)
         except Exception:
             pass
-    comision = ventas * t["comision"]
-    iva_comision = comision * t["iva_comision"]
-    retefuente = ventas * t["retefuente"]
-    reteica = ventas * t["reteica"]
-    cuatromil = ventas * t["cuatromil"]
-    financieros = comision + iva_comision + retefuente + reteica + cuatromil
+    # Gastos financieros segun la FORMA DE PAGO. El 4x1000 SIEMPRE va.
+    forma = str(liq.get("forma_pago", "") or "TC").upper()
+    cuatromil = ventas * t["cuatromil"]        # siempre, en las 3 formas
+    comision = iva_comision = retefuente = reteica = swift = 0.0
+    if forma == "TC":                          # Tarjeta de credito: todos los cargos
+        comision = ventas * t["comision"]
+        iva_comision = comision * t["iva_comision"]
+        retefuente = ventas * t["retefuente"]
+        reteica = ventas * t["reteica"]
+    elif forma in ("SWIFT", "GIRO"):           # Giro internacional: 75 USD fijos
+        swift = float(t.get("swift_usd", 75) or 75) * trm
+    # TRANSFER (transferencia bancaria Panama): solo el 4x1000
+    financieros = comision + iva_comision + retefuente + reteica + cuatromil + swift
     total_gasto = operativos + financieros
     utilidad = ventas - total_gasto
     rent = (utilidad / ventas) if ventas else 0.0
     bonif = utilidad * t["bonificacion"] if utilidad > 0 else 0.0
     return {"trm": trm, "ventas": ventas, "operativos": operativos, "comision": comision,
             "iva_comision": iva_comision, "retefuente": retefuente, "reteica": reteica,
-            "cuatromil": cuatromil, "financieros": financieros, "total_gasto": total_gasto,
+            "cuatromil": cuatromil, "swift": swift, "forma_pago": forma,
+            "financieros": financieros, "total_gasto": total_gasto,
             "utilidad": utilidad, "rent": rent, "bonif": bonif}
 
 
@@ -8948,6 +8961,17 @@ class DialogoGastosReserva(ctk.CTkToplevel):
         trm_prom = self.trm_default or cfg.get("trm_liq", 4000)
         campo("trm", "TRM (vacio = prom. mes)", liq.get("trm", ""),
               ph=f"Prom. mes: {trm_prom:g}")
+        # Forma de pago: define que gastos financieros aplican (4x1000 siempre)
+        ff = ctk.CTkFrame(cont, fg_color="transparent"); ff.pack(fill="x", pady=2)
+        ctk.CTkLabel(ff, text="Forma de pago", text_color=TEXT, width=130, anchor="w",
+                     font=("Segoe UI", 11)).pack(side="left")
+        cod_actual = str(liq.get("forma_pago", "") or "TC").upper()
+        etq_actual = dict(FORMAS_PAGO).get(cod_actual, FORMAS_PAGO[0][1])
+        self._formas_map = {lbl: cod for cod, lbl in FORMAS_PAGO}
+        self.v_forma = tk.StringVar(value=etq_actual)
+        ctk.CTkOptionMenu(ff, variable=self.v_forma, values=[lbl for _c, lbl in FORMAS_PAGO],
+                          width=300, height=30, fg_color=NAVY, button_color=NAVY2,
+                          command=lambda *_: self._recalc()).pack(side="left")
         ctk.CTkLabel(cont, text="GASTOS OPERATIVOS (en pesos)  ·  📎 adjunta el soporte de cada uno",
                      text_color=NAVY, font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(8, 2))
         for k, lbl in GASTOS_OPER:
@@ -9070,6 +9094,8 @@ class DialogoGastosReserva(ctk.CTkToplevel):
         for k, v in self.vars.items():
             liq[k] = _num(v.get())
         liq["evid"] = self.evid
+        if hasattr(self, "v_forma"):
+            liq["forma_pago"] = self._formas_map.get(self.v_forma.get(), "TC")
         return liq
 
     def _recalc(self):

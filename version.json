@@ -1,5 +1,5 @@
 {
-  "version": "10.6",
+  "version": "10.7",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 10.6 - Reservas: nueva PAPELERA (boton '♻ Papelera'). Ahora al borrar una reserva se guarda una copia recuperable; desde la papelera puedes RESTAURARLA (vuelve con uid nuevo para que no la borre otra vez la nube, y con numero nuevo si el original ya esta en uso). Asi un borrado accidental ya no se pierde. El borrado sigue siendo por identificador unico (no afecta a otras reservas)."
+  "notas": "Version 10.7 - Liquidacion: los gastos financieros ahora dependen de la FORMA DE PAGO (selector en 'Editar gastos'). El 4x1000 SIEMPRE se cobra. Tarjeta de credito: ademas comision 2.65% + IVA comision 19% + retefuente 1.5% + reteICA 0.2%. Giro internacional (SWIFT): 75 USD fijos (sin los cargos de TC). Transferencia bancaria (Panama): solo el 4x1000. La utilidad, rentabilidad y bonificacion se recalculan segun la forma de pago."
 }
