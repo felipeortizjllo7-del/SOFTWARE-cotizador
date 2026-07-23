@@ -1,5 +1,5 @@
 {
-  "version": "10.3",
+  "version": "10.4",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 10.3 - Cotizador HTML: el cliente ahora puede EDITAR una cotizacion existente en vez de crear una nueva. En 'Cotizaciones' hay boton 'Editar por numero' (ingresa COT-XXXXX) y 'Editar cotizacion' en cada fila: carga la cotizacion en el formulario, se modifica y al generar se ACTUALIZA la misma (no se repite). En el panel del .exe, cuando llega una cotizacion editada (mismo id) se actualiza su contenido (cliente, total, destinos, snapshot) sin duplicar y conservando el estado/seguimiento."
+  "notas": "Version 10.4 - Reservas: el NUMERO de la reserva ahora es editable en el detalle. Puedes cambiarlo a mano (avisa si choca con otra reserva). El cambio se guarda y se sincroniza a los demas equipos (por el identificador unico)."
 }

@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "10.3"
+VERSION = "10.4"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -6340,8 +6340,17 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         cont.pack(fill="both", expand=True, padx=16, pady=16)
 
         ase = res.get("asesor", {}) or {}
-        ctk.CTkLabel(cont, text=f"Reserva N. {res.get('numero','')}",
-                     font=("Segoe UI", 19, "bold"), text_color=NAVY).pack(anchor="w")
+        # Numero de reserva EDITABLE
+        self._numero_orig = res.get("numero", "")
+        fnr = ctk.CTkFrame(cont, fg_color="transparent"); fnr.pack(anchor="w", fill="x")
+        ctk.CTkLabel(fnr, text="Reserva N.", font=("Segoe UI", 19, "bold"),
+                     text_color=NAVY).pack(side="left")
+        self.v_numero = tk.StringVar(value=res.get("numero", ""))
+        ctk.CTkEntry(fnr, textvariable=self.v_numero, width=120, height=34,
+                     font=("Segoe UI", 16, "bold"), border_color=BLUE, border_width=2).pack(
+            side="left", padx=8)
+        ctk.CTkLabel(fnr, text="(puedes cambiarlo)", text_color=MUTED,
+                     font=("Segoe UI", 10)).pack(side="left")
         # Asesora asignada: selector de la LISTA OFICIAL (no se escribe a mano)
         self._ases_ofic = asesores_reservas(self.cfg)
         nombres = [a.get("nombre", "") for a in self._ases_ofic if a.get("nombre")]
@@ -7528,7 +7537,20 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
 
     def _guardar(self):
         self._sync()
+        # Numero de reserva (editable): si cambio, validar que no choque con otra
+        nuevo_num = self.v_numero.get().strip() if hasattr(self, "v_numero") else self.res.get("numero", "")
+        viejo_num = self._numero_orig or self.res.get("numero", "")
+        if nuevo_num and nuevo_num != viejo_num:
+            mi_uid = self.res.get("uid")
+            choca = any(r.get("numero") == nuevo_num and r.get("uid") != mi_uid
+                        for r in cargar_reservas().get("items", []))
+            if choca and not messagebox.askyesno(
+                    "Numero repetido",
+                    f"Ya existe otra reserva con el numero {nuevo_num}. "
+                    "¿Usarlo de todos modos?", icon="warning", parent=self):
+                return
         cambios = {
+            "numero": nuevo_num or viejo_num,
             "cliente": self.res.get("cliente", ""), "email": self.res.get("email", ""),
             "contacto": self.res.get("contacto", ""),
             "destinos": self.res.get("destinos", []),
@@ -7546,7 +7568,9 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         for k in self.res:
             if k.startswith("os_"):
                 cambios[k] = self.res[k]
-        actualizar_reserva(self.res.get("numero", ""), cambios)
+        actualizar_reserva(viejo_num, cambios)   # busca por el numero VIEJO, guarda el nuevo
+        self.res["numero"] = cambios["numero"]
+        self._numero_orig = cambios["numero"]
         if self.on_save:
             self.on_save()
         messagebox.showinfo("Guardado", "Reserva actualizada.")
