@@ -1,5 +1,5 @@
 {
-  "version": "10.8",
+  "version": "10.9",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 10.8 - Modulo MICE/Eventos: (1) buscador de cliente + contacto/asesor igual que en cotizaciones (lupa + '+ Nuevo'). (2) Fechas del evento con CALENDARIO (inicio al fin). (3) En hoteles: etiquetas Sencilla/Doble/Triple y el precio se ingresa POR NOCHE; en el PDF se multiplica por el numero de noches (columna Noches + total por todo el alojamiento). (4) El historial de eventos cotizados es la misma ventana MICE (lista con Abrir/PDF/Eliminar y '+ Nueva cotizacion')."
+  "notas": "Version 10.9 - Reservas: la SINCRONIZACION ya NUNCA borra reservas. Al actualizar la app o sincronizar, solo se agregan/actualizan reservas; las marcas de borrado de la nube se IGNORAN. Asi ninguna reserva desaparece sola al actualizar. Borrar sigue siendo solo accion manual tuya (y con papelera para recuperar)."
 }

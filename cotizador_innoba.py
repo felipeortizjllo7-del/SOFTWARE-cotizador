@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "10.8"
+VERSION = "10.9"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -638,16 +638,15 @@ def importar_reservas_nube():
     nums_local = {str(it.get("numero", "")) for it in data["items"]}
     cambios = 0
     max_num = 0
-    borrados = set()
     for rc in remotas:
         if not isinstance(rc, dict):
             continue
         uid = str(rc.get("uid") or "")
         if not uid:
             continue
-        # marca de borrado (tombstone): eliminar esa reserva en este equipo
+        # IMPORTANTE: la sincronizacion NUNCA borra reservas. Las marcas de borrado
+        # de la nube se IGNORAN (borrar es solo accion manual, con papelera).
         if rc.get("_accion") == "borrar" or rc.get("borrar"):
-            borrados.add(uid)
             continue
         rc = {k: v for k, v in rc.items() if k != "tipo"}
         try:
@@ -674,11 +673,7 @@ def importar_reservas_nube():
             nums_local.add(num)
             por_uid[uid] = rc
             data["items"].append(rc); cambios += 1
-    # aplicar borrados (tombstones): quitar localmente lo que se borro en otro equipo
-    if borrados:
-        antes = len(data["items"])
-        data["items"] = [x for x in data["items"] if str(x.get("uid")) not in borrados]
-        cambios += (antes - len(data["items"]))
+    # (No se aplican borrados por sincronizacion: las reservas nunca se eliminan solas.)
     # mantener el consecutivo por encima del mayor numero visto
     if max_num:
         data["seq"] = max(int(data.get("seq", RES_SEQ_INICIAL) or RES_SEQ_INICIAL), max_num)
@@ -2812,6 +2807,9 @@ def eliminar_reserva(numero, uid=None):
         pap.append(it2)
     data["papelera"] = pap[-200:]
     guardar_reservas(data)
+    # El borrado manual marca la reserva en la nube para que NO reaparezca en TU equipo
+    # al sincronizar. Pero la sincronizacion NO aplica esas marcas en los demas equipos
+    # (importar_reservas_nube las ignora), asi ninguna reserva se borra sola al actualizar.
     for it in quitados:
         try:
             if it.get("uid"):
