@@ -1,5 +1,5 @@
 {
-  "version": "9.8",
+  "version": "9.9",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 9.8 - Liquidacion: en 'Editar gastos' cada gasto operativo (hotel, traslados, transportes, guia, compartido, actividades, poliza) tiene un boton '📎 Soportes' para adjuntar VARIAS evidencias (facturas/recibos) por gasto. Se abre un gestor donde puedes agregar varios, abrir cada uno y quitarlos, para revisar que el gasto sea correcto. Los soportes se guardan en adjuntos/<reserva>/gastos y quedan con la reserva."
+  "notas": "Version 9.9 - Tarifario: se agrego el nuevo item 'Traslado del Medellin a Pereira' (Medellin) con su tabla de precios 1..40, manteniendo la misma formula (margen terrestre 0.75 + TRM). No se modifico ningun item existente."
 }
