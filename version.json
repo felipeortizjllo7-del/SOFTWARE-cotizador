@@ -1,5 +1,5 @@
 {
-  "version": "9.7",
+  "version": "9.8",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 9.7 - Reservas: voucher CONSOLIDADO por proveedor. En Transporte y Guia, botones '📄 Voucher (todos)' y '✉ Enviar (todos)' generan UN SOLO voucher por proveedor con TODOS sus servicios del destino (ej. transporte que hace traslado + city tour + Guatape = un voucher; guia que hace asistencia + city tour + Guatape = un voucher). En multidestino se separa por destino porque el proveedor cambia (Bogota != Medellin). Los hoteles siguen con un voucher por hotel. Cada servicio con su fecha y hora en la tabla."
+  "notas": "Version 9.8 - Liquidacion: en 'Editar gastos' cada gasto operativo (hotel, traslados, transportes, guia, compartido, actividades, poliza) tiene un boton '📎 Soportes' para adjuntar VARIAS evidencias (facturas/recibos) por gasto. Se abre un gestor donde puedes agregar varios, abrir cada uno y quitarlos, para revisar que el gasto sea correcto. Los soportes se guardan en adjuntos/<reserva>/gastos y quedan con la reserva."
 }

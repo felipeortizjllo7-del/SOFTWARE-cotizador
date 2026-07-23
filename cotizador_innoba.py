@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "9.7"
+VERSION = "9.8"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -8587,24 +8587,37 @@ class DialogoGastosReserva(ctk.CTkToplevel):
                      text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", pady=(0, 8))
         liq = res.get("liq", {}) or {}
         self.vars = {}
+        self.evid = dict(liq.get("evid", {}) or {})   # soporte por gasto
+        self.evid_lbls = {}
 
-        def campo(clave, etq, val, ph=None):
+        def campo(clave, etq, val, ph=None, adjunto=None):
             f = ctk.CTkFrame(cont, fg_color="transparent"); f.pack(fill="x", pady=2)
-            ctk.CTkLabel(f, text=etq, text_color=TEXT, width=170, anchor="w",
+            ctk.CTkLabel(f, text=etq, text_color=TEXT, width=130, anchor="w",
                          font=("Segoe UI", 11)).pack(side="left")
             v = tk.StringVar(value=str(val if val not in (None, "") else "")); self.vars[clave] = v
-            e = ctk.CTkEntry(f, textvariable=v, height=30, width=160,
+            e = ctk.CTkEntry(f, textvariable=v, height=30, width=130,
                              placeholder_text=(ph or ""))
             e.pack(side="left"); e.bind("<KeyRelease>", lambda ev: self._recalc())
+            if adjunto:
+                ctk.CTkButton(f, text="📎 Soportes", width=90, height=30, fg_color=CARD2,
+                              text_color=NAVY, hover_color=LINE, border_width=1, border_color=LINE,
+                              font=("Segoe UI", 10, "bold"),
+                              command=lambda kk=adjunto: self._gestionar_evid(kk)).pack(side="left", padx=4)
+                lb = ctk.CTkLabel(f, text="", text_color=GREEN_H, font=("Segoe UI", 10, "bold"),
+                                  cursor="hand2")
+                lb.pack(side="left")
+                lb.bind("<Button-1>", lambda ev, kk=adjunto: self._gestionar_evid(kk))
+                self.evid_lbls[adjunto] = lb
             return v
 
         trm_prom = self.trm_default or cfg.get("trm_liq", 4000)
         campo("trm", "TRM (vacio = prom. mes)", liq.get("trm", ""),
               ph=f"Prom. mes: {trm_prom:g}")
-        ctk.CTkLabel(cont, text="GASTOS OPERATIVOS (en pesos)", text_color=NAVY,
-                     font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(8, 2))
+        ctk.CTkLabel(cont, text="GASTOS OPERATIVOS (en pesos)  ·  📎 adjunta el soporte de cada uno",
+                     text_color=NAVY, font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(8, 2))
         for k, lbl in GASTOS_OPER:
-            campo(k, lbl, liq.get(k, ""))
+            campo(k, lbl, liq.get(k, ""), adjunto=k)
+        self._refrescar_evid()
         ctk.CTkLabel(cont, text="RESULTADO", text_color=NAVY,
                      font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(10, 2))
         self.box_res = ctk.CTkFrame(cont, fg_color=CARD2, corner_radius=10)
@@ -8626,10 +8639,102 @@ class DialogoGastosReserva(ctk.CTkToplevel):
                       command=self.destroy).pack(side="right", padx=8)
         self._recalc()
 
+    def _carpeta_evid(self):
+        ruta = os.path.join(datos_dir(), "adjuntos",
+                            self.res.get("numero", "tmp"), "gastos")
+        os.makedirs(ruta, exist_ok=True)
+        return ruta
+
+    def _evid_list(self, k):
+        v = self.evid.get(k)
+        if not v:
+            return []
+        return [v] if isinstance(v, str) else list(v)
+
+    def _adjuntar_gasto(self, k):
+        etq = dict(GASTOS_OPER).get(k, k)
+        rutas = filedialog.askopenfilenames(
+            title=f"Evidencia(s) del gasto: {etq}  (puedes elegir varias)",
+            filetypes=[("Documentos", "*.pdf *.jpg *.jpeg *.png"), ("Todos", "*.*")])
+        if not rutas:
+            return
+        lst = self._evid_list(k)
+        for ruta in rutas:
+            destino = os.path.join(self._carpeta_evid(),
+                                   f"{k}_{len(lst)+1}_{os.path.basename(ruta)}")
+            try:
+                shutil.copyfile(ruta, destino)
+                lst.append(destino)
+            except Exception as e:
+                messagebox.showerror("No se pudo adjuntar", str(e), parent=self)
+        self.evid[k] = lst
+        self._refrescar_evid()
+
+    def _gestionar_evid(self, k):
+        etq = dict(GASTOS_OPER).get(k, k)
+        win = ctk.CTkToplevel(self); win.title("Soportes: " + etq)
+        win.geometry("560x440"); win.configure(fg_color=BG)
+        win.transient(self); win.grab_set()
+        ctk.CTkLabel(win, text="Soportes del gasto: " + etq, text_color=NAVY,
+                     font=("Segoe UI", 15, "bold")).pack(anchor="w", padx=16, pady=(14, 2))
+        ctk.CTkLabel(win, text="Adjunta las facturas / recibos que respaldan este gasto.",
+                     text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=16, pady=(0, 8))
+        box = ctk.CTkScrollableFrame(win, fg_color=CARD, corner_radius=10)
+        box.pack(fill="both", expand=True, padx=16, pady=(0, 8))
+
+        def pintar():
+            for w in box.winfo_children():
+                w.destroy()
+            lst = self._evid_list(k)
+            if not lst:
+                ctk.CTkLabel(box, text="Sin soportes. Usa '+ Agregar soporte'.",
+                             text_color=MUTED).pack(pady=16)
+            for i, p in enumerate(lst):
+                row = ctk.CTkFrame(box, fg_color=CARD2, corner_radius=8); row.pack(fill="x", pady=2, padx=2)
+                ctk.CTkLabel(row, text=f"{i+1}. {os.path.basename(p)}", text_color=NAVY, anchor="w",
+                             font=("Segoe UI", 11)).pack(side="left", fill="x", expand=True, padx=8, pady=6)
+                ctk.CTkButton(row, text="Abrir", width=64, height=28, fg_color=NAVY, hover_color=NAVY2,
+                              command=lambda pp=p: self._abrir_evid(pp)).pack(side="left", padx=3)
+                ctk.CTkButton(row, text="Quitar", width=64, height=28, fg_color=RED, hover_color="#9B2C22",
+                              command=lambda idx=i: quitar(idx)).pack(side="left", padx=(3, 8))
+
+        def agregar():
+            self._adjuntar_gasto(k); pintar()
+
+        def quitar(idx):
+            lst = self._evid_list(k)
+            try:
+                del lst[idx]
+            except Exception:
+                pass
+            self.evid[k] = lst; self._refrescar_evid(); pintar()
+
+        bar = ctk.CTkFrame(win, fg_color="transparent"); bar.pack(fill="x", padx=16, pady=(0, 14))
+        ctk.CTkButton(bar, text="+ Agregar soporte", height=36, fg_color=GREEN, hover_color=GREEN_H,
+                      font=("Segoe UI", 12, "bold"), command=agregar).pack(side="left")
+        ctk.CTkButton(bar, text="Cerrar", height=36, fg_color=NAVY, hover_color=NAVY2,
+                      command=win.destroy).pack(side="right")
+        pintar()
+
+    def _abrir_evid(self, p):
+        if p and os.path.exists(p):
+            try:
+                os.startfile(p)
+            except Exception as e:
+                messagebox.showerror("No se pudo abrir", str(e), parent=self)
+        else:
+            messagebox.showinfo("Soporte", "El archivo ya no existe en la ruta guardada.", parent=self)
+
+    def _refrescar_evid(self):
+        for k, lb in self.evid_lbls.items():
+            n = len(self._evid_list(k))
+            lb.configure(text=(f"✓ {n} soporte(s)" if n else ""))
+
     def _leer(self):
         liq = {}
         for k, v in self.vars.items():
             liq[k] = _num(v.get())
+        liq["evid"] = self.evid
         return liq
 
     def _recalc(self):
