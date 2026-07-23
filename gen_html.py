@@ -459,7 +459,8 @@ function generar(){
  const valida=`${String(v.getDate()).padStart(2,"0")}/${String(v.getMonth()+1).padStart(2,"0")}/${v.getFullYear()}`;
  const ad=st.adultos;let paxtxt=`${ad} adultos`;if(st.ages.length)paxtxt+=`, ${st.ages.length} ninos (${st.ages.map(a=>a===0?"bebe":a+" anos").join(", ")})`;
  const multi=bloques.length>1;
- const numero=peekNumero();
+ const editando=!!EDIT_ID;
+ const numero=editando?EDIT_NUM:peekNumero();
  const _marca=marcaAgencia();
  const _empresaPDF=_marca?(cfg.agencia_nombre||""):cfg.empresa;
  let html=`<div class="ph"><img src="${logoPDF()}"><div>`;
@@ -537,9 +538,18 @@ function generar(){
    total:_totBase,                 // precio para INNOBA (SIN el margen de la agencia)
    total_cliente:_totCliente,      // precio final al cliente de la agencia (con margen) - referencia
    ganancia:(cfg.ganancia||""),    // % de margen que aplico la agencia
-   id:"WEB-"+Date.now()+"-"+Math.floor(Math.random()*10000),
+   id:(editando?EDIT_ID:("WEB-"+Date.now()+"-"+Math.floor(Math.random()*10000))),
+   numero:numero,
    snapshot:snapshotActual()};
- registrarCotiz(rec);
+ if(editando){
+   // ACTUALIZAR la misma cotizacion (no crear una nueva ni duplicar)
+   const idx=(COTIZS.items||[]).findIndex(x=>x.numero===EDIT_NUM);
+   if(idx>=0){const est=COTIZS.items[idx];rec.estado=est.estado;rec.fecha_seg=est.fecha_seg;rec.tareas=est.tareas;COTIZS.items[idx]=rec;} else {COTIZS.items.push(rec);}
+   guardarCotizs();
+   EDIT_ID=null; EDIT_NUM=null; ocultarBannerEdicion();
+ } else {
+   registrarCotiz(rec);
+ }
  enviarCotizWebhook(rec);
  const _tit=document.title;
  if(_marca) document.title=(cfg.agencia_nombre||"Cotizacion");
@@ -562,6 +572,52 @@ function snapshotActual(){
 }
 function enviarCotizWebhook(rec){if(!WEBHOOK_URL)return;
  try{fetch(WEBHOOK_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(rec)});}catch(e){}}
+
+/* ---------- editar una cotizacion existente (por numero) ---------- */
+let EDIT_ID=null, EDIT_NUM=null;
+function cargarSnapshot(snap){
+ if(!snap)return;
+ document.getElementById("cli").value=snap.cliente||"";
+ document.getElementById("email").value=snap.email||"";
+ document.getElementById("asesor").value=snap.asesor||"";
+ document.getElementById("asesorTel").value=snap.asesor_tel||"";
+ const cz=document.getElementById("cotizador");if(cz&&snap.cotizador)cz.value=snap.cotizador;
+ document.getElementById("fdesde").value=snap.fecha_desde||"";
+ document.getElementById("fhasta").value=snap.fecha_hasta||"";
+ st.adultos=snap.adultos||2;
+ st.ages=(snap.ages||[]).slice();
+ st.hab={sencilla:(snap.hab&&snap.hab.sencilla)||0,doble:(snap.hab&&snap.hab.doble)||0,triple:(snap.hab&&snap.hab.triple)||0};
+ st.itinerario=snap.itinerario||"";
+ st.tramos=(snap.tramos||[]).map(t=>({destino:t.destino,temporada:t.temporada,noches:t.noches||3,
+   hoteles:[...(t.hoteles||[])],hab:{s:0,d:1,t:0},trans:new Set(t.trans||[]),act:new Set(t.act||[])}));
+ st.activo=st.tramos.length?0:null;
+ renderPax();render();
+}
+function editarCotiz(numero){
+ const it=(COTIZS.items||[]).find(x=>String(x.numero).toLowerCase()===String(numero).toLowerCase());
+ if(!it){alert("No se encontro la cotizacion "+numero+" en este navegador.");return;}
+ if(!it.snapshot){alert("Esa cotizacion no tiene datos guardados para editar.");return;}
+ const m=document.getElementById("modal");if(m)m.remove();
+ cargarSnapshot(it.snapshot);
+ EDIT_ID=it.id; EDIT_NUM=it.numero;
+ mostrarBannerEdicion(it.numero);
+ window.scrollTo({top:0,behavior:"smooth"});
+}
+function editarCotizNum(){
+ const num=prompt("Ingresa el NUMERO de la cotizacion a editar (ej. COT-00012):");
+ if(!num)return;
+ editarCotiz(num.trim());
+}
+function mostrarBannerEdicion(numero){
+ ocultarBannerEdicion();
+ const b=document.createElement("div");b.id="editBanner";
+ b.style.cssText="position:sticky;top:0;z-index:50;background:#FFF3C4;border:2px solid #D9A400;color:#7A5300;padding:8px 14px;border-radius:10px;margin:8px 0;font-weight:700;display:flex;align-items:center;gap:10px";
+ b.innerHTML='&#9998; Editando la cotizacion <b>'+numero+'</b>. Al generar, se ACTUALIZA la misma (no se crea una nueva). '+
+   '<button class="btn btn-nav" style="padding:3px 10px;margin-left:auto" onclick="cancelarEdicion()">Cancelar edicion</button>';
+ const cont=document.querySelector(".wrap")||document.body;cont.insertBefore(b,cont.firstChild);
+}
+function ocultarBannerEdicion(){const b=document.getElementById("editBanner");if(b)b.remove();}
+function cancelarEdicion(){EDIT_ID=null;EDIT_NUM=null;ocultarBannerEdicion();}
 
 /* ---------- clientes: usar / buscar / editar ---------- */
 function usarCliente(emp){const c=CLIENTES.find(x=>x.empresa===emp);if(!c)return;
@@ -647,7 +703,9 @@ function eliminarClienteRapido(emp){if(!emp)return;
 function abrirCotizaciones(){const m=document.createElement("div");m.className="modal";m.id="modal";
  m.innerHTML=`<div class="box" style="max-width:640px">
   <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">Historial de cotizaciones</h3>
-   <button class="btn btn-nav" style="padding:4px 10px" onclick="cerrarModal()">Cerrar</button></div>
+   <div style="display:flex;gap:6px">
+    <button class="btn btn-nav" style="padding:4px 10px;background:var(--green);color:#fff" onclick="editarCotizNum()">&#9998; Editar por numero</button>
+    <button class="btn btn-nav" style="padding:4px 10px" onclick="cerrarModal()">Cerrar</button></div></div>
   <input id="qcot" type="text" placeholder="Buscar por consecutivo, agencia o asesor..." style="margin:10px 0" autofocus>
   <div class="list" id="cotlist" style="max-height:56vh"></div></div>`;
  document.body.appendChild(m);
@@ -666,7 +724,8 @@ function abrirCotizaciones(){const m=document.createElement("div");m.className="
       ${it.fecha_seg?`<span style="color:${venc?"var(--red)":"var(--muted)"};font-size:10px;font-weight:700;margin-left:6px">&#128276; ${fmtISO(it.fecha_seg)}</span>`:""}
       ${pend?`<span style="color:var(--red);font-size:10px;font-weight:700;margin-left:4px">${pend} tarea(s) pend.</span>`:""}</div>
      <div style="display:flex;gap:4px">
-      <button class="btn btn-nav" style="padding:3px 9px" onclick="detalleCotiz(${JSON.stringify(it.numero)})">&#9998; Editar / Tareas</button>
+      <button class="btn btn-nav" style="padding:3px 9px;background:var(--green);color:#fff" onclick="editarCotiz(${JSON.stringify(it.numero)})">&#9998; Editar cotizacion</button>
+      <button class="btn btn-nav" style="padding:3px 9px" onclick="detalleCotiz(${JSON.stringify(it.numero)})">Seguimiento</button>
       <button class="btn btn-nav" style="padding:3px 9px;color:var(--red)" onclick="eliminarCotiz(${JSON.stringify(it.numero)})">&#128465;</button></div></div>
     <div class="mut" style="font-size:11px">Asesor: ${it.asesor||"-"} &nbsp; Fecha: ${it.fecha||""} &nbsp; ${(it.destinos||[]).join(", ")} &nbsp; ${usd(it.total||0)}</div>`;
    L.appendChild(it2);}
@@ -766,6 +825,7 @@ function subirLogo(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;
 function setAgenciaNombre(){cfg.agencia_nombre=document.getElementById("agenciaNombre").value;localStorage.setItem("innoba_cfg",JSON.stringify(cfg));}
 function initAgencia(){const g=document.getElementById("ganancia");if(g&&cfg.ganancia)g.value=cfg.ganancia;const s=document.getElementById("logoSel");if(s)s.value=cfg.usar_logo_agencia?"agencia":"innoba";const an=document.getElementById("agenciaNombre");if(an&&cfg.agencia_nombre)an.value=cfg.agencia_nombre;const m=document.getElementById("logoMsg");if(m&&cfg.agencia_logo)m.textContent="Logo cargado ✓ (PDF a nombre de tu agencia)";}
 function nueva(){st={adultos:2,ages:[],tramos:[],activo:null,tab:"hotel",hab:{sencilla:0,doble:1,triple:0},itinerario:""};
+ EDIT_ID=null;EDIT_NUM=null;ocultarBannerEdicion();
  document.getElementById("cli").value="";document.getElementById("email").value="";
  document.getElementById("asesor").value="";document.getElementById("asesorTel").value="";
  _vendActuales=[];document.getElementById("asesorSel").innerHTML='<option value="">(vendedor)</option>';

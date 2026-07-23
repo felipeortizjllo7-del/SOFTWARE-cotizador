@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "10.2"
+VERSION = "10.3"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -419,11 +419,6 @@ def importar_cotizaciones_html():
         # --- Cotizacion del HTML (cliente/agencia) ---
         if not wid:
             continue
-        local = por_wid.get(wid)
-        if local is not None:
-            if _merge_cot(local, rc):
-                cambios += 1
-            continue
         dests = rc.get("destinos", [])
         if isinstance(dests, str):
             dests = [d.strip() for d in dests.split(",") if d.strip()]
@@ -439,6 +434,21 @@ def importar_cotizaciones_html():
             ganancia = float(str(rc.get("ganancia", "") or "").replace(",", "") or 0)
         except (TypeError, ValueError):
             ganancia = 0.0
+        local = por_wid.get(wid)
+        if local is not None:
+            # ya existe: sincronizar gestion + ACTUALIZAR contenido si el cliente la re-envio
+            # (editada). Conserva numero/estado/tareas/seguimiento (gestion del .exe).
+            cambio = _merge_cot(local, rc)
+            for campo, val in (("cliente", rc.get("cliente", "")), ("asesor", rc.get("asesor", "")),
+                               ("asesor_tel", rc.get("asesor_tel", "")), ("email", rc.get("email", "")),
+                               ("fecha", rc.get("fecha", "")), ("fechas_viaje", rc.get("fechas_viaje", "")),
+                               ("destinos", dests), ("total", total), ("total_cliente", total_cliente),
+                               ("ganancia_agencia", ganancia), ("snapshot", rc.get("snapshot"))):
+                if val not in (None, "", []) and local.get(campo) != val:
+                    local[campo] = val; cambio = True
+            if cambio:
+                cambios += 1
+            continue
         data["seq"] = int(data.get("seq", 0)) + 1
         nuevo = {
             "numero": f"COT-{data['seq']:05d}", "web_id": wid, "origen": "HTML (cliente)",
