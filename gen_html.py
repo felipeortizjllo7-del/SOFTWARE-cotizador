@@ -118,6 +118,7 @@ display:flex;align-items:center;gap:16px;margin-top:6px}
  <img src="data:image/png;base64,__LOGO__" alt="logo">
  <div><div class="t1">Cotizador de Paquetes</div><div class="t2">INNOBA Colombia DMC &middot; v__VERSION__ &middot; Itinerario hasta 5 destinos &middot; Version HTML</div></div>
  <div class="sp"></div>
+ <button class="btn btn-green" onclick="abrirCotizaciones()">&#128203; Cotizaciones / Editar</button>
  <button class="btn btn-navy" onclick="abrirItinerario()">Itinerario</button>
  <button class="btn btn-nav" onclick="abrirConfig()">Datos de mi empresa</button>
 </header>
