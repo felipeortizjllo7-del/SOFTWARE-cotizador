@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "10.1"
+VERSION = "10.2"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -3900,22 +3900,9 @@ class VentanaCotizaciones(ctk.CTkToplevel):
         self.title("Historial de cotizaciones")
         self.geometry("1240x660"); self.configure(fg_color=BG)
         self.transient(master); self.grab_set()
-        # Traer las de todos (HTML + otros equipos) al instante; subir las del .exe
-        # (Felipe/Carlos) en segundo plano para no congelar la ventana.
-        try:
-            importar_cotizaciones_html()
-        except Exception:
-            pass
-        # Depurar: eliminar las cotizaciones que pasado 1 mes no se convirtieron en reserva
+        # Mostrar YA lo que hay local (rapido); sincronizar con la nube en 2do plano
+        # para NO congelar la ventana mientras hay internet lento.
         self._vencidas_borradas = []
-        try:
-            self._vencidas_borradas = depurar_cotizaciones_vencidas()
-        except Exception:
-            pass
-        try:
-            threading.Thread(target=subir_cotizaciones_exe, daemon=True).start()
-        except Exception:
-            pass
         self.data = cargar_cotizaciones()
         self.grid_columnconfigure(0, weight=1); self.grid_rowconfigure(3, weight=1)
         top = ctk.CTkFrame(self, fg_color="transparent")
@@ -3942,7 +3929,8 @@ class VentanaCotizaciones(ctk.CTkToplevel):
                          border_color=BLUE, border_width=2, fg_color=CARD, font=("Segoe UI", 12),
                          placeholder_text="Buscar por consecutivo, agencia o asesor...")
         e.grid(row=1, column=0, sticky="ew", padx=16, pady=(2, 6))
-        self.var_q.trace_add("write", lambda *a: self._pintar())
+        self._q_after = None
+        self.var_q.trace_add("write", lambda *a: self._buscar_debounce())
         self.kpis = ctk.CTkFrame(self, fg_color="transparent")
         self.kpis.grid(row=2, column=0, sticky="ew", padx=12, pady=(0, 4))
         self.lista = ctk.CTkScrollableFrame(self, fg_color=CARD, corner_radius=12)
@@ -3960,6 +3948,54 @@ class VentanaCotizaciones(ctk.CTkToplevel):
                 "desde su elaboracion que no se convirtieron en reserva.\n\n"
                 f"({nums}{extra})\n\n"
                 "No se tocaron las marcadas 'Ganada' ni 'En seguimiento'.", parent=self))
+        # Sincronizar con la nube en 2do plano (no congela la ventana)
+        self.after(150, self._sync_bg)
+
+    def _buscar_debounce(self):
+        # Espera a que el usuario deje de escribir (evita re-dibujar en cada tecla)
+        if self._q_after:
+            try:
+                self.after_cancel(self._q_after)
+            except Exception:
+                pass
+        self._q_after = self.after(280, self._pintar)
+
+    def _sync_bg(self):
+        def worker():
+            try:
+                importar_cotizaciones_html()
+            except Exception:
+                pass
+            try:
+                venc = depurar_cotizaciones_vencidas()
+            except Exception:
+                venc = []
+            try:
+                subir_cotizaciones_exe()
+            except Exception:
+                pass
+            try:
+                self.after(0, lambda: self._fin_sync(venc))
+            except Exception:
+                pass
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _fin_sync(self, venc):
+        try:
+            if not self.winfo_exists():
+                return
+        except Exception:
+            return
+        self.data = cargar_cotizaciones()
+        self._pintar()
+        if venc:
+            nums = ", ".join(x.get("numero", "") for x in venc[:12])
+            extra = "..." if len(venc) > 12 else ""
+            messagebox.showinfo(
+                "Cotizaciones vencidas eliminadas",
+                f"Se eliminaron {len(venc)} cotizacion(es) con mas de 1 mes desde su "
+                "elaboracion que no se convirtieron en reserva.\n\n"
+                f"({nums}{extra})\n\nNo se tocaron 'Ganada' ni 'En seguimiento'.", parent=self)
 
     def _toggle_filtro(self, f):
         self.filtro_seg = None if self.filtro_seg == f else f
@@ -4019,93 +4055,122 @@ class VentanaCotizaciones(ctk.CTkToplevel):
                 side="right", padx=8)
         q = _nz(self.var_q.get())
         items = list(reversed(self.data.get("items", [])))   # mas recientes primero
-        n = 0
-        for it in items:
-            campos = " ".join([it.get("numero", ""), it.get("cliente", ""),
-                               it.get("asesor", "")])
-            if q and q not in _nz(campos):
-                continue
-            if not self._pasa_filtro(it):
-                continue
-            n += 1
-            estado = it.get("estado", "Pendiente")
-            fila = ctk.CTkFrame(self.lista, fg_color=ESTADO_FILA.get(estado, CARD2),
-                                corner_radius=8, border_width=1, border_color=LINE)
-            fila.pack(fill="x", padx=4, pady=2)
-            fila.grid_columnconfigure(0, weight=1)
-            dest = ", ".join(it.get("destinos", []))
-            tareas = it.get("tareas", []) or []
-            pend = sum(1 for t in tareas if not t.get("hecha"))
-            fseg = parse_fecha(it.get("fecha_seg", ""))
-            venc = fseg and fseg <= datetime.date.today() and estado not in ("Ganada", "Perdida")
-            cel = ctk.CTkFrame(fila, fg_color="transparent")
-            cel.grid(row=0, column=0, sticky="w", padx=10, pady=6)
-            top = ctk.CTkFrame(cel, fg_color="transparent"); top.pack(anchor="w")
-            chk = ctk.CTkCheckBox(top, text="", width=24, checkbox_width=20, checkbox_height=20,
-                                  fg_color=RED, hover_color="#9B2C22")
-            chk.pack(side="left", padx=(0, 6))
-            if it.get("numero") in self.seleccion:
-                chk.select()
-            chk.configure(command=lambda num=it.get("numero"), c=chk: self._toggle_sel(num, c))
-            ctk.CTkLabel(top, text=f"{it.get('numero','')}    {it.get('cliente') or '(sin agencia)'}",
-                         text_color=NAVY, anchor="w",
-                         font=("Segoe UI", 12, "bold")).pack(side="left")
-            ctk.CTkLabel(top, text=" " + estado + " ", text_color="#FFFFFF",
-                         fg_color=ESTADO_COLOR.get(estado, MUTED), corner_radius=6,
-                         font=("Segoe UI", 9, "bold")).pack(side="left", padx=8)
-            if it.get("fecha_seg"):
-                ctk.CTkLabel(top, text=("🔔 seguimiento " + it.get("fecha_seg", "")),
-                             text_color=(RED if venc else MUTED),
-                             font=("Segoe UI", 9, "bold")).pack(side="left", padx=6)
-            if pend:
-                ctk.CTkLabel(top, text=f"{pend} tarea(s) pend.", text_color=RED,
-                             font=("Segoe UI", 9, "bold")).pack(side="left", padx=4)
-            linea2 = (f"Asesor: {it.get('asesor') or '-'}     Fecha: {it.get('fecha','')}"
-                      f"     {dest}     {usd(it.get('total', 0))}")
-            ctk.CTkLabel(cel, text=linea2, text_color=MUTED, anchor="w",
-                         font=("Segoe UI", 10)).pack(anchor="w")
-            col = 1
-            ctk.CTkButton(fila, text="👁 Ver", width=76, height=30, corner_radius=8,
-                          fg_color=CYAN, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
-                          command=lambda x=it: self._ver(x)).grid(row=0, column=col, padx=4)
-            col += 1
-            ctk.CTkButton(fila, text="✎ Editar", width=84, height=30,
-                          corner_radius=8, fg_color=GREEN, hover_color=GREEN_H,
-                          font=("Segoe UI", 11, "bold"),
-                          command=lambda x=it: self._editar_cotizacion(x)).grid(
-                row=0, column=col, padx=4); col += 1
-            ctk.CTkButton(fila, text="Seguimiento", width=100, height=30, corner_radius=8,
-                          fg_color=CYAN, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
-                          command=lambda x=it: self._detalle(x)).grid(row=0, column=col, padx=4)
-            col += 1
-            _en_reserva = bool(it.get("reserva_creada"))
-            ctk.CTkButton(fila,
-                          text=(f"✓ Reserva {it.get('reserva_creada')}" if _en_reserva else "➜ Reserva"),
-                          width=(120 if _en_reserva else 98), height=30, corner_radius=8,
-                          fg_color=(GREEN if _en_reserva else NAVY),
-                          hover_color=(GREEN_H if _en_reserva else NAVY2),
-                          font=("Segoe UI", 11, "bold"),
-                          command=lambda x=it: self._enviar_a_reserva(x)).grid(row=0, column=col, padx=4)
-            col += 1
-            if it.get("pdf"):
-                ctk.CTkButton(fila, text="Abrir PDF", width=90, height=30, corner_radius=8,
-                              fg_color=NAVY, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
-                              command=lambda p=it["pdf"]: self._abrir(p)).grid(
-                    row=0, column=col, padx=4); col += 1
-            elif it.get("snapshot"):
-                ctk.CTkButton(fila, text="Generar PDF", width=100, height=30, corner_radius=8,
-                              fg_color=NAVY, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
-                              command=lambda x=it: self._generar_pdf_de(x)).grid(
-                    row=0, column=col, padx=4); col += 1
-            ctk.CTkButton(fila, text="🗑", width=34, height=30, corner_radius=8,
-                          fg_color=CARD2, text_color=RED, hover_color=LINE,
-                          font=("Segoe UI", 13),
-                          command=lambda x=it: self._eliminar(x)).grid(row=0, column=col, padx=(0, 6))
-        if not n:
+        # Filtrar primero (rapido) y solo DIBUJAR un maximo (dibujar cientos de filas
+        # congela la app). El buscador y los filtros de arriba permiten llegar al resto.
+        TOPE = 50
+        visibles = [it for it in items
+                    if (not q or q in _nz(" ".join([it.get("numero", ""), it.get("cliente", ""),
+                                                    it.get("asesor", "")])))
+                    and self._pasa_filtro(it)]
+        total = len(visibles)
+        if total > TOPE:
+            av = ctk.CTkLabel(self.lista,
+                              text=f"Mostrando {TOPE} de {total}. Usa el buscador o los "
+                                   "filtros de arriba para encontrar el resto.",
+                              text_color="#B7791F", fg_color="#FFF3C4", corner_radius=8,
+                              font=("Segoe UI", 11, "bold"))
+            av.pack(fill="x", padx=4, pady=(2, 4), ipady=4)
+        lista = visibles[:TOPE]
+        if not lista:
             msg = ("Aun no hay cotizaciones guardadas.\nGenera un PDF y aparecera aqui."
                    if not self.data.get("items") else "Sin resultados.")
             ctk.CTkLabel(self.lista, text=msg, text_color=MUTED).pack(pady=24)
-        self._actualizar_btn_sel()
+            self._actualizar_btn_sel()
+            return
+        # Dibujar por LOTES para que la ventana no se congele (queda responsiva)
+        self._render_gen = getattr(self, "_render_gen", 0) + 1
+        gen = self._render_gen
+
+        def _chunk(i):
+            if gen != self._render_gen:
+                return
+            try:
+                if not self.winfo_exists():
+                    return
+            except Exception:
+                return
+            for it in lista[i:i + 6]:
+                self._fila_cot(it)
+            if i + 6 < len(lista):
+                self.after(1, lambda: _chunk(i + 6))
+            else:
+                self._actualizar_btn_sel()
+        _chunk(0)
+
+    def _fila_cot(self, it):
+        estado = it.get("estado", "Pendiente")
+        fila = ctk.CTkFrame(self.lista, fg_color=ESTADO_FILA.get(estado, CARD2),
+                            corner_radius=8, border_width=1, border_color=LINE)
+        fila.pack(fill="x", padx=4, pady=2)
+        fila.grid_columnconfigure(0, weight=1)
+        dest = ", ".join(it.get("destinos", []))
+        tareas = it.get("tareas", []) or []
+        pend = sum(1 for t in tareas if not t.get("hecha"))
+        fseg = parse_fecha(it.get("fecha_seg", ""))
+        venc = fseg and fseg <= datetime.date.today() and estado not in ("Ganada", "Perdida")
+        cel = ctk.CTkFrame(fila, fg_color="transparent")
+        cel.grid(row=0, column=0, sticky="w", padx=10, pady=6)
+        top = ctk.CTkFrame(cel, fg_color="transparent"); top.pack(anchor="w")
+        chk = ctk.CTkCheckBox(top, text="", width=24, checkbox_width=20, checkbox_height=20,
+                              fg_color=RED, hover_color="#9B2C22")
+        chk.pack(side="left", padx=(0, 6))
+        if it.get("numero") in self.seleccion:
+            chk.select()
+        chk.configure(command=lambda num=it.get("numero"), c=chk: self._toggle_sel(num, c))
+        ctk.CTkLabel(top, text=f"{it.get('numero','')}    {it.get('cliente') or '(sin agencia)'}",
+                     text_color=NAVY, anchor="w",
+                     font=("Segoe UI", 12, "bold")).pack(side="left")
+        ctk.CTkLabel(top, text=" " + estado + " ", text_color="#FFFFFF",
+                     fg_color=ESTADO_COLOR.get(estado, MUTED), corner_radius=6,
+                     font=("Segoe UI", 9, "bold")).pack(side="left", padx=8)
+        if it.get("fecha_seg"):
+            ctk.CTkLabel(top, text=("🔔 seguimiento " + it.get("fecha_seg", "")),
+                         text_color=(RED if venc else MUTED),
+                         font=("Segoe UI", 9, "bold")).pack(side="left", padx=6)
+        if pend:
+            ctk.CTkLabel(top, text=f"{pend} tarea(s) pend.", text_color=RED,
+                         font=("Segoe UI", 9, "bold")).pack(side="left", padx=4)
+        linea2 = (f"Asesor: {it.get('asesor') or '-'}     Fecha: {it.get('fecha','')}"
+                  f"     {dest}     {usd(it.get('total', 0))}")
+        ctk.CTkLabel(cel, text=linea2, text_color=MUTED, anchor="w",
+                     font=("Segoe UI", 10)).pack(anchor="w")
+        col = 1
+        ctk.CTkButton(fila, text="👁 Ver", width=76, height=30, corner_radius=8,
+                      fg_color=CYAN, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
+                      command=lambda x=it: self._ver(x)).grid(row=0, column=col, padx=4)
+        col += 1
+        ctk.CTkButton(fila, text="✎ Editar", width=84, height=30,
+                      corner_radius=8, fg_color=GREEN, hover_color=GREEN_H,
+                      font=("Segoe UI", 11, "bold"),
+                      command=lambda x=it: self._editar_cotizacion(x)).grid(
+            row=0, column=col, padx=4); col += 1
+        ctk.CTkButton(fila, text="Seguimiento", width=100, height=30, corner_radius=8,
+                      fg_color=CYAN, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
+                      command=lambda x=it: self._detalle(x)).grid(row=0, column=col, padx=4)
+        col += 1
+        _en_reserva = bool(it.get("reserva_creada"))
+        ctk.CTkButton(fila,
+                      text=(f"✓ Reserva {it.get('reserva_creada')}" if _en_reserva else "➜ Reserva"),
+                      width=(120 if _en_reserva else 98), height=30, corner_radius=8,
+                      fg_color=(GREEN if _en_reserva else NAVY),
+                      hover_color=(GREEN_H if _en_reserva else NAVY2),
+                      font=("Segoe UI", 11, "bold"),
+                      command=lambda x=it: self._enviar_a_reserva(x)).grid(row=0, column=col, padx=4)
+        col += 1
+        if it.get("pdf"):
+            ctk.CTkButton(fila, text="Abrir PDF", width=90, height=30, corner_radius=8,
+                          fg_color=NAVY, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
+                          command=lambda p=it["pdf"]: self._abrir(p)).grid(
+                row=0, column=col, padx=4); col += 1
+        elif it.get("snapshot"):
+            ctk.CTkButton(fila, text="Generar PDF", width=100, height=30, corner_radius=8,
+                          fg_color=NAVY, hover_color=BLUE, font=("Segoe UI", 11, "bold"),
+                          command=lambda x=it: self._generar_pdf_de(x)).grid(
+                row=0, column=col, padx=4); col += 1
+        ctk.CTkButton(fila, text="🗑", width=34, height=30, corner_radius=8,
+                      fg_color=CARD2, text_color=RED, hover_color=LINE,
+                      font=("Segoe UI", 13),
+                      command=lambda x=it: self._eliminar(x)).grid(row=0, column=col, padx=(0, 6))
 
     def _reporte_ventas(self):
         data = cargar_cotizaciones()
@@ -7814,14 +7879,28 @@ class ModuloReservas(ctk.CTkToplevel):
         self.title(f"Reservas - INNOBA Colombia DMC   v{VERSION}")
         self.configure(fg_color=BG)
         self.geometry("1180x720")
-        # Reparar (uid + numeros unicos) y traer reservas de la nube al abrir.
+        # Reparar local (rapido) y mostrar YA; traer de la nube en 2do plano para
+        # no congelar la ventana con internet lento.
         try:
             reparar_reservas()
-            importar_reservas_nube()
         except Exception:
             pass
         self._build()
         self.after(60, lambda: self._max())
+        self.after(150, self._sync_bg)
+
+    def _sync_bg(self):
+        def worker():
+            try:
+                n = importar_reservas_nube()
+            except Exception:
+                n = 0
+            if n:
+                try:
+                    self.after(0, self._pintar)
+                except Exception:
+                    pass
+        threading.Thread(target=worker, daemon=True).start()
 
     def _max(self):
         try:
@@ -7947,7 +8026,15 @@ class ModuloReservas(ctk.CTkToplevel):
                      if (it.get("asesor", {}) or {}).get("nombre", "") == fase]
         q = self.q.get().lower().strip()
         if q:
-            items = [it for it in items if q in json.dumps(it, ensure_ascii=False).lower()]
+            def _match(it):
+                blob = " ".join(str(it.get(k, "")) for k in
+                                ("numero", "cliente", "contacto", "fechas_viaje", "estado")).lower()
+                ase = it.get("asesor", {})
+                if isinstance(ase, dict):
+                    blob += " " + str(ase.get("nombre", "")).lower()
+                blob += " " + " ".join(str(d.get("nombre", "")) for d in it.get("destinos_detalle", [])).lower()
+                return q in blob
+            items = [it for it in items if _match(it)]
         # totales negociados por moneda (excluye anuladas)
         tot = sum(float(it.get("monto", 0) or 0) for it in items
                   if it.get("estado") != "Anulada")
@@ -7956,8 +8043,30 @@ class ModuloReservas(ctk.CTkToplevel):
             ctk.CTkLabel(self.lista, text="Aun no hay reservas. Crea una con "
                          "'+ Nueva desde cotizacion'.", text_color=MUTED).pack(pady=24)
             return
-        for it in items:
-            self._fila(it)
+        TOPE = 50
+        if len(items) > TOPE:
+            ctk.CTkLabel(self.lista,
+                         text=f"Mostrando {TOPE} de {len(items)}. Usa el buscador o el filtro "
+                              "por asesora para ver el resto.",
+                         text_color="#B7791F", fg_color="#FFF3C4", corner_radius=8,
+                         font=("Segoe UI", 11, "bold")).pack(fill="x", padx=2, pady=(2, 4), ipady=4)
+        lista = items[:TOPE]
+        self._render_gen = getattr(self, "_render_gen", 0) + 1
+        gen = self._render_gen
+
+        def _chunk(i):
+            if gen != self._render_gen:
+                return
+            try:
+                if not self.winfo_exists():
+                    return
+            except Exception:
+                return
+            for it in lista[i:i + 6]:
+                self._fila(it)
+            if i + 6 < len(lista):
+                self.after(1, lambda: _chunk(i + 6))
+        _chunk(0)
 
     def _fila(self, it):
         estado = it.get("estado", "Confirmada")

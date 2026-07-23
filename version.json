@@ -1,5 +1,5 @@
 {
-  "version": "10.1",
+  "version": "10.2",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 10.1 - Cotizaciones: ahora cada fila tiene una casilla para SELECCIONAR varias cotizaciones y un boton '🗑 Eliminar seleccionadas (N)' que las borra todas de una sola operacion (con confirmacion). El borrado se propaga a la nube y a los demas equipos."
+  "notas": "Version 10.2 - RENDIMIENTO: el sistema ya no se congela. (1) La sincronizacion con la nube ahora corre en SEGUNDO PLANO al abrir Cotizaciones y Reservas (la ventana aparece al instante, no espera al internet). (2) Se dibuja un maximo de 50 filas (usa el buscador/filtros para el resto) y por LOTES, para que la ventana quede responsiva y no bloquee el computador. (3) El buscador espera a que dejes de escribir (no redibuja en cada tecla) y es mas liviano."
 }
