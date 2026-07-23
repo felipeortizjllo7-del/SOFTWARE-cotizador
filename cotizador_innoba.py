@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "10.5"
+VERSION = "10.6"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -2774,12 +2774,12 @@ def _voucher_defaults(ciudad="", hotel="", fecha_in="", fecha_out="", habitacion
 
 
 def eliminar_reserva(numero, uid=None):
-    """Borra UNA sola reserva. Por 'uid' (identificador unico) si se conoce; si no,
-       borra solo la PRIMERA que coincida por numero (nunca todas las del mismo numero).
-       Tambien la borra de la nube para que desaparezca en los demas equipos."""
+    """Borra UNA sola reserva (por 'uid' si se conoce; si no, la PRIMERA con ese numero).
+       La guarda en la PAPELERA (recuperable) y la borra de la nube para los demas equipos."""
     data = cargar_reservas()
-    quitado_uid = uid
+    quitados = []
     if uid:
+        quitados = [it for it in data["items"] if str(it.get("uid")) == str(uid)]
         data["items"] = [it for it in data["items"] if str(it.get("uid")) != str(uid)]
     else:
         nuevo = []
@@ -2787,16 +2787,48 @@ def eliminar_reserva(numero, uid=None):
         for it in data["items"]:
             if not borrado and it.get("numero") == numero:
                 borrado = True
-                quitado_uid = it.get("uid")
+                quitados.append(it)
                 continue
             nuevo.append(it)
         data["items"] = nuevo
+    # Papelera: guardar copia recuperable (ultimas 200)
+    pap = data.setdefault("papelera", [])
+    sello = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    for it in quitados:
+        it2 = dict(it); it2["_borrada"] = sello
+        pap.append(it2)
+    data["papelera"] = pap[-200:]
+    guardar_reservas(data)
+    for it in quitados:
+        try:
+            if it.get("uid"):
+                enviar_borrado_nube("reserva", it.get("uid"))
+        except Exception:
+            pass
+
+
+def restaurar_reserva(uid):
+    """Restaura una reserva desde la papelera. Le pone un uid NUEVO (para esquivar la
+       marca de borrado en la nube) y un numero unico. Devuelve la reserva o None."""
+    data = cargar_reservas()
+    pap = data.get("papelera", []) or []
+    it = next((x for x in pap if str(x.get("uid")) == str(uid)), None)
+    if not it:
+        return None
+    r = {k: v for k, v in it.items() if k != "_borrada"}
+    r["uid"] = "RES-" + uuid.uuid4().hex[:12]     # uid nuevo: la vieja marca de borrado no lo afecta
+    nums = {str(x.get("numero")) for x in data["items"]}
+    if not r.get("numero") or str(r.get("numero")) in nums:
+        data["seq"] = int(data.get("seq", RES_SEQ_INICIAL) or RES_SEQ_INICIAL) + 1
+        r["numero"] = str(data["seq"])
+    data["items"].append(r)
+    data["papelera"] = [x for x in pap if str(x.get("uid")) != str(uid)]
     guardar_reservas(data)
     try:
-        if quitado_uid:
-            enviar_borrado_nube("reserva", quitado_uid)
+        enviar_reserva_nube(r)
     except Exception:
         pass
+    return r
 
 
 def reparar_reservas():
@@ -7577,6 +7609,59 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         self.destroy()
 
 
+class VentanaPapeleraReservas(ctk.CTkToplevel):
+    """Reservas borradas (recuperables). Permite restaurarlas."""
+    def __init__(self, master, on_restaurar=None):
+        super().__init__(master)
+        self.on_restaurar = on_restaurar
+        self.title("Papelera de reservas"); self.configure(fg_color=BG)
+        self.geometry("760x560+60+30"); self.transient(master); self.grab_set()
+        ctk.CTkLabel(self, text="Papelera de reservas (recuperables)", text_color=NAVY,
+                     font=("Segoe UI", 16, "bold")).pack(anchor="w", padx=16, pady=(14, 2))
+        ctk.CTkLabel(self, text="Aqui quedan las reservas que se borraron. Puedes restaurarlas "
+                     "(vuelven con un numero nuevo si el original ya esta en uso).",
+                     text_color=MUTED, font=("Segoe UI", 11), wraplength=700,
+                     justify="left").pack(anchor="w", padx=16, pady=(0, 8))
+        self.box = ctk.CTkScrollableFrame(self, fg_color=BG)
+        self.box.pack(fill="both", expand=True, padx=16, pady=(0, 14))
+        self._pintar()
+
+    def _pintar(self):
+        for w in self.box.winfo_children():
+            w.destroy()
+        pap = list(reversed(cargar_reservas().get("papelera", []) or []))
+        if not pap:
+            ctk.CTkLabel(self.box, text="La papelera esta vacia.", text_color=MUTED).pack(pady=24)
+            return
+        for it in pap:
+            row = ctk.CTkFrame(self.box, fg_color=CARD, corner_radius=8,
+                               border_width=1, border_color=LINE)
+            row.pack(fill="x", pady=3)
+            izq = ctk.CTkFrame(row, fg_color="transparent"); izq.pack(side="left", fill="x", expand=True, padx=10, pady=6)
+            ase = it.get("asesor", {}); asen = ase.get("nombre", "") if isinstance(ase, dict) else str(ase)
+            ctk.CTkLabel(izq, text=f"N. {it.get('numero','')}   {it.get('cliente','') or '(sin cliente)'}",
+                         text_color=NAVY, anchor="w", font=("Segoe UI", 12, "bold")).pack(anchor="w")
+            ctk.CTkLabel(izq, text=f"{', '.join(it.get('destinos', []))}  ·  {it.get('fechas_viaje','')}  ·  "
+                         f"{usd(it.get('monto', 0))}  ·  Asesor: {asen or '-'}  ·  borrada {it.get('_borrada','')}",
+                         text_color=MUTED, anchor="w", font=("Segoe UI", 10), wraplength=560,
+                         justify="left").pack(anchor="w")
+            ctk.CTkButton(row, text="↺ Restaurar", width=110, height=30, fg_color=GREEN,
+                          hover_color=GREEN_H, font=("Segoe UI", 11, "bold"),
+                          command=lambda x=it: self._restaurar(x)).pack(side="right", padx=8)
+
+    def _restaurar(self, it):
+        r = restaurar_reserva(it.get("uid"))
+        if r:
+            messagebox.showinfo("Restaurada",
+                                f"Reserva restaurada como N. {r.get('numero','')} "
+                                f"({r.get('cliente','')}).", parent=self)
+            if self.on_restaurar:
+                self.on_restaurar()
+            self._pintar()
+        else:
+            messagebox.showerror("No se pudo restaurar", "No se encontro en la papelera.", parent=self)
+
+
 class DialogoReporteMes(ctk.CTkToplevel):
     """Elegir mes (o todos) y descargar un reporte en Excel."""
     def __init__(self, master, titulo, subtitulo, meses, export_fn, base_nombre):
@@ -7992,6 +8077,9 @@ class ModuloReservas(ctk.CTkToplevel):
         ctk.CTkButton(hb, text="💰 Liquidacion", width=140, height=36, corner_radius=10,
                       fg_color="#0E7C6B", hover_color="#0A5C50", font=("Segoe UI", 12, "bold"),
                       command=self._liquidacion).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(hb, text="♻ Papelera", width=110, height=36, corner_radius=10,
+                      fg_color="#8A6D3B", hover_color="#6E561F", font=("Segoe UI", 12, "bold"),
+                      command=self._papelera).pack(side="left", padx=(0, 8))
         ctk.CTkButton(hb, text="📊 Reporte", width=110, height=36, corner_radius=10,
                       fg_color="#7A5AB5", hover_color="#63459A", font=("Segoe UI", 12, "bold"),
                       command=self._reporte).pack(side="left", padx=(0, 8))
@@ -8178,6 +8266,9 @@ class ModuloReservas(ctk.CTkToplevel):
 
     def _liquidacion(self):
         VentanaLiquidacion(self, self.cfg)
+
+    def _papelera(self):
+        VentanaPapeleraReservas(self, on_restaurar=self._pintar)
 
     def _reordenar(self):
         if not messagebox.askyesno(

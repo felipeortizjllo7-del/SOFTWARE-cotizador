@@ -876,4 +876,7 @@ HTML = (HTML.replace("__PRECIOS__", json.dumps(precios, ensure_ascii=False))
 out = os.path.join(PROJ, "CotizadorInnoba.html")
 with open(out, "w", encoding="utf-8") as f:
     f.write(HTML)
+# index.html (mismo contenido) para que GitHub Pages sirva el cotizador en el link corto
+with open(os.path.join(PROJ, "index.html"), "w", encoding="utf-8") as f:
+    f.write(HTML)
 print("HTML generado:", out, "  tamano:", round(len(HTML)/1024), "KB")

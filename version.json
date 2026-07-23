@@ -1,5 +1,5 @@
 {
-  "version": "10.5",
+  "version": "10.6",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 10.5 - Cotizador HTML: se agrego el boton '📋 Cotizaciones / Editar' en el encabezado (antes no habia forma de abrir el historial). Desde ahi: 'Editar por numero' (ingresa el consecutivo COT-XXXXX para abrir y editar la cotizacion anterior) o 'Editar cotizacion' en cada fila. Al generar se actualiza la misma, no se duplica."
+  "notas": "Version 10.6 - Reservas: nueva PAPELERA (boton '♻ Papelera'). Ahora al borrar una reserva se guarda una copia recuperable; desde la papelera puedes RESTAURARLA (vuelve con uid nuevo para que no la borre otra vez la nube, y con numero nuevo si el original ya esta en uso). Asi un borrado accidental ya no se pierde. El borrado sigue siendo por identificador unico (no afecta a otras reservas)."
 }
