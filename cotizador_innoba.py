@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "10.7"
+VERSION = "10.8"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -9435,24 +9435,35 @@ def generar_pdf_mice(cfg, rec, ruta):
         if hoteles:
             pdf.ln(2); pdf.set_fill_color(*PDF_CLARO); pdf.set_text_color(*PDF_PRIM)
             pdf.set_font("Helvetica", "B", 9)
-            pdf.cell(64, 7, T(" HOTEL"), border=1, fill=True)
-            pdf.cell(30, 7, T("ALIMENTACION"), border=1, fill=True, align="C")
-            pdf.cell(26, 7, T("CATEGORIA"), border=1, fill=True, align="C")
-            pdf.cell(20, 7, T("SENCILLA"), border=1, fill=True, align="R")
-            pdf.cell(20, 7, T("DOBLE"), border=1, fill=True, align="R")
+            pdf.cell(52, 7, T(" HOTEL"), border=1, fill=True)
+            pdf.cell(24, 7, T("ALIMENT."), border=1, fill=True, align="C")
+            pdf.cell(22, 7, T("CATEGORIA"), border=1, fill=True, align="C")
+            pdf.cell(14, 7, T("NOCHES"), border=1, fill=True, align="C")
+            pdf.cell(24, 7, T("SENCILLA"), border=1, fill=True, align="R")
+            pdf.cell(24, 7, T("DOBLE"), border=1, fill=True, align="R")
             pdf.cell(0, 7, T("TRIPLE"), border=1, fill=True, align="R", ln=1)
             pdf.set_text_color(*PDF_TXT); pdf.set_font("Helvetica", "", 9)
             for h in hoteles:
-                pdf.cell(64, 6.5, T(" " + str(h.get("hotel", ""))[:44]), border=1)
-                pdf.cell(30, 6.5, T(str(h.get("alimentacion", ""))), border=1, align="C")
-                pdf.cell(26, 6.5, T(str(h.get("categoria", ""))), border=1, align="C")
-                pdf.cell(20, 6.5, T(usd(h.get("sencilla", 0))), border=1, align="R")
-                pdf.cell(20, 6.5, T(usd(h.get("doble", 0))), border=1, align="R")
-                pdf.cell(0, 6.5, T(usd(h.get("triple", 0))), border=1, align="R", ln=1)
-            nn = hoteles[0].get("noches", "")
-            if nn:
-                pdf.set_font("Helvetica", "I", 8)
-                pdf.cell(0, 5, T(f"Tarifa por {nn} noche(s), por persona."), ln=1)
+                try:
+                    noc = int(float(h.get("noches", 1) or 1))
+                except Exception:
+                    noc = 1
+                noc = max(1, noc)
+                def _tot(acc):
+                    try:
+                        return float(h.get(acc, 0) or 0) * noc
+                    except Exception:
+                        return 0.0
+                pdf.cell(52, 6.5, T(" " + str(h.get("hotel", ""))[:36]), border=1)
+                pdf.cell(24, 6.5, T(str(h.get("alimentacion", ""))[:12]), border=1, align="C")
+                pdf.cell(22, 6.5, T(str(h.get("categoria", ""))), border=1, align="C")
+                pdf.cell(14, 6.5, T(str(noc)), border=1, align="C")
+                pdf.cell(24, 6.5, T(usd(_tot("sencilla"))), border=1, align="R")
+                pdf.cell(24, 6.5, T(usd(_tot("doble"))), border=1, align="R")
+                pdf.cell(0, 6.5, T(usd(_tot("triple"))), border=1, align="R", ln=1)
+            pdf.set_font("Helvetica", "I", 8)
+            pdf.cell(0, 5, T("Valores por persona por TODO el alojamiento "
+                             "(precio por noche x numero de noches)."), ln=1)
         # Minuto a minuto
         pdf.ln(2); pdf.set_fill_color(*PDF_PRIM); pdf.set_text_color(255, 255, 255)
         pdf.set_font("Helvetica", "B", 9)
@@ -9580,11 +9591,25 @@ class VentanaMICEDetalle(ctk.CTkToplevel):
             ctk.CTkEntry(parent, textvariable=var, height=32, corner_radius=8, border_color=LINE).pack(fill="x", pady=(0, 6))
             return var
 
+        # Empresa / Cliente con BUSCADOR (igual que en cotizaciones) + contacto
         f1 = ctk.CTkFrame(cont, fg_color="transparent"); f1.pack(fill="x")
         a = ctk.CTkFrame(f1, fg_color="transparent"); a.pack(side="left", fill="x", expand=True, padx=(0, 6))
         b = ctk.CTkFrame(f1, fg_color="transparent"); b.pack(side="left", fill="x", expand=True, padx=(6, 0))
-        campo(a, "empresa", "Empresa / Cliente", rec.get("empresa", ""))
-        campo(b, "contacto", "Contacto", rec.get("contacto", ""))
+        ctk.CTkLabel(a, text="Empresa / Cliente", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        self.v["empresa"] = tk.StringVar(value=rec.get("empresa", ""))
+        fe = ctk.CTkFrame(a, fg_color="transparent"); fe.pack(fill="x", pady=(0, 6))
+        ctk.CTkEntry(fe, textvariable=self.v["empresa"], height=32, corner_radius=8,
+                     border_color=LINE).pack(side="left", fill="x", expand=True)
+        ctk.CTkButton(fe, text="🔍", width=40, height=32, fg_color=NAVY, hover_color=NAVY2,
+                      command=self._buscar_cliente_mice).pack(side="left", padx=(4, 0))
+        ctk.CTkButton(fe, text="+ Nuevo", width=74, height=32, fg_color=GREEN, hover_color=GREEN_H,
+                      font=("Segoe UI", 11, "bold"),
+                      command=self._nuevo_cliente_mice).pack(side="left", padx=(4, 0))
+        ctk.CTkLabel(b, text="Contacto (vendedor)", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        self.v["contacto"] = tk.StringVar(value=rec.get("contacto", ""))
+        self.combo_contacto_mice = ctk.CTkComboBox(b, variable=self.v["contacto"], values=[""],
+                                                   height=32, corner_radius=8)
+        self.combo_contacto_mice.pack(fill="x", pady=(0, 6))
         f2 = ctk.CTkFrame(cont, fg_color="transparent"); f2.pack(fill="x")
         a2 = ctk.CTkFrame(f2, fg_color="transparent"); a2.pack(side="left", fill="x", expand=True, padx=(0, 6))
         b2 = ctk.CTkFrame(f2, fg_color="transparent"); b2.pack(side="left", fill="x", expand=True, padx=(6, 0))
@@ -9594,7 +9619,18 @@ class VentanaMICEDetalle(ctk.CTkToplevel):
         a3 = ctk.CTkFrame(f3, fg_color="transparent"); a3.pack(side="left", fill="x", expand=True, padx=(0, 6))
         b3 = ctk.CTkFrame(f3, fg_color="transparent"); b3.pack(side="left", fill="x", expand=True, padx=(6, 0))
         campo(a3, "pax", "No. de pasajeros", rec.get("pax", ""))
-        campo(b3, "fechas_evento", "Fechas del evento", rec.get("fechas_evento", ""))
+        # Fechas del evento con CALENDARIO (inicio al fin)
+        ctk.CTkLabel(b3, text="Fechas del evento", text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=2)
+        ffe = ctk.CTkFrame(b3, fg_color="transparent"); ffe.pack(fill="x", pady=(0, 6))
+        self.sel_ev_ini = SelectorFecha(ffe); self.sel_ev_ini.pack(side="left")
+        ctk.CTkLabel(ffe, text="  al  ", text_color=MUTED, font=("Segoe UI", 11)).pack(side="left")
+        self.sel_ev_fin = SelectorFecha(ffe); self.sel_ev_fin.pack(side="left")
+        _fi, _ff = _fechas_in_out(rec.get("fechas_evento", ""))
+        _di, _dfn = parse_fecha(_fi), parse_fecha(_ff)
+        if _di:
+            self.sel_ev_ini._set(_di)
+        if _dfn:
+            self.sel_ev_fin._set(_dfn)
         f4 = ctk.CTkFrame(cont, fg_color="transparent"); f4.pack(fill="x")
         a4 = ctk.CTkFrame(f4, fg_color="transparent"); a4.pack(side="left", fill="x", expand=True, padx=(0, 6))
         b4 = ctk.CTkFrame(f4, fg_color="transparent"); b4.pack(side="left", fill="x", expand=True, padx=(6, 0))
@@ -9625,6 +9661,32 @@ class VentanaMICEDetalle(ctk.CTkToplevel):
             self.state("zoomed")
         except Exception:
             pass
+
+    def _buscar_cliente_mice(self):
+        SelectorContacto(self, self._usar_cliente_mice)
+
+    def _usar_cliente_mice(self, c, v):
+        self.v["empresa"].set(c.get("empresa", ""))
+        vends = c.get("vendedores", []) or []
+        nombres = [x.get("nombre", "") for x in vends if x.get("nombre")]
+        try:
+            self.combo_contacto_mice.configure(values=nombres or [""])
+        except Exception:
+            pass
+        if v and v.get("nombre"):
+            self.v["contacto"].set(v.get("nombre", ""))
+            if v.get("email"):
+                self.v["email"].set(v.get("email", ""))
+            elif c.get("email"):
+                self.v["email"].set(c.get("email", ""))
+        else:
+            if nombres:
+                self.v["contacto"].set(nombres[0])
+            if c.get("email"):
+                self.v["email"].set(c.get("email", ""))
+
+    def _nuevo_cliente_mice(self):
+        VentanaClientes(self, preseleccion=self.v["empresa"].get().strip() or None)
 
     def _opcion_vacia(self):
         return {"nombre": "", "ciudad": "Cartagena", "hoteles": [], "lineas": []}
@@ -9659,16 +9721,22 @@ class VentanaMICEDetalle(ctk.CTkToplevel):
         ow = {"nombre": v_nom, "ciudad": v_ciu, "hoteles": [], "lineas": [],
               "hbox": None, "lbox": None, "tot": None}
         self.op_widgets.append(ow)
-        # Hoteles
+        # Hoteles (precio POR NOCHE por persona; el PDF lo multiplica por las noches)
         hh = ctk.CTkFrame(card, fg_color="transparent"); hh.pack(fill="x", padx=10, pady=(8, 0))
-        ctk.CTkLabel(hh, text="Hoteles (tarifa por persona)", text_color=NAVY,
-                     font=("Segoe UI", 12, "bold")).pack(side="left")
+        ctk.CTkLabel(hh, text="Hoteles (precio POR NOCHE; se multiplica por las noches)",
+                     text_color=NAVY, font=("Segoe UI", 12, "bold")).pack(side="left")
         ctk.CTkButton(hh, text="+ Hotel", width=80, height=26, fg_color=BLUE, hover_color=NAVY,
                       font=("Segoe UI", 10, "bold"),
                       command=lambda idx=i: self._add_hotel(idx)).pack(side="right", padx=(4, 0))
         ctk.CTkButton(hh, text="📚 De biblioteca", width=120, height=26, fg_color=CARD2, text_color=NAVY,
                       hover_color=LINE, border_width=1, border_color=LINE, font=("Segoe UI", 10, "bold"),
                       command=lambda idx=i: self._hotel_bib(idx)).pack(side="right")
+        cabh = ctk.CTkFrame(card, fg_color="transparent"); cabh.pack(fill="x", padx=10)
+        for txt, w in (("Hotel", 0), ("Alimentacion", 110), ("Cat.", 80), ("Noches", 44),
+                       ("Sencilla/n", 60), ("Doble/n", 60), ("Triple/n", 60), ("", 30)):
+            ctk.CTkLabel(cabh, text=txt, text_color=MUTED, font=("Segoe UI", 9, "bold"),
+                         width=(w or 90), anchor="w").pack(side="left", fill=("x" if w == 0 else None),
+                                                           expand=(w == 0), padx=(3 if w == 0 else 1))
         ow["hbox"] = ctk.CTkFrame(card, fg_color="transparent"); ow["hbox"].pack(fill="x", padx=10)
         for h in op.get("hoteles", []):
             self._fila_hotel(ow, h)
@@ -9770,7 +9838,9 @@ class VentanaMICEDetalle(ctk.CTkToplevel):
         self.res["email"] = self.v["email"].get().strip()
         self.res["evento"] = self.v["evento"].get().strip()
         self.res["pax"] = _num(self.v["pax"].get())
-        self.res["fechas_evento"] = self.v["fechas_evento"].get().strip()
+        fi = self.sel_ev_ini.get_str() if hasattr(self, "sel_ev_ini") else ""
+        ff = self.sel_ev_fin.get_str() if hasattr(self, "sel_ev_fin") else ""
+        self.res["fechas_evento"] = (fi + " al " + ff) if (fi and ff) else (fi or ff)
         self.res["notas"] = self.v["notas"].get().strip()
         self.res["cotizado_por"] = self.v_cotpor.get()
         self.res["estado"] = self.v_estado.get()

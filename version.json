@@ -1,5 +1,5 @@
 {
-  "version": "10.7",
+  "version": "10.8",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 10.7 - Liquidacion: los gastos financieros ahora dependen de la FORMA DE PAGO (selector en 'Editar gastos'). El 4x1000 SIEMPRE se cobra. Tarjeta de credito: ademas comision 2.65% + IVA comision 19% + retefuente 1.5% + reteICA 0.2%. Giro internacional (SWIFT): 75 USD fijos (sin los cargos de TC). Transferencia bancaria (Panama): solo el 4x1000. La utilidad, rentabilidad y bonificacion se recalculan segun la forma de pago."
+  "notas": "Version 10.8 - Modulo MICE/Eventos: (1) buscador de cliente + contacto/asesor igual que en cotizaciones (lupa + '+ Nuevo'). (2) Fechas del evento con CALENDARIO (inicio al fin). (3) En hoteles: etiquetas Sencilla/Doble/Triple y el precio se ingresa POR NOCHE; en el PDF se multiplica por el numero de noches (columna Noches + total por todo el alojamiento). (4) El historial de eventos cotizados es la misma ventana MICE (lista con Abrir/PDF/Eliminar y '+ Nueva cotizacion')."
 }
