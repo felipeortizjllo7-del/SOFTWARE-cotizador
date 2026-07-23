@@ -1,5 +1,5 @@
 {
-  "version": "10.0",
+  "version": "10.1",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 10.0 - Cotizaciones: al abrir el historial se ELIMINAN automaticamente las cotizaciones que pasado 1 mes desde su fecha de elaboracion NO se convirtieron en reserva. Se respetan las marcadas 'Ganada' y 'En seguimiento' (gestion activa) y las que ya pasaron a reserva. El borrado tambien se propaga a la nube. Avisa cuantas se eliminaron."
+  "notas": "Version 10.1 - Cotizaciones: ahora cada fila tiene una casilla para SELECCIONAR varias cotizaciones y un boton '🗑 Eliminar seleccionadas (N)' que las borra todas de una sola operacion (con confirmacion). El borrado se propaga a la nube y a los demas equipos."
 }

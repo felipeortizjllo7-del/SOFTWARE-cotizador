@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "10.0"
+VERSION = "10.1"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -3924,6 +3924,12 @@ class VentanaCotizaciones(ctk.CTkToplevel):
         ctk.CTkLabel(top, text="Historial de cotizaciones", text_color=NAVY,
                      font=("Segoe UI", 16, "bold")).grid(row=0, column=0, sticky="w")
         botones_top = ctk.CTkFrame(top, fg_color="transparent"); botones_top.grid(row=0, column=1, sticky="e")
+        self.seleccion = set()   # numeros seleccionados para borrado en bloque
+        self.btn_borrar_sel = ctk.CTkButton(
+            botones_top, text="🗑 Eliminar seleccionadas", width=190, height=32, corner_radius=8,
+            fg_color=RED, hover_color="#9B2C22", font=("Segoe UI", 11, "bold"),
+            command=self._eliminar_seleccionadas)
+        self.btn_borrar_sel.pack(side="left", padx=(0, 6))
         ctk.CTkButton(botones_top, text="📊 Reporte de ventas", width=170, height=32, corner_radius=8,
                       fg_color="#7A5AB5", hover_color="#63459A", font=("Segoe UI", 11, "bold"),
                       command=self._reporte_ventas).pack(side="left", padx=(0, 6))
@@ -4035,6 +4041,12 @@ class VentanaCotizaciones(ctk.CTkToplevel):
             cel = ctk.CTkFrame(fila, fg_color="transparent")
             cel.grid(row=0, column=0, sticky="w", padx=10, pady=6)
             top = ctk.CTkFrame(cel, fg_color="transparent"); top.pack(anchor="w")
+            chk = ctk.CTkCheckBox(top, text="", width=24, checkbox_width=20, checkbox_height=20,
+                                  fg_color=RED, hover_color="#9B2C22")
+            chk.pack(side="left", padx=(0, 6))
+            if it.get("numero") in self.seleccion:
+                chk.select()
+            chk.configure(command=lambda num=it.get("numero"), c=chk: self._toggle_sel(num, c))
             ctk.CTkLabel(top, text=f"{it.get('numero','')}    {it.get('cliente') or '(sin agencia)'}",
                          text_color=NAVY, anchor="w",
                          font=("Segoe UI", 12, "bold")).pack(side="left")
@@ -4093,6 +4105,7 @@ class VentanaCotizaciones(ctk.CTkToplevel):
             msg = ("Aun no hay cotizaciones guardadas.\nGenera un PDF y aparecera aqui."
                    if not self.data.get("items") else "Sin resultados.")
             ctk.CTkLabel(self.lista, text=msg, text_color=MUTED).pack(pady=24)
+        self._actualizar_btn_sel()
 
     def _reporte_ventas(self):
         data = cargar_cotizaciones()
@@ -4247,7 +4260,49 @@ class VentanaCotizaciones(ctk.CTkToplevel):
                 enviar_borrado_nube("cotizacion", it.get("uid") or it.get("web_id"))
             except Exception:
                 pass
+            self.seleccion.discard(it.get("numero"))
             self._pintar()
+
+    def _toggle_sel(self, numero, chk):
+        if chk.get():
+            self.seleccion.add(numero)
+        else:
+            self.seleccion.discard(numero)
+        self._actualizar_btn_sel()
+
+    def _actualizar_btn_sel(self):
+        n = len(self.seleccion)
+        try:
+            self.btn_borrar_sel.configure(
+                text=(f"🗑 Eliminar seleccionadas ({n})" if n else "🗑 Eliminar seleccionadas"),
+                state=("normal" if n else "disabled"))
+        except Exception:
+            pass
+
+    def _eliminar_seleccionadas(self):
+        nums = set(self.seleccion)
+        if not nums:
+            messagebox.showinfo("Eliminar", "No has seleccionado cotizaciones.\n"
+                                "Marca las casillas de las que quieres eliminar.", parent=self)
+            return
+        if not messagebox.askyesno(
+                "Eliminar seleccionadas",
+                f"¿Eliminar {len(nums)} cotizacion(es) seleccionada(s)?\n\n"
+                "Se quitaran del historial y de los demas equipos. Esta accion NO se puede "
+                "deshacer.", icon="warning", parent=self):
+            return
+        borrar = [x for x in self.data["items"] if x.get("numero") in nums]
+        claves = [(x.get("uid") or x.get("web_id")) for x in borrar]
+        self.data["items"] = [x for x in self.data["items"] if x.get("numero") not in nums]
+        guardar_cotizaciones(self.data)
+        for k in claves:
+            try:
+                enviar_borrado_nube("cotizacion", k)
+            except Exception:
+                pass
+        self.seleccion.clear()
+        self._pintar()
+        messagebox.showinfo("Listo", f"Se eliminaron {len(borrar)} cotizacion(es).", parent=self)
 
 
 # ============================================================================
