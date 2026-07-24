@@ -1,5 +1,5 @@
 {
-  "version": "11.1",
+  "version": "11.2",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 11.1 - RESERVA DESDE LA WEB: en el cotizador web cada cotizacion tiene boton 'Reservar'. El cliente adjunta el PASAPORTE de cada pasajero (se comprime y se guarda en Drive), los VUELOS y el CONTACTO. Al enviar: la cotizacion pasa a GANADA (verde) y en el modulo Reservas se crea automaticamente la orden de servicio con el consecutivo global y asignada por rotacion a Valentina, Estefania o Maria Camila (todas la ven). Ademas: el VOUCHER ahora muestra el numero de VUELO de cada pasajero (columna nueva) y el detalle de reserva tiene campo Vuelo por pasajero. Todo es aditivo: no cambia consecutivos existentes ni borra nada."
+  "notas": "Version 11.2 - Reserva web: proteccion para que una solicitud NUNCA se pierda (si Drive no esta autorizado, la solicitud se guarda igual sin los archivos) y se ignoran registros vacios o anulados para que no creen ordenes en blanco."
 }

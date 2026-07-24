@@ -41,36 +41,54 @@ function doPost(e) {
 /* Guarda los pasaportes (base64) en una carpeta de Drive y reemplaza el archivo
    por su LINK, para no exceder el limite de una celda de la hoja. */
 function _guardarPasaportes(pasajeros, id) {
-  var props = PropertiesService.getScriptProperties();
-  var fid = props.getProperty('DRIVE_FOLDER');
-  var folder;
-  if (fid) {
-    try { folder = DriveApp.getFolderById(fid); } catch (e) { folder = null; }
-  }
-  if (!folder) {
-    folder = DriveApp.createFolder('INNOBA Pasaportes');
-    props.setProperty('DRIVE_FOLDER', folder.getId());
+  // Si Drive no esta autorizado, NO se pierde la solicitud: se guarda igual sin archivos.
+  var folder = null;
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var fid = props.getProperty('DRIVE_FOLDER');
+    if (fid) {
+      try { folder = DriveApp.getFolderById(fid); } catch (e) { folder = null; }
+    }
+    if (!folder) {
+      folder = DriveApp.createFolder('INNOBA Pasaportes');
+      props.setProperty('DRIVE_FOLDER', folder.getId());
+    }
+  } catch (e) {
+    folder = null;   // sin permiso de Drive
   }
   for (var i = 0; i < pasajeros.length; i++) {
     var p = pasajeros[i];
     if (p && p.archivo_b64) {
-      try {
-        var partes = String(p.archivo_b64).split(',');
-        var datos = partes.length > 1 ? partes[1] : partes[0];
-        var mime = (String(p.archivo_b64).match(/data:([^;]+);/) || [null, 'image/jpeg'])[1];
-        var nombre = (p.archivo_nombre || ('pasaporte_' + (i + 1)));
-        var blob = Utilities.newBlob(Utilities.base64Decode(datos), mime,
-                                     id + '_' + nombre);
-        var f = folder.createFile(blob);
-        f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-        p.pasaporte_url = f.getUrl();
-      } catch (err) {
-        p.pasaporte_url = 'ERROR: ' + err;
+      if (folder) {
+        try {
+          var partes = String(p.archivo_b64).split(',');
+          var datos = partes.length > 1 ? partes[1] : partes[0];
+          var mime = (String(p.archivo_b64).match(/data:([^;]+);/) || [null, 'image/jpeg'])[1];
+          var nombre = (p.archivo_nombre || ('pasaporte_' + (i + 1)));
+          var blob = Utilities.newBlob(Utilities.base64Decode(datos), mime,
+                                       id + '_' + nombre);
+          var f = folder.createFile(blob);
+          f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+          p.pasaporte_url = f.getUrl();
+        } catch (err) {
+          p.pasaporte_url = 'ERROR: ' + err;
+        }
+      } else {
+        p.pasaporte_url = 'PENDIENTE (falta autorizar Drive en el script)';
       }
-      delete p.archivo_b64;   // no guardar el archivo en la hoja
+      delete p.archivo_b64;   // nunca guardar el archivo dentro de la hoja
     }
   }
   return pasajeros;
+}
+
+/* Ejecuta esta funcion UNA VEZ desde el editor (boton Ejecutar) para autorizar
+   Google Drive. Crea la carpeta donde se guardaran los pasaportes. */
+function AUTORIZAR_DRIVE() {
+  var props = PropertiesService.getScriptProperties();
+  var folder = DriveApp.createFolder('INNOBA Pasaportes');
+  props.setProperty('DRIVE_FOLDER', folder.getId());
+  return 'Carpeta creada: ' + folder.getUrl();
 }
 
 function doGet(e) {

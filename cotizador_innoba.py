@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "11.1"
+VERSION = "11.2"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -738,6 +738,10 @@ def importar_solicitudes_reserva(cfg):
         sid = str(s.get("id") or "")
         if not sid or sid in ya:
             continue                      # ya se convirtio en reserva
+        if s.get("_accion") == "borrar" or s.get("borrar"):
+            continue                      # marca de anulacion: no crear orden
+        if not (s.get("cliente") or s.get("pasajeros") or s.get("cot_numero")):
+            continue                      # registro vacio/incompleto: ignorar
         pax = []
         for p in (s.get("pasajeros", []) or []):
             pax.append({"nombre": p.get("nombre", ""), "documento": p.get("pasaporte", ""),
