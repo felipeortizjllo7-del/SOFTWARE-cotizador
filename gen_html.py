@@ -574,6 +574,118 @@ function snapshotActual(){
 function enviarCotizWebhook(rec){if(!WEBHOOK_URL)return;
  try{fetch(WEBHOOK_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(rec)});}catch(e){}}
 
+/* ---------- SOLICITAR RESERVA desde la web ---------- */
+let RES_PAX=[];
+function abrirReserva(numero){
+ const it=(COTIZS.items||[]).find(x=>String(x.numero).toLowerCase()===String(numero).toLowerCase());
+ if(!it){alert("No se encontro la cotizacion "+numero+" en este navegador.");return;}
+ if(it.reserva_solicitada){if(!confirm("Esta cotizacion YA fue enviada a reserva.\n\n¿Enviarla de nuevo?"))return;}
+ const m=document.getElementById("modal");if(m)m.remove();
+ const nPax=(it.snapshot&&it.snapshot.adultos?it.snapshot.adultos:1)+((it.snapshot&&it.snapshot.ages)?it.snapshot.ages.length:0);
+ RES_PAX=[];for(let i=0;i<Math.max(nPax,1);i++)RES_PAX.push({nombre:"",pasaporte:"",archivo_b64:"",archivo_nombre:""});
+ const d=document.createElement("div");d.className="modal";d.id="modal";
+ d.innerHTML=`<div class="box" style="max-width:760px">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+   <h3 style="margin:0">Solicitar reserva &middot; ${it.numero}</h3>
+   <button class="btn btn-nav" style="padding:4px 10px" onclick="cerrarModal()">Cerrar</button></div>
+  <div class="mut" style="font-size:12px;margin:6px 0">Completa los datos para confirmar la reserva de
+   <b>${it.cliente||""}</b> (${(it.destinos||[]).join(", ")} &middot; ${it.fechas_viaje||""}).
+   Adjunta el <b>pasaporte de cada pasajero</b>.</div>
+  <div style="font-weight:700;color:var(--navy);margin-top:8px">CONTACTO DEL PASAJERO</div>
+  <div class="row">
+   <div class="col"><label class="lb">Nombre de contacto</label><input id="rs_cnom" type="text"></div>
+   <div class="col"><label class="lb">Telefono</label><input id="rs_ctel" type="text"></div>
+   <div class="col"><label class="lb">Correo</label><input id="rs_cmail" type="email" value="${it.email||""}"></div>
+  </div>
+  <div style="font-weight:700;color:var(--navy);margin-top:10px">VUELOS</div>
+  <div class="row">
+   <div class="col"><label class="lb">Vuelo de llegada</label><input id="rs_vin" type="text" placeholder="Aerolinea y numero"></div>
+   <div class="col"><label class="lb">Fecha/hora llegada</label><input id="rs_hin" type="text" placeholder="dd/mm/aaaa 10:30"></div>
+  </div>
+  <div class="row">
+   <div class="col"><label class="lb">Vuelo de salida</label><input id="rs_vout" type="text" placeholder="Aerolinea y numero"></div>
+   <div class="col"><label class="lb">Fecha/hora salida</label><input id="rs_hout" type="text" placeholder="dd/mm/aaaa 18:00"></div>
+  </div>
+  <div style="display:flex;align-items:center;margin-top:10px">
+   <div style="font-weight:700;color:var(--navy)">PASAJEROS Y PASAPORTES</div>
+   <button class="btn btn-nav" style="padding:3px 10px;margin-left:auto" onclick="resAddPax()">+ Agregar pasajero</button></div>
+  <div id="rs_paxbox"></div>
+  <div class="mut" style="font-size:11px;margin-top:6px">Las imagenes se comprimen automaticamente antes de enviarse.</div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+   <button class="btn btn-nav" onclick="cerrarModal()">Cancelar</button>
+   <button class="btn btn-green" id="rs_btn" onclick="enviarReserva(${JSON.stringify(it.numero)})">Enviar solicitud de reserva</button></div></div>`;
+ document.body.appendChild(d);
+ resPintarPax();
+}
+function resPintarPax(){
+ const box=document.getElementById("rs_paxbox");if(!box)return;box.innerHTML="";
+ RES_PAX.forEach((p,i)=>{
+  const f=document.createElement("div");f.className="row";f.style.alignItems="flex-end";
+  f.innerHTML=`<div class="col"><label class="lb">Pasajero ${i+1} - nombre completo</label>
+    <input type="text" value="${(p.nombre||"").replace(/"/g,'&quot;')}" oninput="RES_PAX[${i}].nombre=this.value"></div>
+   <div class="col"><label class="lb">No. de pasaporte</label>
+    <input type="text" value="${(p.pasaporte||"").replace(/"/g,'&quot;')}" oninput="RES_PAX[${i}].pasaporte=this.value"></div>
+   <div class="col"><label class="lb">Pasaporte (foto/PDF)</label>
+    <input type="file" accept="image/*,application/pdf" onchange="resArchivo(${i},this)">
+    <div class="mut" style="font-size:11px" id="rs_f${i}">${p.archivo_nombre?("&#10003; "+p.archivo_nombre):"Sin adjuntar"}</div></div>
+   <div style="padding-bottom:6px"><button class="btn btn-nav" style="padding:4px 9px;color:var(--red)" onclick="resDelPax(${i})">&#10005;</button></div>`;
+  box.appendChild(f);});
+}
+function resAddPax(){RES_PAX.push({nombre:"",pasaporte:"",archivo_b64:"",archivo_nombre:""});resPintarPax();}
+function resDelPax(i){RES_PAX.splice(i,1);if(!RES_PAX.length)resAddPax();else resPintarPax();}
+function resArchivo(i,input){
+ const f=input.files&&input.files[0];if(!f)return;
+ const info=document.getElementById("rs_f"+i);
+ if(info)info.textContent="procesando...";
+ const fin=(b64)=>{RES_PAX[i].archivo_b64=b64;RES_PAX[i].archivo_nombre=f.name;
+   if(info)info.innerHTML="&#10003; "+f.name;};
+ if(f.type&&f.type.indexOf("image")===0){
+  const r=new FileReader();
+  r.onload=function(){const img=new Image();
+   img.onload=function(){const MAX=1400;let w=img.width,h=img.height;
+    if(w>MAX||h>MAX){const s=Math.min(MAX/w,MAX/h);w=Math.round(w*s);h=Math.round(h*s);}
+    const c=document.createElement("canvas");c.width=w;c.height=h;
+    c.getContext("2d").drawImage(img,0,0,w,h);
+    fin(c.toDataURL("image/jpeg",0.72));};
+   img.src=r.result;};
+  r.readAsDataURL(f);
+ } else {const r=new FileReader();r.onload=function(){fin(r.result);};r.readAsDataURL(f);}
+}
+function enviarReserva(numero){
+ const it=(COTIZS.items||[]).find(x=>String(x.numero)===String(numero));if(!it)return;
+ const cnom=(document.getElementById("rs_cnom").value||"").trim();
+ const ctel=(document.getElementById("rs_ctel").value||"").trim();
+ const cmail=(document.getElementById("rs_cmail").value||"").trim();
+ if(!cnom||!ctel){alert("Ingresa el nombre y telefono de contacto del pasajero.");return;}
+ const pax=RES_PAX.filter(p=>(p.nombre||"").trim());
+ if(!pax.length){alert("Ingresa al menos un pasajero con su nombre.");return;}
+ const sinPas=pax.filter(p=>!p.archivo_b64&&!(p.pasaporte||"").trim());
+ if(sinPas.length&&!confirm("Hay pasajeros sin pasaporte adjunto ni numero.\n\n¿Enviar de todos modos?"))return;
+ const btn=document.getElementById("rs_btn");if(btn){btn.disabled=true;btn.textContent="Enviando...";}
+ const sol={tipo:"solicitud",
+   id:"SOL-"+Date.now()+"-"+Math.floor(Math.random()*10000),
+   cot_id:it.id, cot_numero:it.numero,
+   cliente:it.cliente||"", asesor:it.asesor||"", email:cmail||it.email||"",
+   destinos:it.destinos||[], fechas_viaje:it.fechas_viaje||"",
+   total:it.total||0, snapshot:it.snapshot||null,
+   contacto:{nombre:cnom,telefono:ctel,email:cmail},
+   vuelos:{llegada:(document.getElementById("rs_vin").value||"").trim(),
+           hora_llegada:(document.getElementById("rs_hin").value||"").trim(),
+           salida:(document.getElementById("rs_vout").value||"").trim(),
+           hora_salida:(document.getElementById("rs_hout").value||"").trim()},
+   pasajeros:pax, fecha:(new Date()).toLocaleDateString("es-CO")};
+ try{fetch(WEBHOOK_URL,{method:"POST",mode:"no-cors",
+   headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(sol)});}catch(e){}
+ // marcar la cotizacion local como GANADA / enviada a reserva
+ it.estado="Ganada"; it.reserva_solicitada=sol.id; guardarCotizs();
+ try{enviarCotizWebhook(it);}catch(e){}
+ setTimeout(function(){
+   cerrarModal();
+   alert("¡Listo! Tu solicitud de reserva fue enviada a INNOBA.\n\n"+
+         "Una asesora de reservas te contactara para confirmar los servicios.");
+ },900);
+}
+
 /* ---------- editar una cotizacion existente (por numero) ---------- */
 let EDIT_ID=null, EDIT_NUM=null;
 function cargarSnapshot(snap){
@@ -725,7 +837,8 @@ function abrirCotizaciones(){const m=document.createElement("div");m.className="
       ${it.fecha_seg?`<span style="color:${venc?"var(--red)":"var(--muted)"};font-size:10px;font-weight:700;margin-left:6px">&#128276; ${fmtISO(it.fecha_seg)}</span>`:""}
       ${pend?`<span style="color:var(--red);font-size:10px;font-weight:700;margin-left:4px">${pend} tarea(s) pend.</span>`:""}</div>
      <div style="display:flex;gap:4px">
-      <button class="btn btn-nav" style="padding:3px 9px;background:var(--green);color:#fff" onclick="editarCotiz(${JSON.stringify(it.numero)})">&#9998; Editar cotizacion</button>
+      <button class="btn btn-nav" style="padding:3px 9px;background:${it.reserva_solicitada?'#1E9E5A':'#013984'};color:#fff;font-weight:700" onclick="abrirReserva(${JSON.stringify(it.numero)})">${it.reserva_solicitada?'&#10003; Reservada':'&#10003; Reservar'}</button>
+      <button class="btn btn-nav" style="padding:3px 9px;background:var(--green);color:#fff" onclick="editarCotiz(${JSON.stringify(it.numero)})">&#9998; Editar</button>
       <button class="btn btn-nav" style="padding:3px 9px" onclick="detalleCotiz(${JSON.stringify(it.numero)})">Seguimiento</button>
       <button class="btn btn-nav" style="padding:3px 9px;color:var(--red)" onclick="eliminarCotiz(${JSON.stringify(it.numero)})">&#128465;</button></div></div>
     <div class="mut" style="font-size:11px">Asesor: ${it.asesor||"-"} &nbsp; Fecha: ${it.fecha||""} &nbsp; ${(it.destinos||[]).join(", ")} &nbsp; ${usd(it.total||0)}</div>`;

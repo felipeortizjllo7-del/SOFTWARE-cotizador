@@ -27,11 +27,50 @@ function doPost(e) {
     var tipo = _tipo(body.tipo);
     var id = String(body.id || body.uid || body.web_id || body.numero ||
                     Utilities.getUuid());
+    // Solicitud de RESERVA desde la web: guarda los pasaportes en Drive y deja el link
+    if (tipo === 'solicitudes' && body.pasajeros) {
+      body.pasajeros = _guardarPasaportes(body.pasajeros, id);
+    }
     _guardar(tipo, id, body);   // un borrado llega como marca {_accion:'borrar'} y solo
     return _json({ ok: true, id: id, tipo: tipo });   // sobrescribe la fila (tombstone)
   } catch (err) {
     return _json({ ok: false, error: String(err) });
   }
+}
+
+/* Guarda los pasaportes (base64) en una carpeta de Drive y reemplaza el archivo
+   por su LINK, para no exceder el limite de una celda de la hoja. */
+function _guardarPasaportes(pasajeros, id) {
+  var props = PropertiesService.getScriptProperties();
+  var fid = props.getProperty('DRIVE_FOLDER');
+  var folder;
+  if (fid) {
+    try { folder = DriveApp.getFolderById(fid); } catch (e) { folder = null; }
+  }
+  if (!folder) {
+    folder = DriveApp.createFolder('INNOBA Pasaportes');
+    props.setProperty('DRIVE_FOLDER', folder.getId());
+  }
+  for (var i = 0; i < pasajeros.length; i++) {
+    var p = pasajeros[i];
+    if (p && p.archivo_b64) {
+      try {
+        var partes = String(p.archivo_b64).split(',');
+        var datos = partes.length > 1 ? partes[1] : partes[0];
+        var mime = (String(p.archivo_b64).match(/data:([^;]+);/) || [null, 'image/jpeg'])[1];
+        var nombre = (p.archivo_nombre || ('pasaporte_' + (i + 1)));
+        var blob = Utilities.newBlob(Utilities.base64Decode(datos), mime,
+                                     id + '_' + nombre);
+        var f = folder.createFile(blob);
+        f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        p.pasaporte_url = f.getUrl();
+      } catch (err) {
+        p.pasaporte_url = 'ERROR: ' + err;
+      }
+      delete p.archivo_b64;   // no guardar el archivo en la hoja
+    }
+  }
+  return pasajeros;
 }
 
 function doGet(e) {
@@ -43,10 +82,12 @@ function doGet(e) {
   return _json({ items: _leer(tipo) });
 }
 
-// 'reserva'/'reservas' -> 'reservas' ;  cualquier otra cosa -> 'cotizaciones'
+// 'reserva'->reservas ; 'solicitud'->solicitudes ; cualquier otra cosa -> cotizaciones
 function _tipo(t) {
   t = String(t || '').toLowerCase();
-  return (t === 'reserva' || t === 'reservas') ? 'reservas' : 'cotizaciones';
+  if (t === 'reserva' || t === 'reservas') return 'reservas';
+  if (t === 'solicitud' || t === 'solicitudes') return 'solicitudes';
+  return 'cotizaciones';
 }
 
 function _hoja(nombre) {

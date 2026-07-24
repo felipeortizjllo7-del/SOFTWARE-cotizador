@@ -1,5 +1,5 @@
 {
-  "version": "11.0",
+  "version": "11.1",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 11.0 - Reservas ESTABLES (arreglo de raiz): (1) El NUMERO de orden se asigna una sola vez y NUNCA cambia: se quitaron los renumerados automaticos al sincronizar y al reparar, asi TODOS los equipos ven siempre el MISMO numero. (2) El consecutivo es GLOBAL: al crear una reserva se sincroniza primero y se toma el maximo conocido +1, para que no se repitan numeros entre equipos. (3) Editar ya no pierde ni borra la reserva: todas las operaciones buscan por identificador unico (uid), no por numero. La sincronizacion sigue sin borrar reservas (v10.9) y el borrado manual va a la papelera."
+  "notas": "Version 11.1 - RESERVA DESDE LA WEB: en el cotizador web cada cotizacion tiene boton 'Reservar'. El cliente adjunta el PASAPORTE de cada pasajero (se comprime y se guarda en Drive), los VUELOS y el CONTACTO. Al enviar: la cotizacion pasa a GANADA (verde) y en el modulo Reservas se crea automaticamente la orden de servicio con el consecutivo global y asignada por rotacion a Valentina, Estefania o Maria Camila (todas la ven). Ademas: el VOUCHER ahora muestra el numero de VUELO de cada pasajero (columna nueva) y el detalle de reserva tiene campo Vuelo por pasajero. Todo es aditivo: no cambia consecutivos existentes ni borra nada."
 }

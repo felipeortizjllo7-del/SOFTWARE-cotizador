@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "11.0"
+VERSION = "11.1"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -706,6 +706,88 @@ def compactar_consecutivo_reservas():
     except Exception:
         pass
     return seq
+
+
+def importar_solicitudes_reserva(cfg):
+    """Trae las SOLICITUDES DE RESERVA hechas por el cliente en la web:
+       - marca la cotizacion como 'Ganada' (verde)
+       - crea la RESERVA (consecutivo global + asesora por rotacion)
+       con pasajeros/pasaportes, vuelos y contacto. Es aditivo: no borra nada.
+       Devuelve la lista de reservas creadas."""
+    if not WEBHOOK_URL:
+        return []
+    try:
+        ctx = ssl.create_default_context()
+        url = (WEBHOOK_URL + ("&" if "?" in WEBHOOK_URL else "?")
+               + "key=" + WEBHOOK_KEY + "&tipo=solicitud")
+        req = urllib.request.Request(url, headers={"User-Agent": "CotizadorInnoba"})
+        with urllib.request.urlopen(req, context=ctx, timeout=25) as r:
+            remotas = json.loads(r.read().decode("utf-8"))
+    except Exception:
+        return []
+    if isinstance(remotas, dict):
+        remotas = remotas.get("items", [])
+    if not isinstance(remotas, list):
+        return []
+    reservas = cargar_reservas()
+    ya = {str(x.get("solicitud_id")) for x in reservas["items"] if x.get("solicitud_id")}
+    creadas = []
+    for s in remotas:
+        if not isinstance(s, dict):
+            continue
+        sid = str(s.get("id") or "")
+        if not sid or sid in ya:
+            continue                      # ya se convirtio en reserva
+        pax = []
+        for p in (s.get("pasajeros", []) or []):
+            pax.append({"nombre": p.get("nombre", ""), "documento": p.get("pasaporte", ""),
+                        "adjunto": p.get("pasaporte_url", ""), "telefono": "",
+                        "vuelo": ""})
+        vue = s.get("vuelos", {}) or {}
+        ct = s.get("contacto", {}) or {}
+        rec = {
+            "cot_origen": s.get("cot_numero", ""), "cot_uid": s.get("cot_id", ""),
+            "cliente": s.get("cliente", ""), "contacto": ct.get("nombre", ""),
+            "email": ct.get("email", "") or s.get("email", ""),
+            "destinos": s.get("destinos", []) or [],
+            "fechas_viaje": s.get("fechas_viaje", ""),
+            "pax_txt": f"{len(pax)} pasajero(s)" if pax else "",
+            "estado": "Confirmada", "monto": float(s.get("total", 0) or 0), "moneda": "USD",
+            "pasajeros_list": pax, "solicitud_id": sid,
+            "origen_solicitud": "Web (cliente)",
+            "notas": (f"Solicitud web. Contacto: {ct.get('nombre','')} {ct.get('telefono','')}"),
+            "os_vuelo_llegada": vue.get("llegada", ""), "os_hora_llegada": vue.get("hora_llegada", ""),
+            "os_vuelo_salida": vue.get("salida", ""), "os_hora_salida": vue.get("hora_salida", ""),
+            "os_contacto_principal": f"{ct.get('nombre','')} {ct.get('telefono','')}".strip(),
+            "itinerario": "", "destinos_detalle": [], "voucher_cliente": "",
+            "fecha_creacion": datetime.date.today().isoformat(),
+        }
+        try:
+            rec.update(_voucher_defaults((s.get("destinos", []) or [""])[0], "", "", "", ""))
+        except Exception:
+            pass
+        rec["pasajeros_list"] = pax
+        try:
+            numero, guardado = registrar_reserva(rec, cfg)
+            creadas.append(guardado)
+        except Exception:
+            continue
+        # marcar la cotizacion como GANADA (verde) en el historial local
+        try:
+            dc = cargar_cotizaciones()
+            key = str(s.get("cot_id") or "")
+            for it in dc["items"]:
+                if (key and str(it.get("web_id")) == key) or \
+                   (s.get("cot_numero") and it.get("numero") == s.get("cot_numero")):
+                    it["estado"] = "Ganada"
+                    it["reserva_creada"] = guardado.get("numero", "")
+                    break
+            guardar_cotizaciones(dc)
+        except Exception:
+            pass
+        reservas = cargar_reservas()
+        ya.add(sid)
+    return creadas
 
 
 def sincronizar_reservas_nube():
@@ -2901,13 +2983,14 @@ def _parse_pasajeros(txt):
 
 
 def pasajeros_de(res):
-    """Lista de (nombre, documento, telefono) de la reserva. Usa la lista
+    """Lista de (nombre, documento, telefono, vuelo) de la reserva. Usa la lista
        estructurada 'pasajeros_list'; si no existe, migra del texto 'os_pasajeros'."""
     lst = res.get("pasajeros_list")
     if isinstance(lst, list) and lst:
-        return [(p.get("nombre", ""), p.get("documento", ""), p.get("telefono", ""))
+        return [(p.get("nombre", ""), p.get("documento", ""), p.get("telefono", ""),
+                 p.get("vuelo", ""))
                 for p in lst if (p.get("nombre", "") or p.get("documento", ""))]
-    return [(n, d, "") for n, d in _parse_pasajeros(res.get("os_pasajeros", ""))]
+    return [(n, d, "", "") for n, d in _parse_pasajeros(res.get("os_pasajeros", ""))]
 
 
 _MESES_ES = ["", "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO",
@@ -3335,15 +3418,22 @@ def _os_pasajeros_tabla(pdf, res):
     pdf.ln(1)
     pdf.set_x(12); pdf.set_font("Helvetica", "B", 9); pdf.set_fill_color(*PDF_PRIM)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(96, 7, T("NOMBRE PASAJEROS"), border=1, fill=True, align="C")
-    pdf.cell(46, 7, T("IDENTIFICACION"), border=1, fill=True, align="C")
-    pdf.cell(44, 7, T("TELEFONO"), border=1, ln=1, fill=True, align="C")
+    pdf.cell(72, 7, T("NOMBRE PASAJEROS"), border=1, fill=True, align="C")
+    pdf.cell(40, 7, T("IDENTIFICACION"), border=1, fill=True, align="C")
+    pdf.cell(38, 7, T("TELEFONO"), border=1, fill=True, align="C")
+    pdf.cell(36, 7, T("VUELO"), border=1, ln=1, fill=True, align="C")
     pdf.set_text_color(*PDF_TXT)
-    for nom, doc, tel in pax:
+    for p in pax:
+        nom, doc, tel = p[0], p[1], p[2]
+        vue = p[3] if len(p) > 3 else ""
+        # si el pasajero no tiene vuelo propio, usar el de la reserva
+        if not vue:
+            vue = res.get("os_vuelo_llegada", "") or ""
         pdf.set_x(12); pdf.set_font("Helvetica", "", 8.5)
-        pdf.cell(96, 6, T(" " + nom), border=1)
-        pdf.cell(46, 6, T(" " + doc), border=1, align="C")
-        pdf.cell(44, 6, T(" " + tel), border=1, ln=1, align="C")
+        pdf.cell(72, 6, T(" " + nom), border=1)
+        pdf.cell(40, 6, T(" " + doc), border=1, align="C")
+        pdf.cell(38, 6, T(" " + tel), border=1, align="C")
+        pdf.cell(36, 6, T(" " + str(vue)[:22]), border=1, ln=1, align="C")
 
 
 def _os_pie_prov(pdf, cfg, res):
@@ -6816,14 +6906,17 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         v_nom = tk.StringVar(value=p.get("nombre", ""))
         v_doc = tk.StringVar(value=p.get("documento", ""))
         v_tel = tk.StringVar(value=p.get("telefono", ""))
+        v_vue = tk.StringVar(value=p.get("vuelo", ""))
         adj = p.get("adjunto", "")
         ctk.CTkEntry(row, textvariable=v_nom, height=30,
                      placeholder_text="Nombre completo del pasajero").pack(
             side="left", fill="x", expand=True, padx=(0, 6))
         ctk.CTkEntry(row, textvariable=v_doc, width=140, height=30,
                      placeholder_text="Pasaporte / documento").pack(side="left", padx=(0, 6))
-        ctk.CTkEntry(row, textvariable=v_tel, width=120, height=30,
-                     placeholder_text="Telefono").pack(side="left")
+        ctk.CTkEntry(row, textvariable=v_tel, width=110, height=30,
+                     placeholder_text="Telefono").pack(side="left", padx=(0, 6))
+        ctk.CTkEntry(row, textvariable=v_vue, width=110, height=30,
+                     placeholder_text="Vuelo").pack(side="left")
         ctk.CTkButton(row, text="✕", width=30, height=30, fg_color=RED, hover_color="#9B2C22",
                       command=lambda idx=i: self._quitar_pasajero(idx)).pack(side="right", padx=(6, 0))
         if adj:
@@ -6839,14 +6932,16 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
                           hover_color=BLUE_H,
                           command=lambda idx=i: self._adjuntar_pasaporte(idx)).pack(side="right", padx=(6, 0))
         self.pax_widgets.append({"nombre": v_nom, "documento": v_doc, "telefono": v_tel,
-                                 "adjunto": adj})
+                                 "vuelo": v_vue, "adjunto": adj})
 
     def _sync_pax(self):
         # Conserva todas las filas (aunque esten vacias) para no perder pasajeros
         # recien agregados; el filtrado de vacios se hace al generar el voucher.
         self.res["pasajeros_list"] = [
             {"nombre": w["nombre"].get().strip(), "documento": w["documento"].get().strip(),
-             "telefono": w["telefono"].get().strip(), "adjunto": w.get("adjunto", "")}
+             "telefono": w["telefono"].get().strip(),
+             "vuelo": (w["vuelo"].get().strip() if w.get("vuelo") is not None else ""),
+             "adjunto": w.get("adjunto", "")}
             for w in self.pax_widgets]
 
     def _agregar_pasajero(self):
@@ -8044,9 +8139,28 @@ class ModuloReservas(ctk.CTkToplevel):
                 n = importar_reservas_nube()
             except Exception:
                 n = 0
-            if n:
+            # Solicitudes de reserva hechas por el cliente en la web -> crean la orden
+            try:
+                nuevas = importar_solicitudes_reserva(self.cfg)
+            except Exception:
+                nuevas = []
+            if n or nuevas:
                 try:
                     self.after(0, self._pintar)
+                except Exception:
+                    pass
+            if nuevas:
+                def avisar():
+                    det = "\n".join(
+                        f"  N. {r.get('numero','')}  ·  {r.get('cliente','')}  ·  "
+                        f"asesora: {(r.get('asesor',{}) or {}).get('nombre','(sin asignar)')}"
+                        for r in nuevas)
+                    messagebox.showinfo(
+                        "Nuevas reservas desde la web",
+                        f"Llegaron {len(nuevas)} solicitud(es) de reserva del cotizador web.\n"
+                        "Se crearon estas ordenes de servicio:\n\n" + det, parent=self)
+                try:
+                    self.after(300, avisar)
                 except Exception:
                     pass
         threading.Thread(target=worker, daemon=True).start()
