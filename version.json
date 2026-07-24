@@ -1,5 +1,5 @@
 {
-  "version": "10.9",
+  "version": "11.0",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 10.9 - Reservas: la SINCRONIZACION ya NUNCA borra reservas. Al actualizar la app o sincronizar, solo se agregan/actualizan reservas; las marcas de borrado de la nube se IGNORAN. Asi ninguna reserva desaparece sola al actualizar. Borrar sigue siendo solo accion manual tuya (y con papelera para recuperar)."
+  "notas": "Version 11.0 - Reservas ESTABLES (arreglo de raiz): (1) El NUMERO de orden se asigna una sola vez y NUNCA cambia: se quitaron los renumerados automaticos al sincronizar y al reparar, asi TODOS los equipos ven siempre el MISMO numero. (2) El consecutivo es GLOBAL: al crear una reserva se sincroniza primero y se toma el maximo conocido +1, para que no se repitan numeros entre equipos. (3) Editar ya no pierde ni borra la reserva: todas las operaciones buscan por identificador unico (uid), no por numero. La sincronizacion sigue sin borrar reservas (v10.9) y el borrado manual va a la papelera."
 }

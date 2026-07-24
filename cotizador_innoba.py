@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "10.9"
+VERSION = "11.0"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -662,15 +662,9 @@ def importar_reservas_nube():
                 # asi una reorganizacion del consecutivo se propaga a todos los equipos
                 local.clear(); local.update(rc); cambios += 1
         else:
-            # si el numero choca con uno local de OTRA reserva, renumerar la entrante
-            num = str(rc.get("numero", "") or "")
-            if not num or num in nums_local:
-                nuevo = max(int(data.get("seq", RES_SEQ_INICIAL) or RES_SEQ_INICIAL),
-                            max_num) + 1
-                data["seq"] = nuevo
-                rc["numero"] = str(nuevo)
-                num = str(nuevo)
-            nums_local.add(num)
+            # Se CONSERVA el numero original (el que asigno quien la creo): asi todos
+            # los equipos ven SIEMPRE el mismo numero de orden. No se renumera nada.
+            nums_local.add(str(rc.get("numero", "") or ""))
             por_uid[uid] = rc
             data["items"].append(rc); cambios += 1
     # (No se aplican borrados por sincronizacion: las reservas nunca se eliminan solas.)
@@ -1770,11 +1764,27 @@ def asesores_reservas(cfg):
     return [a for a in lst if isinstance(a, dict) and (a.get("nombre") or "").strip()]
 
 
+def _num_reserva(it):
+    try:
+        return int(re.sub(r"\D", "", str(it.get("numero", "0"))) or 0)
+    except Exception:
+        return 0
+
+
 def registrar_reserva(rec, cfg):
-    """Asigna consecutivo + asesor por rotacion equitativa y guarda la reserva.
+    """Asigna consecutivo GLOBAL + asesor por rotacion y guarda la reserva.
+       El numero se toma del MAXIMO conocido (local + nube) + 1, para que el
+       consecutivo sea el mismo para todos los equipos y no se repita.
        Devuelve (numero, asesor_asignado)."""
+    try:
+        importar_reservas_nube()   # traer lo ultimo para no repetir consecutivo
+    except Exception:
+        pass
     data = cargar_reservas()
-    data["seq"] = int(data.get("seq", RES_SEQ_INICIAL)) + 1
+    mx = int(data.get("seq", RES_SEQ_INICIAL) or RES_SEQ_INICIAL)
+    for it in data["items"]:
+        mx = max(mx, _num_reserva(it))
+    data["seq"] = mx + 1
     numero = str(data["seq"])
     ases = asesores_reservas(cfg)
     asesor = {}
@@ -1890,15 +1900,24 @@ def _texto_notif_reserva(guardado):
             "con su contrasena en 'Datos de mi empresa'.")
 
 
-def actualizar_reserva(numero, cambios):
-    """Aplica cambios a la reserva con ese numero, guarda y sincroniza a la nube."""
+def actualizar_reserva(numero, cambios, uid=None):
+    """Aplica cambios a una reserva, guarda y sincroniza a la nube.
+       Busca PRIMERO por 'uid' (identidad estable); si no, por numero. Asi editar
+       nunca 'pierde' la reserva aunque el numero haya cambiado."""
     data = cargar_reservas()
     actualizada = None
-    for it in data["items"]:
-        if it.get("numero") == numero:
-            it.update(cambios)
-            actualizada = it
-            break
+    if uid:
+        for it in data["items"]:
+            if str(it.get("uid")) == str(uid):
+                it.update(cambios)
+                actualizada = it
+                break
+    if actualizada is None:
+        for it in data["items"]:
+            if it.get("numero") == numero:
+                it.update(cambios)
+                actualizada = it
+                break
     guardar_reservas(data)
     if actualizada is not None:
         try:
@@ -2843,25 +2862,25 @@ def restaurar_reserva(uid):
 
 
 def reparar_reservas():
-    """Repara el archivo local: asigna 'uid' a las que no lo tengan y renumera las
-       reservas que tengan un numero repetido (para que cada una sea unica y borrar
-       una no afecte a las demas). Devuelve cuantas reparo."""
+    """Repara el archivo local SIN cambiar numeros: solo asigna 'uid' a las reservas
+       que no lo tengan (identidad estable) y le pone numero a las que esten vacias.
+       NUNCA renumera una reserva que ya tiene numero: todos los equipos deben ver
+       siempre el MISMO numero de orden. Devuelve cuantas reparo."""
     data = cargar_reservas()
-    vistos_num = set()
     seq = int(data.get("seq", RES_SEQ_INICIAL) or RES_SEQ_INICIAL)
+    for it in data["items"]:
+        seq = max(seq, _num_reserva(it))
     cambios = 0
     for it in data["items"]:
         if not it.get("uid"):
             it["uid"] = "RES-" + uuid.uuid4().hex[:12]
             cambios += 1
-        num = str(it.get("numero", "") or "")
-        if not num or num in vistos_num:
+        if not str(it.get("numero", "") or "").strip():
             seq += 1
             it["numero"] = str(seq)
             cambios += 1
-        vistos_num.add(str(it.get("numero", "")))
     if cambios:
-        data["seq"] = max(seq, int(data.get("seq", RES_SEQ_INICIAL) or RES_SEQ_INICIAL))
+        data["seq"] = seq
         guardar_reservas(data)
     return cambios
 
@@ -6876,7 +6895,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
             return
         self.res["pasajeros_list"][i]["adjunto"] = destino
         actualizar_reserva(self.res.get("numero", ""),
-                           {"pasajeros_list": self.res["pasajeros_list"]})
+                           {"pasajeros_list": self.res["pasajeros_list"]}, uid=self.res.get("uid"))
         self._pintar_pasajeros()
 
     def _quitar_adjunto_pax(self, i):
@@ -6886,7 +6905,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         except Exception:
             pass
         actualizar_reserva(self.res.get("numero", ""),
-                           {"pasajeros_list": self.res["pasajeros_list"]})
+                           {"pasajeros_list": self.res["pasajeros_list"]}, uid=self.res.get("uid"))
         self._pintar_pasajeros()
 
     def _pintar_vuelos(self):
@@ -6917,7 +6936,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
             destino = self._copiar_adjunto(r, prefijo="vuelo")
             if destino:
                 vuelos.append(destino)
-        actualizar_reserva(self.res.get("numero", ""), {"vuelos_adjuntos": vuelos})
+        actualizar_reserva(self.res.get("numero", ""), {"vuelos_adjuntos": vuelos}, uid=self.res.get("uid"))
         self._pintar_vuelos()
 
     def _quitar_vuelo(self, i):
@@ -6926,7 +6945,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         except Exception:
             pass
         actualizar_reserva(self.res.get("numero", ""),
-                           {"vuelos_adjuntos": self.res.get("vuelos_adjuntos", [])})
+                           {"vuelos_adjuntos": self.res.get("vuelos_adjuntos", [])}, uid=self.res.get("uid"))
         self._pintar_vuelos()
 
     def _pintar_soportes(self):
@@ -6963,7 +6982,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
             destino = self._copiar_adjunto(r, prefijo="pago")
             if destino:
                 soportes.append(destino)
-        actualizar_reserva(self.res.get("numero", ""), {"soportes_pago": soportes})
+        actualizar_reserva(self.res.get("numero", ""), {"soportes_pago": soportes}, uid=self.res.get("uid"))
         self._pintar_soportes()
 
     def _quitar_soporte(self, i):
@@ -6972,7 +6991,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         except Exception:
             pass
         actualizar_reserva(self.res.get("numero", ""),
-                           {"soportes_pago": self.res.get("soportes_pago", [])})
+                           {"soportes_pago": self.res.get("soportes_pago", [])}, uid=self.res.get("uid"))
         self._pintar_soportes()
 
     def _pintar_servicios(self):
@@ -7488,7 +7507,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
         s["fecha_envio"] = datetime.date.today().strftime("%d/%m/%Y")
         lbl.configure(text="✓ Voucher enviado " + s["fecha_envio"], text_color=GREEN)
         actualizar_reserva(self.res.get("numero", ""),
-                           {"destinos_detalle": self.res["destinos_detalle"]})
+                           {"destinos_detalle": self.res["destinos_detalle"]}, uid=self.res.get("uid"))
         self._refrescar_resumen()
         messagebox.showinfo("Enviado", f"Voucher enviado a {reng['correo']}.")
 
@@ -7548,7 +7567,7 @@ class VentanaReservaDetalle(ctk.CTkToplevel):
             messagebox.showerror("Error al generar el voucher", str(e))
             return None
         self.res["voucher_cliente"] = fn
-        actualizar_reserva(self.res.get("numero", ""), {"voucher_cliente": fn})
+        actualizar_reserva(self.res.get("numero", ""), {"voucher_cliente": fn}, uid=self.res.get("uid"))
         if abrir:
             try:
                 os.startfile(fn)
@@ -7926,7 +7945,7 @@ class VentanaVouchersProveedores(ctk.CTkToplevel):
         except Exception:
             pass
         actualizar_reserva(self.res.get("numero", ""),
-                           {"destinos_detalle": self.res["destinos_detalle"]})
+                           {"destinos_detalle": self.res["destinos_detalle"]}, uid=self.res.get("uid"))
         self._resumen()
         if self.on_change:
             self.on_change()
@@ -9110,7 +9129,7 @@ class DialogoGastosReserva(ctk.CTkToplevel):
 
     def _guardar(self):
         self.res["liq"] = self._leer()
-        actualizar_reserva(self.res.get("numero", ""), {"liq": self.res["liq"]})
+        actualizar_reserva(self.res.get("numero", ""), {"liq": self.res["liq"]}, uid=self.res.get("uid"))
         if self.on_save:
             self.on_save()
         self.destroy()
