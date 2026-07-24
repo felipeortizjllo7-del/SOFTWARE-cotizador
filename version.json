@@ -1,5 +1,5 @@
 {
-  "version": "11.6",
+  "version": "11.7",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "MICE: se indica el numero de habitaciones sencillas/dobles/triples y el sistema calcula el alojamiento y lo suma a los servicios para dar el total final. PDF mas limpio: texto sin justificar, tabla de alojamiento con total por hotel y resumen de la inversion."
+  "notas": "MICE: habitaciones cuadruples (4 pax) con precio y cantidad. Las cotizaciones MICE ahora se comparten entre Felipe y Carlos con boton Sincronizar."
 }

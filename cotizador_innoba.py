@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "11.6"
+VERSION = "11.7"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -398,6 +398,10 @@ def importar_cotizaciones_html():
     borrados = set()
     for rc in remotas:
         if not isinstance(rc, dict):
+            continue
+        # las cotizaciones MICE viajan por este mismo buzon: aqui no van
+        if rc.get("tipo_doc") == "mice" or str(rc.get("uid", "")).startswith("MICE-") \
+           or str(rc.get("numero", "")).startswith("MICE-"):
             continue
         uid = str(rc.get("uid") or "")
         wid = str(rc.get("id") or rc.get("web_id") or "")
@@ -9875,15 +9879,134 @@ def vence_el(fecha_txt, meses=VIGENCIA_MESES):
 
 
 def registrar_mice(rec):
+    try:
+        importar_mice_nube()      # traer lo ultimo para no repetir consecutivo
+    except Exception:
+        pass
     data = cargar_mice()
-    data["seq"] = int(data.get("seq", 0)) + 1
-    rec = dict(rec); rec["numero"] = f"MICE-{data['seq']:05d}"
+    mx = int(data.get("seq", 0) or 0)
+    for it in data["items"]:
+        try:
+            mx = max(mx, int(re.sub(r"\D", "", str(it.get("numero", "0"))) or 0))
+        except Exception:
+            pass
+    data["seq"] = mx + 1
+    # se escribe sobre el mismo dict para que quien lo llamo quede con numero/uid
+    rec["numero"] = f"MICE-{data['seq']:05d}"
     if not rec.get("uid"):
         rec["uid"] = "MICE-" + uuid.uuid4().hex[:12]
     rec.setdefault("fecha", datetime.date.today().strftime("%d/%m/%Y"))
     rec["vence"] = vence_el(rec.get("fecha", "")).strftime("%d/%m/%Y")
-    data["items"].append(rec); guardar_mice(data)
+    rec["actualizado"] = _ahora_iso()
+    data["items"].append(dict(rec)); guardar_mice(data)
+    threading.Thread(target=enviar_mice_nube, args=(dict(rec),), daemon=True).start()
     return rec["numero"]
+
+
+# ---- Sincronizacion de MICE en la nube ----------------------------------
+# Viajan por el mismo buzon de cotizaciones (no hace falta tocar el Apps Script);
+# se distinguen porque llevan tipo_doc='mice' y su numero empieza por 'MICE-'.
+def _es_mice(rec):
+    return (rec.get("tipo_doc") == "mice"
+            or str(rec.get("uid", "")).startswith("MICE-")
+            or str(rec.get("numero", "")).startswith("MICE-"))
+
+
+def _mice_vencida(rec):
+    if rec.get("estado") in ("Ganada", "En seguimiento"):
+        return False
+    limite = parse_fecha(rec.get("vence", "")) or vence_el(rec.get("fecha", ""))
+    return bool(limite) and limite < datetime.date.today()
+
+
+def enviar_mice_nube(rec):
+    """Sube (o actualiza) una cotizacion MICE para que la vean Felipe y Carlos."""
+    if not WEBHOOK_URL or not rec.get("uid"):
+        return False
+    try:
+        payload = {k: v for k, v in rec.items() if not str(k).startswith("_")}
+        payload["tipo"] = "mice"
+        payload["tipo_doc"] = "mice"
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        req = urllib.request.Request(
+            WEBHOOK_URL, data=body, method="POST",
+            headers={"Content-Type": "text/plain;charset=utf-8",
+                     "User-Agent": "CotizadorInnoba"})
+        with urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=15) as r:
+            r.read()
+        return True
+    except Exception:
+        return False
+
+
+def importar_mice_nube():
+    """Trae las cotizaciones MICE de los demas equipos y las mezcla por 'uid'.
+       Gana la version mas reciente. Devuelve cuantas entraron o cambiaron."""
+    if not WEBHOOK_URL or not WEBHOOK_KEY:
+        return 0
+    try:
+        url = (WEBHOOK_URL + ("&" if "?" in WEBHOOK_URL else "?")
+               + "key=" + WEBHOOK_KEY + "&tipo=cotizacion")
+        req = urllib.request.Request(url, headers={"User-Agent": "CotizadorInnoba"})
+        with urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=25) as r:
+            remotas = json.loads(r.read().decode("utf-8", "ignore")).get("items", []) or []
+    except Exception:
+        return 0
+    data = cargar_mice()
+    por_uid = {str(it.get("uid")): it for it in data["items"] if it.get("uid")}
+    borradas = {str(rt.get("uid") or rt.get("id")) for rt in remotas
+                if rt.get("_accion") == "borrar"}
+    nuevas = 0
+    for rt in remotas:
+        if not _es_mice(rt) or rt.get("_accion") == "borrar":
+            continue
+        uid = str(rt.get("uid") or "")
+        if uid in borradas:
+            continue
+        if not uid or not rt.get("opciones"):
+            continue
+        if _mice_vencida(rt):
+            continue          # ya paso su mes de vigencia: no la revivimos
+        rt = {k: v for k, v in rt.items() if k not in ("tipo",)}
+        loc = por_uid.get(uid)
+        if loc is None:
+            data["items"].append(rt); por_uid[uid] = rt; nuevas += 1
+        elif str(rt.get("actualizado", "")) > str(loc.get("actualizado", "")):
+            loc.update(rt); nuevas += 1
+    if borradas:
+        antes = len(data["items"])
+        data["items"] = [it for it in data["items"] if str(it.get("uid")) not in borradas]
+        nuevas += antes - len(data["items"])
+    mx = int(data.get("seq", 0) or 0)
+    for it in data["items"]:
+        try:
+            mx = max(mx, int(re.sub(r"\D", "", str(it.get("numero", "0"))) or 0))
+        except Exception:
+            pass
+    data["seq"] = mx
+    if nuevas:
+        guardar_mice(data)
+    return nuevas
+
+
+def subir_mice_exe():
+    """Sube las MICE locales que aun no esten en la nube."""
+    data = cargar_mice(); cambio = False; subidas = 0
+    for it in data["items"]:
+        if it.get("nube_ok"):
+            continue
+        if not it.get("uid"):
+            it["uid"] = "MICE-" + uuid.uuid4().hex[:12]; cambio = True
+        it.setdefault("actualizado", _ahora_iso())
+        if enviar_mice_nube(it):
+            it["nube_ok"] = True; cambio = True; subidas += 1
+    if cambio:
+        guardar_mice(data)
+    return subidas
+
+
+def sincronizar_mice_nube():
+    return subir_mice_exe(), importar_mice_nube()
 
 
 def depurar_mice_vencidas():
@@ -9906,22 +10029,43 @@ def depurar_mice_vencidas():
     return borradas
 
 
-def actualizar_mice(numero, cambios):
-    data = cargar_mice()
-    for it in data["items"]:
-        if it.get("numero") == numero:
-            it.update(cambios); break
+def actualizar_mice(numero, cambios, uid=None):
+    data = cargar_mice(); tocada = None
+    if uid:
+        for it in data["items"]:
+            if str(it.get("uid")) == str(uid):
+                it.update(cambios); tocada = it; break
+    if tocada is None:
+        for it in data["items"]:
+            if it.get("numero") == numero:
+                it.update(cambios); tocada = it; break
+    if tocada is not None:
+        tocada.setdefault("uid", "MICE-" + uuid.uuid4().hex[:12])
+        tocada["actualizado"] = _ahora_iso()
     guardar_mice(data)
+    if tocada is not None:
+        threading.Thread(target=enviar_mice_nube, args=(dict(tocada),), daemon=True).start()
 
 
-def eliminar_mice(numero):
+def eliminar_mice(numero, uid=None):
     data = cargar_mice()
-    data["items"] = [x for x in data["items"] if x.get("numero") != numero]
+
+    def _es(x):
+        if uid:
+            return str(x.get("uid")) == str(uid)
+        return x.get("numero") == numero
+    fuera = [x for x in data["items"] if _es(x)]
+    data["items"] = [x for x in data["items"] if not _es(x)]
     guardar_mice(data)
+    for x in fuera:
+        if x.get("uid"):
+            threading.Thread(target=enviar_borrado_nube,
+                             args=("mice", x["uid"]), daemon=True).start()
 
 
 # Cuantas personas caben en cada tipo de habitacion (igual que el cotizador normal)
-OCUP_MICE = {"sencilla": 1, "doble": 2, "triple": 3}
+OCUP_MICE = {"sencilla": 1, "doble": 2, "triple": 3, "cuadruple": 4}
+ACOM_MICE = ("sencilla", "doble", "triple", "cuadruple")
 
 
 def noches_hotel_mice(h):
@@ -10159,14 +10303,16 @@ def generar_pdf_mice(cfg, rec, ruta):
             pdf.cell(MICE_W, 7, T("  ALOJAMIENTO"), ln=1, fill=True)
             pdf.set_x(x0); pdf.set_fill_color(*PDF_CLARO); pdf.set_text_color(*PDF_PRIM)
             pdf.set_font("Helvetica", "B", 8.5)
-            WH = (52, 18, 11, 11, 22, 22, 22, 22)
+            WH = (44, 16, 10, 10, 19, 19, 19, 19, 24)
+            pdf.set_font("Helvetica", "B", 8)
             for w, txt, al in ((WH[0], " HOTEL", "L"), (WH[1], "ALIMENT.", "C"),
                                (WH[2], "CAT.", "C"), (WH[3], "NOCH.", "C"),
                                (WH[4], "SENCILLA", "C"), (WH[5], "DOBLE", "C"),
-                               (WH[6], "TRIPLE", "C"), (WH[7], "TOTAL ", "R")):
+                               (WH[6], "TRIPLE", "C"), (WH[7], "CUADRUPLE", "C"),
+                               (WH[8], "TOTAL ", "R")):
                 pdf.cell(w, 7, T(txt), border=1, fill=True, align=al)
             pdf.ln(7)
-            pdf.set_text_color(*PDF_TXT); pdf.set_font("Helvetica", "", 8)
+            pdf.set_text_color(*PDF_TXT); pdf.set_font("Helvetica", "", 7.5)
             for k, h in enumerate(hoteles):
                 noc = noches_hotel_mice(h)
 
@@ -10182,21 +10328,20 @@ def generar_pdf_mice(cfg, rec, ruta):
                 zebra = (k % 2 == 1)
                 pdf.set_fill_color(247, 249, 252)
                 pdf.set_x(x0)
-                pdf.cell(WH[0], 7, T(" " + str(h.get("hotel", ""))[:40]), border=1, fill=zebra)
-                pdf.cell(WH[1], 7, T(str(h.get("alimentacion", ""))[:10]), border=1, align="C", fill=zebra)
-                pdf.cell(WH[2], 7, T(str(h.get("categoria", ""))[:5]), border=1, align="C", fill=zebra)
+                pdf.cell(WH[0], 7, T(" " + str(h.get("hotel", ""))[:36]), border=1, fill=zebra)
+                pdf.cell(WH[1], 7, T(str(h.get("alimentacion", ""))[:9]), border=1, align="C", fill=zebra)
+                pdf.cell(WH[2], 7, T(str(h.get("categoria", ""))[:4]), border=1, align="C", fill=zebra)
                 pdf.cell(WH[3], 7, T(str(noc)), border=1, align="C", fill=zebra)
-                pdf.cell(WH[4], 7, T(_celda("sencilla")), border=1, align="C", fill=zebra)
-                pdf.cell(WH[5], 7, T(_celda("doble")), border=1, align="C", fill=zebra)
-                pdf.cell(WH[6], 7, T(_celda("triple")), border=1, align="C", fill=zebra)
+                for j, acc in enumerate(ACOM_MICE):
+                    pdf.cell(WH[4 + j], 7, T(_celda(acc)), border=1, align="C", fill=zebra)
                 pdf.set_font("Helvetica", "B", 8); pdf.set_text_color(*PDF_PRIM)
-                pdf.cell(WH[7], 7, T(usd(total_hotel_mice(h)) + " "), border=1, align="R",
+                pdf.cell(WH[8], 7, T(usd(total_hotel_mice(h)) + " "), border=1, align="R",
                          ln=1, fill=zebra)
-                pdf.set_font("Helvetica", "", 8); pdf.set_text_color(*PDF_TXT)
+                pdf.set_font("Helvetica", "", 7.5); pdf.set_text_color(*PDF_TXT)
             pdf.set_x(x0); pdf.set_font("Helvetica", "I", 7.5); pdf.set_text_color(120, 120, 120)
-            pdf.cell(MICE_W, 5, T("Cada celda muestra  habitaciones x tarifa por persona/noche.  "
-                                  "El TOTAL ya incluye las noches y las personas por habitacion "
-                                  "(doble = 2 pax, triple = 3 pax)."), ln=1)
+            pdf.cell(MICE_W, 5, T("Cada celda:  habitaciones x tarifa por persona/noche.  El TOTAL ya "
+                                  "incluye noches y pax por habitacion (doble 2, triple 3, cuadruple 4)."),
+                     ln=1)
             if len(hoteles) > 1:
                 pdf.set_x(x0)
                 pdf.cell(MICE_W, 4.5, T("Los hoteles son alternativas entre si: elija uno."), ln=1)
@@ -10582,12 +10727,13 @@ class VentanaMICEDetalle(ctk.CTkToplevel):
                       hover_color=LINE, border_width=1, border_color=LINE, font=("Segoe UI", 10, "bold"),
                       command=lambda idx=i: self._hotel_bib(idx)).pack(side="right")
         ctk.CTkLabel(card, text="Tarifa POR PERSONA por noche  ·  Hab = numero de habitaciones "
-                     "(doble = 2 pax, triple = 3 pax). El total se calcula solo.",
+                     "(doble = 2 pax, triple = 3 pax, cuadruple = 4 pax). El total se calcula solo.",
                      text_color=MUTED, font=("Segoe UI", 10)).pack(anchor="w", padx=10)
         cabh = ctk.CTkFrame(card, fg_color="transparent"); cabh.pack(fill="x", padx=10)
-        for txt, w in (("Hotel", 0), ("Alimentacion", 100), ("Cat.", 56), ("Noches", 44),
-                       ("Sencilla", 58), ("Hab", 38), ("Doble", 58), ("Hab", 38),
-                       ("Triple", 58), ("Hab", 38), ("Total alojam.", 88), ("", 30)):
+        for txt, w in (("Hotel", 0), ("Alimentacion", 96), ("Cat.", 50), ("Noches", 42),
+                       ("Sencilla", 54), ("Hab", 34), ("Doble", 54), ("Hab", 34),
+                       ("Triple", 54), ("Hab", 34), ("Cuadruple", 54), ("Hab", 34),
+                       ("Total alojam.", 84), ("", 30)):
             ctk.CTkLabel(cabh, text=txt, text_color=MUTED, font=("Segoe UI", 9, "bold"),
                          width=(w or 90), anchor="w").pack(side="left", fill=("x" if w == 0 else None),
                                                            expand=(w == 0), padx=(3 if w == 0 else 1))
@@ -10625,21 +10771,22 @@ class VentanaMICEDetalle(ctk.CTkToplevel):
         v["alimentacion"] = tk.StringVar(value=h.get("alimentacion", "Desayuno"))
         v["categoria"] = tk.StringVar(value=h.get("categoria", ""))
         v["noches"] = tk.StringVar(value=str(h.get("noches", "") or ""))
-        for acc in ("sencilla", "doble", "triple"):
+        for acc in ACOM_MICE:
             v[acc] = tk.StringVar(value=str(h.get(acc, "") or ""))
             v["n_" + acc] = tk.StringVar(value=str(h.get("n_" + acc, "") or ""))
         ctk.CTkEntry(row, textvariable=v["hotel"], height=28, placeholder_text="Hotel").pack(side="left", fill="x", expand=True, padx=(6, 2), pady=4)
-        ctk.CTkOptionMenu(row, variable=v["alimentacion"], values=ALIMENTACION_MICE, width=100, height=28,
+        ctk.CTkOptionMenu(row, variable=v["alimentacion"], values=ALIMENTACION_MICE, width=96, height=28,
                           fg_color=NAVY, button_color=NAVY2).pack(side="left", padx=2)
-        ctk.CTkEntry(row, textvariable=v["categoria"], height=28, width=56, placeholder_text="Cat.").pack(side="left", padx=2)
-        e = ctk.CTkEntry(row, textvariable=v["noches"], height=28, width=44, placeholder_text="Noch")
+        ctk.CTkEntry(row, textvariable=v["categoria"], height=28, width=50, placeholder_text="Cat.").pack(side="left", padx=2)
+        e = ctk.CTkEntry(row, textvariable=v["noches"], height=28, width=42, placeholder_text="Noch")
         e.pack(side="left", padx=2); e.bind("<KeyRelease>", lambda ev: self._recalc())
-        for acc, ph in (("sencilla", "Sencilla"), ("doble", "Doble"), ("triple", "Triple")):
-            e = ctk.CTkEntry(row, textvariable=v[acc], height=28, width=58, placeholder_text=ph)
+        for acc in ACOM_MICE:
+            e = ctk.CTkEntry(row, textvariable=v[acc], height=28, width=54,
+                             placeholder_text=acc.capitalize())
             e.pack(side="left", padx=(2, 1)); e.bind("<KeyRelease>", lambda ev: self._recalc())
-            e = ctk.CTkEntry(row, textvariable=v["n_" + acc], height=28, width=38, placeholder_text="#")
+            e = ctk.CTkEntry(row, textvariable=v["n_" + acc], height=28, width=34, placeholder_text="#")
             e.pack(side="left", padx=(1, 2)); e.bind("<KeyRelease>", lambda ev: self._recalc())
-        v["tot_lbl"] = ctk.CTkLabel(row, text="0.00", text_color=GREEN_H, width=88, anchor="e",
+        v["tot_lbl"] = ctk.CTkLabel(row, text="0.00", text_color=GREEN_H, width=84, anchor="e",
                                     font=("Segoe UI", 11, "bold"))
         v["tot_lbl"].pack(side="left", padx=2)
         ctk.CTkButton(row, text="✕", width=26, height=26, fg_color=RED, hover_color="#9B2C22",
@@ -10677,16 +10824,14 @@ class VentanaMICEDetalle(ctk.CTkToplevel):
         for ow in self.op_widgets:
             hoteles = []
             for h in ow["hoteles"]:
-                hoteles.append({"hotel": h["hotel"].get().strip(),
-                                "alimentacion": h["alimentacion"].get(),
-                                "categoria": h["categoria"].get().strip(),
-                                "noches": _num(h["noches"].get()),
-                                "sencilla": _num(h["sencilla"].get()),
-                                "doble": _num(h["doble"].get()),
-                                "triple": _num(h["triple"].get()),
-                                "n_sencilla": _num(h["n_sencilla"].get()),
-                                "n_doble": _num(h["n_doble"].get()),
-                                "n_triple": _num(h["n_triple"].get())})
+                d = {"hotel": h["hotel"].get().strip(),
+                     "alimentacion": h["alimentacion"].get(),
+                     "categoria": h["categoria"].get().strip(),
+                     "noches": _num(h["noches"].get())}
+                for acc in ACOM_MICE:
+                    d[acc] = _num(h[acc].get())
+                    d["n_" + acc] = _num(h["n_" + acc].get())
+                hoteles.append(d)
             lineas = []
             for l in ow["lineas"]:
                 lineas.append({"dia": l["dia"].get().strip(), "item": l["item"].get().strip(),
@@ -10722,7 +10867,7 @@ class VentanaMICEDetalle(ctk.CTkToplevel):
             aloj = []
             for h in ow["hoteles"]:
                 d = {"noches": _num(h["noches"].get())}
-                for acc in ("sencilla", "doble", "triple"):
+                for acc in ACOM_MICE:
                     d[acc] = _num(h[acc].get())
                     d["n_" + acc] = _num(h["n_" + acc].get())
                 th = total_hotel_mice(d)
@@ -10770,7 +10915,7 @@ class VentanaMICEDetalle(ctk.CTkToplevel):
         self._sync()
         self.res["opciones"][i].setdefault("hoteles", []).append(
             {"hotel": "", "alimentacion": "Desayuno", "categoria": "", "noches": "",
-             "sencilla": "", "doble": "", "triple": ""})
+             "sencilla": "", "doble": "", "triple": "", "cuadruple": ""})
         self._pintar_opciones()
 
     def _del_hotel(self, ow, v):
@@ -10784,7 +10929,7 @@ class VentanaMICEDetalle(ctk.CTkToplevel):
                 "hotel": h.get("hotel", ""), "alimentacion": h.get("alimentacion", "Desayuno"),
                 "categoria": h.get("categoria", ""), "noches": h.get("noches", ""),
                 "sencilla": h.get("sencilla", ""), "doble": h.get("doble", ""),
-                "triple": h.get("triple", "")})
+                "triple": h.get("triple", ""), "cuadruple": h.get("cuadruple", "")})
             self._pintar_opciones()
         SelectorMICEBib(self, "hoteles", pick)
 
@@ -10820,10 +10965,10 @@ class VentanaMICEDetalle(ctk.CTkToplevel):
     def _guardar(self):
         self._sync()
         if self.res.get("numero"):
-            actualizar_mice(self.res["numero"], self.res)
+            actualizar_mice(self.res["numero"], self.res, uid=self.res.get("uid"))
         else:
             self.res["fecha"] = datetime.date.today().strftime("%d/%m/%Y")
-            registrar_mice(self.res)
+            self.res["numero"] = registrar_mice(self.res)
         if self.on_save:
             self.on_save()
         messagebox.showinfo("Guardado", "Cotizacion MICE guardada.", parent=self)
@@ -10871,12 +11016,47 @@ class ModuloMICE(ctk.CTkToplevel):
             pass
         self._build()
         self.after(60, self._max)
+        self._sync_bg()
 
     def _max(self):
         try:
             self.state("zoomed")
         except Exception:
             pass
+
+    def _sync_bg(self):
+        """Trae en segundo plano las cotizaciones MICE de los demas equipos."""
+        def trabajo():
+            try:
+                n = sum(sincronizar_mice_nube())
+            except Exception:
+                n = 0
+            if n:
+                try:
+                    self.after(0, self._pintar)
+                except Exception:
+                    pass
+        threading.Thread(target=trabajo, daemon=True).start()
+
+    def _sincronizar(self):
+        self.btn_sync.configure(state="disabled", text="Sincronizando...")
+
+        def trabajo():
+            try:
+                s, b = sincronizar_mice_nube()
+                msg = f"Subidas: {s}\nRecibidas de los demas: {b}"
+            except Exception as e:
+                msg = "No se pudo sincronizar:\n" + str(e)
+
+            def fin():
+                self.btn_sync.configure(state="normal", text="☁ Sincronizar")
+                self._pintar()
+                messagebox.showinfo("Sincronizacion", msg, parent=self)
+            try:
+                self.after(0, fin)
+            except Exception:
+                pass
+        threading.Thread(target=trabajo, daemon=True).start()
 
     def _volver(self):
         lanz = self.master
@@ -10916,6 +11096,10 @@ class ModuloMICE(ctk.CTkToplevel):
                       hover_color=GREEN_H, font=("Segoe UI", 12, "bold"), command=self._nueva).pack(side="left", padx=(0, 8))
         ctk.CTkButton(hb, text="📚 Biblioteca", width=120, height=36, corner_radius=10, fg_color=CYAN,
                       hover_color=BLUE, font=("Segoe UI", 12, "bold"), command=self._biblioteca).pack(side="left", padx=(0, 8))
+        self.btn_sync = ctk.CTkButton(hb, text="☁ Sincronizar", width=130, height=36,
+                                      corner_radius=10, fg_color=NAVY2, hover_color=NAVY,
+                                      font=("Segoe UI", 12, "bold"), command=self._sincronizar)
+        self.btn_sync.pack(side="left", padx=(0, 8))
         ctk.CTkButton(hb, text="Datos de mi empresa", width=170, height=36, corner_radius=10, fg_color=NAVY2,
                       hover_color=NAVY, font=("Segoe UI", 12, "bold"), command=self._config_empresa).pack(side="left")
 
@@ -11002,7 +11186,7 @@ class ModuloMICE(ctk.CTkToplevel):
 
     def _eliminar(self, it):
         if messagebox.askyesno("Eliminar", f"¿Eliminar la cotizacion MICE {it.get('numero','')}?", parent=self):
-            eliminar_mice(it.get("numero", "")); self._pintar()
+            eliminar_mice(it.get("numero", ""), uid=it.get("uid")); self._pintar()
 
     def _biblioteca(self):
         SelectorMICEBib(self, "items", lambda x: None)
