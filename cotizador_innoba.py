@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "11.5"
+VERSION = "11.6"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -9920,7 +9920,36 @@ def eliminar_mice(numero):
     guardar_mice(data)
 
 
-def total_opcion_mice(op):
+# Cuantas personas caben en cada tipo de habitacion (igual que el cotizador normal)
+OCUP_MICE = {"sencilla": 1, "doble": 2, "triple": 3}
+
+
+def noches_hotel_mice(h):
+    try:
+        return max(1, int(float(h.get("noches", 1) or 1)))
+    except Exception:
+        return 1
+
+
+def total_hotel_mice(h):
+    """Costo TOTAL del alojamiento en ese hotel:
+       habitaciones x personas por habitacion x tarifa por persona/noche x noches."""
+    noches = noches_hotel_mice(h)
+    t = 0.0
+    for acc, occ in OCUP_MICE.items():
+        n = _num(h.get("n_" + acc, 0))
+        pp = _num(h.get(acc, 0))
+        t += n * occ * pp * noches
+    return round(t, 2)
+
+
+def pax_hotel_mice(h):
+    """Personas alojadas segun las habitaciones indicadas."""
+    return int(sum(_num(h.get("n_" + acc, 0)) * occ for acc, occ in OCUP_MICE.items()))
+
+
+def total_servicios_mice(op):
+    """Suma del minuto a minuto (traslados, tours, cenas...)."""
     t = 0.0
     for ln in op.get("lineas", []):
         try:
@@ -9928,6 +9957,27 @@ def total_opcion_mice(op):
         except Exception:
             pass
     return round(t, 2)
+
+
+def totales_opcion_mice(op):
+    """Desglose de una opcion. Los hoteles son ALTERNATIVAS entre si, por eso se
+       devuelve un total por cada hotel (servicios + ese alojamiento), no su suma."""
+    serv = total_servicios_mice(op)
+    hoteles = []
+    for h in op.get("hoteles", []):
+        th = total_hotel_mice(h)
+        if th > 0:
+            hoteles.append({"hotel": h.get("hotel", "") or "(hotel sin nombre)",
+                            "alojamiento": th, "total": round(serv + th, 2)})
+    return {"servicios": serv, "hoteles": hoteles,
+            "min": min([x["total"] for x in hoteles], default=serv),
+            "max": max([x["total"] for x in hoteles], default=serv)}
+
+
+def total_opcion_mice(op):
+    """Total de la opcion: servicios + alojamiento. Si hay varios hoteles (que son
+       alternativas), toma el mas economico -> es un 'desde'."""
+    return totales_opcion_mice(op)["min"]
 
 
 def total_mice(rec):
@@ -10059,7 +10109,7 @@ def _mice_info(pdf, pares):
             pdf.set_text_color(*PDF_TXT); pdf.set_font("Helvetica", "", 8.5)
             pdf.set_xy(x + we, y)
             pdf.multi_cell(wv, alto / max(1, len(_particiones(pdf, wv - 2, 5.2, val))),
-                           T(" " + val), border=1, align="L")
+                           T("  " + val), border=1, align="L")
         # si la fila quedo impar, cerrar el espacio sobrante con un recuadro vacio
         if len(fila) == 1:
             pdf.set_xy(x0 + we + wv, y)
@@ -10109,37 +10159,47 @@ def generar_pdf_mice(cfg, rec, ruta):
             pdf.cell(MICE_W, 7, T("  ALOJAMIENTO"), ln=1, fill=True)
             pdf.set_x(x0); pdf.set_fill_color(*PDF_CLARO); pdf.set_text_color(*PDF_PRIM)
             pdf.set_font("Helvetica", "B", 8.5)
-            for w, txt, al in ((52, " HOTEL", "L"), (24, "ALIMENT.", "C"), (22, "CATEGORIA", "C"),
-                               (14, "NOCHES", "C"), (23, "SENCILLA ", "R"), (23, "DOBLE ", "R"),
-                               (22, "TRIPLE ", "R")):
+            WH = (52, 18, 11, 11, 22, 22, 22, 22)
+            for w, txt, al in ((WH[0], " HOTEL", "L"), (WH[1], "ALIMENT.", "C"),
+                               (WH[2], "CAT.", "C"), (WH[3], "NOCH.", "C"),
+                               (WH[4], "SENCILLA", "C"), (WH[5], "DOBLE", "C"),
+                               (WH[6], "TRIPLE", "C"), (WH[7], "TOTAL ", "R")):
                 pdf.cell(w, 7, T(txt), border=1, fill=True, align=al)
             pdf.ln(7)
-            pdf.set_text_color(*PDF_TXT); pdf.set_font("Helvetica", "", 8.5)
+            pdf.set_text_color(*PDF_TXT); pdf.set_font("Helvetica", "", 8)
             for k, h in enumerate(hoteles):
-                try:
-                    noc = max(1, int(float(h.get("noches", 1) or 1)))
-                except Exception:
-                    noc = 1
-                def _tot(acc):
-                    try:
-                        return float(h.get(acc, 0) or 0) * noc
-                    except Exception:
-                        return 0.0
+                noc = noches_hotel_mice(h)
+
+                def _celda(acc):
+                    """'3 x 320.00' = habitaciones x tarifa por persona/noche."""
+                    n = _num(h.get("n_" + acc, 0)); pp = _num(h.get(acc, 0))
+                    if not pp:
+                        return "-"
+                    return (f"{n:g} x {pp:,.2f}" if n else f"{pp:,.2f}")
+
                 if pdf.get_y() + 7 > limite():
                     pdf.add_page(); pdf.set_y(pdf.get_y())
                 zebra = (k % 2 == 1)
                 pdf.set_fill_color(247, 249, 252)
                 pdf.set_x(x0)
-                pdf.cell(52, 6.5, T(" " + str(h.get("hotel", ""))[:38]), border=1, fill=zebra)
-                pdf.cell(24, 6.5, T(str(h.get("alimentacion", ""))[:13]), border=1, align="C", fill=zebra)
-                pdf.cell(22, 6.5, T(str(h.get("categoria", ""))), border=1, align="C", fill=zebra)
-                pdf.cell(14, 6.5, T(str(noc)), border=1, align="C", fill=zebra)
-                pdf.cell(23, 6.5, T(usd(_tot("sencilla")) + " "), border=1, align="R", fill=zebra)
-                pdf.cell(23, 6.5, T(usd(_tot("doble")) + " "), border=1, align="R", fill=zebra)
-                pdf.cell(22, 6.5, T(usd(_tot("triple")) + " "), border=1, align="R", ln=1, fill=zebra)
+                pdf.cell(WH[0], 7, T(" " + str(h.get("hotel", ""))[:40]), border=1, fill=zebra)
+                pdf.cell(WH[1], 7, T(str(h.get("alimentacion", ""))[:10]), border=1, align="C", fill=zebra)
+                pdf.cell(WH[2], 7, T(str(h.get("categoria", ""))[:5]), border=1, align="C", fill=zebra)
+                pdf.cell(WH[3], 7, T(str(noc)), border=1, align="C", fill=zebra)
+                pdf.cell(WH[4], 7, T(_celda("sencilla")), border=1, align="C", fill=zebra)
+                pdf.cell(WH[5], 7, T(_celda("doble")), border=1, align="C", fill=zebra)
+                pdf.cell(WH[6], 7, T(_celda("triple")), border=1, align="C", fill=zebra)
+                pdf.set_font("Helvetica", "B", 8); pdf.set_text_color(*PDF_PRIM)
+                pdf.cell(WH[7], 7, T(usd(total_hotel_mice(h)) + " "), border=1, align="R",
+                         ln=1, fill=zebra)
+                pdf.set_font("Helvetica", "", 8); pdf.set_text_color(*PDF_TXT)
             pdf.set_x(x0); pdf.set_font("Helvetica", "I", 7.5); pdf.set_text_color(120, 120, 120)
-            pdf.cell(MICE_W, 5, T("Valores por persona por todo el alojamiento "
-                                  "(precio por noche x numero de noches)."), ln=1)
+            pdf.cell(MICE_W, 5, T("Cada celda muestra  habitaciones x tarifa por persona/noche.  "
+                                  "El TOTAL ya incluye las noches y las personas por habitacion "
+                                  "(doble = 2 pax, triple = 3 pax)."), ln=1)
+            if len(hoteles) > 1:
+                pdf.set_x(x0)
+                pdf.cell(MICE_W, 4.5, T("Los hoteles son alternativas entre si: elija uno."), ln=1)
             pdf.set_text_color(*PDF_TXT)
 
         # ---------------- Minuto a minuto ----------------
@@ -10178,14 +10238,14 @@ def generar_pdf_mice(cfg, rec, ruta):
             zebra = (k % 2 == 1)
             pdf.set_fill_color(247, 249, 252)
             pdf.set_xy(x0, y); pdf.multi_cell(W[0], hh / max(1, len(_particiones(pdf, W[0] - 2, 5, dia))),
-                                              T(" " + dia), border=1, fill=zebra)
+                                              T(" " + dia), border=1, align="L", fill=zebra)
             pdf.set_xy(x0 + W[0], y)
             pdf.multi_cell(W[1], hh / max(1, len(_particiones(pdf, W[1] - 2, 5, item))),
-                           T(" " + item), border=1, fill=zebra)
+                           T(" " + item), border=1, align="L", fill=zebra)
             pdf.set_xy(x0 + W[0] + W[1], y)
             if corta:
                 pdf.multi_cell(W[2], hh / max(1, len(_particiones(pdf, W[2] - 2, 5, corta))),
-                               T(" " + corta), border=1, fill=zebra)
+                               T(" " + corta), border=1, align="L", fill=zebra)
             else:
                 pdf.cell(W[2], hh, T("  (ver detalle abajo)" if larga else ""),
                          border=1, fill=zebra)
@@ -10207,14 +10267,62 @@ def generar_pdf_mice(cfg, rec, ruta):
                 pdf.set_x(x0); pdf.cell(MICE_W, 0.6, "", border="LRB", ln=1)
                 pdf.set_text_color(*PDF_TXT); pdf.set_font("Helvetica", "", 8.5)
 
-        # ---------------- Total ----------------
-        if pdf.get_y() + 12 > limite():
+        # ---------------- Resumen: servicios + alojamiento = TOTAL ----------------
+        tt = totales_opcion_mice(op)
+        nh = len(tt["hoteles"])
+        alto_res = 14 + 7 * (1 + nh) + (11 if nh <= 1 else 8 + 8 * nh)
+        pdf.ln(4)
+        if pdf.get_y() + min(alto_res, 90) > limite():
             pdf.add_page()
         pdf.set_x(x0); pdf.set_fill_color(*PDF_PRIM); pdf.set_text_color(255, 255, 255)
-        pdf.set_font("Helvetica", "B", 10.5)
-        pdf.cell(MICE_W - 44, 9, T("  TOTAL " + tit), border=0, fill=True)
-        pdf.cell(44, 9, T(usd(total_opcion_mice(op)) + "  "), border=0, fill=True, align="R", ln=1)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.cell(MICE_W, 7, T("  RESUMEN DE LA INVERSION"), ln=1, fill=True)
         pdf.set_text_color(*PDF_TXT)
+
+        def _linea_res(etq, valor, fill=False):
+            pdf.set_x(x0)
+            pdf.set_font("Helvetica", "", 8.5)
+            pdf.set_fill_color(247, 249, 252)
+            pdf.cell(MICE_W - 34, 7, T("   " + etq), border="LTB", fill=fill)
+            pdf.set_font("Helvetica", "B", 8.5)
+            pdf.cell(34, 7, T(usd(valor) + "  "), border="RTB", align="R", ln=1, fill=fill)
+
+        _linea_res("Servicios  (traslados, tours, alimentacion, salones)", tt["servicios"])
+        for hx in tt["hoteles"]:
+            _linea_res("Alojamiento  ·  " + str(hx["hotel"])[:50], hx["alojamiento"], fill=True)
+
+        if nh <= 1:
+            pdf.ln(2)
+            pdf.set_x(x0); pdf.set_fill_color(*PDF_PRIM); pdf.set_text_color(255, 255, 255)
+            pdf.set_font("Helvetica", "B", 11)
+            pdf.cell(MICE_W - 46, 10, T("  TOTAL " + tit[:44]), fill=True)
+            pdf.cell(46, 10, T(usd(tt["hoteles"][0]["total"] if nh else tt["servicios"]) + "  "),
+                     fill=True, align="R", ln=1)
+            pdf.set_text_color(*PDF_TXT)
+        else:
+            # varios hoteles = alternativas -> una tabla de totales, no varias bandas
+            pdf.ln(3)
+            if pdf.get_y() + 12 + 8 * nh > limite():
+                pdf.add_page()
+            pdf.set_x(x0); pdf.set_fill_color(*PDF_PRIM); pdf.set_text_color(255, 255, 255)
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.cell(MICE_W - 46, 7.5, T("  TOTAL POR OPCION DE HOTEL"), fill=True)
+            pdf.cell(46, 7.5, T("TOTAL  "), fill=True, align="R", ln=1)
+            pdf.set_text_color(*PDF_TXT)
+            barato = min(x["total"] for x in tt["hoteles"])
+            for hx in sorted(tt["hoteles"], key=lambda x: x["total"]):
+                if pdf.get_y() + 8.5 > limite():
+                    pdf.add_page()
+                mejor = (hx["total"] == barato)
+                pdf.set_x(x0)
+                pdf.set_fill_color(230, 240, 233) if mejor else pdf.set_fill_color(247, 249, 252)
+                pdf.set_font("Helvetica", "B" if mejor else "", 9)
+                pdf.set_text_color(*(PDF_PRIM if mejor else PDF_TXT))
+                etq = ("   " + str(hx["hotel"])[:46]) + ("   (opcion mas economica)" if mejor else "")
+                pdf.cell(MICE_W - 46, 8.5, T(etq), border=1, fill=True)
+                pdf.set_font("Helvetica", "B", 10)
+                pdf.cell(46, 8.5, T(usd(hx["total"]) + "  "), border=1, align="R", ln=1, fill=True)
+            pdf.set_text_color(*PDF_TXT)
 
         notas = rec.get("notas", "")
         if notas:
@@ -10473,9 +10581,13 @@ class VentanaMICEDetalle(ctk.CTkToplevel):
         ctk.CTkButton(hh, text="📚 De biblioteca", width=120, height=26, fg_color=CARD2, text_color=NAVY,
                       hover_color=LINE, border_width=1, border_color=LINE, font=("Segoe UI", 10, "bold"),
                       command=lambda idx=i: self._hotel_bib(idx)).pack(side="right")
+        ctk.CTkLabel(card, text="Tarifa POR PERSONA por noche  ·  Hab = numero de habitaciones "
+                     "(doble = 2 pax, triple = 3 pax). El total se calcula solo.",
+                     text_color=MUTED, font=("Segoe UI", 10)).pack(anchor="w", padx=10)
         cabh = ctk.CTkFrame(card, fg_color="transparent"); cabh.pack(fill="x", padx=10)
-        for txt, w in (("Hotel", 0), ("Alimentacion", 110), ("Cat.", 80), ("Noches", 44),
-                       ("Sencilla/n", 60), ("Doble/n", 60), ("Triple/n", 60), ("", 30)):
+        for txt, w in (("Hotel", 0), ("Alimentacion", 100), ("Cat.", 56), ("Noches", 44),
+                       ("Sencilla", 58), ("Hab", 38), ("Doble", 58), ("Hab", 38),
+                       ("Triple", 58), ("Hab", 38), ("Total alojam.", 88), ("", 30)):
             ctk.CTkLabel(cabh, text=txt, text_color=MUTED, font=("Segoe UI", 9, "bold"),
                          width=(w or 90), anchor="w").pack(side="left", fill=("x" if w == 0 else None),
                                                            expand=(w == 0), padx=(3 if w == 0 else 1))
@@ -10513,17 +10625,23 @@ class VentanaMICEDetalle(ctk.CTkToplevel):
         v["alimentacion"] = tk.StringVar(value=h.get("alimentacion", "Desayuno"))
         v["categoria"] = tk.StringVar(value=h.get("categoria", ""))
         v["noches"] = tk.StringVar(value=str(h.get("noches", "") or ""))
-        v["sencilla"] = tk.StringVar(value=str(h.get("sencilla", "") or ""))
-        v["doble"] = tk.StringVar(value=str(h.get("doble", "") or ""))
-        v["triple"] = tk.StringVar(value=str(h.get("triple", "") or ""))
+        for acc in ("sencilla", "doble", "triple"):
+            v[acc] = tk.StringVar(value=str(h.get(acc, "") or ""))
+            v["n_" + acc] = tk.StringVar(value=str(h.get("n_" + acc, "") or ""))
         ctk.CTkEntry(row, textvariable=v["hotel"], height=28, placeholder_text="Hotel").pack(side="left", fill="x", expand=True, padx=(6, 2), pady=4)
-        ctk.CTkOptionMenu(row, variable=v["alimentacion"], values=ALIMENTACION_MICE, width=110, height=28,
+        ctk.CTkOptionMenu(row, variable=v["alimentacion"], values=ALIMENTACION_MICE, width=100, height=28,
                           fg_color=NAVY, button_color=NAVY2).pack(side="left", padx=2)
-        ctk.CTkEntry(row, textvariable=v["categoria"], height=28, width=80, placeholder_text="Cat.").pack(side="left", padx=2)
-        ctk.CTkEntry(row, textvariable=v["noches"], height=28, width=44, placeholder_text="Noch").pack(side="left", padx=2)
-        ctk.CTkEntry(row, textvariable=v["sencilla"], height=28, width=60, placeholder_text="Sencilla").pack(side="left", padx=2)
-        ctk.CTkEntry(row, textvariable=v["doble"], height=28, width=60, placeholder_text="Doble").pack(side="left", padx=2)
-        ctk.CTkEntry(row, textvariable=v["triple"], height=28, width=60, placeholder_text="Triple").pack(side="left", padx=2)
+        ctk.CTkEntry(row, textvariable=v["categoria"], height=28, width=56, placeholder_text="Cat.").pack(side="left", padx=2)
+        e = ctk.CTkEntry(row, textvariable=v["noches"], height=28, width=44, placeholder_text="Noch")
+        e.pack(side="left", padx=2); e.bind("<KeyRelease>", lambda ev: self._recalc())
+        for acc, ph in (("sencilla", "Sencilla"), ("doble", "Doble"), ("triple", "Triple")):
+            e = ctk.CTkEntry(row, textvariable=v[acc], height=28, width=58, placeholder_text=ph)
+            e.pack(side="left", padx=(2, 1)); e.bind("<KeyRelease>", lambda ev: self._recalc())
+            e = ctk.CTkEntry(row, textvariable=v["n_" + acc], height=28, width=38, placeholder_text="#")
+            e.pack(side="left", padx=(1, 2)); e.bind("<KeyRelease>", lambda ev: self._recalc())
+        v["tot_lbl"] = ctk.CTkLabel(row, text="0.00", text_color=GREEN_H, width=88, anchor="e",
+                                    font=("Segoe UI", 11, "bold"))
+        v["tot_lbl"].pack(side="left", padx=2)
         ctk.CTkButton(row, text="✕", width=26, height=26, fg_color=RED, hover_color="#9B2C22",
                       command=lambda: self._del_hotel(ow, v)).pack(side="left", padx=(2, 6))
         ow["hoteles"].append(v)
@@ -10565,7 +10683,10 @@ class VentanaMICEDetalle(ctk.CTkToplevel):
                                 "noches": _num(h["noches"].get()),
                                 "sencilla": _num(h["sencilla"].get()),
                                 "doble": _num(h["doble"].get()),
-                                "triple": _num(h["triple"].get())})
+                                "triple": _num(h["triple"].get()),
+                                "n_sencilla": _num(h["n_sencilla"].get()),
+                                "n_doble": _num(h["n_doble"].get()),
+                                "n_triple": _num(h["n_triple"].get())})
             lineas = []
             for l in ow["lineas"]:
                 lineas.append({"dia": l["dia"].get().strip(), "item": l["item"].get().strip(),
@@ -10588,24 +10709,45 @@ class VentanaMICEDetalle(ctk.CTkToplevel):
         self.res["estado"] = self.v_estado.get()
 
     def _recalc(self):
-        gran = 0.0
+        gran = None
         for ow in self.op_widgets:
-            t = 0.0
+            serv = 0.0
             for l in ow["lineas"]:
                 sub = _num(l["cantidad"].get()) * _num(l["unitario"].get())
-                t += sub
+                serv += sub
                 try:
                     l["tot_lbl"].configure(text=f"{sub:,.2f}")
                 except Exception:
                     pass
+            aloj = []
+            for h in ow["hoteles"]:
+                d = {"noches": _num(h["noches"].get())}
+                for acc in ("sencilla", "doble", "triple"):
+                    d[acc] = _num(h[acc].get())
+                    d["n_" + acc] = _num(h["n_" + acc].get())
+                th = total_hotel_mice(d)
+                if th:
+                    aloj.append(th)
+                try:
+                    h["tot_lbl"].configure(text=f"{th:,.2f}")
+                except Exception:
+                    pass
+            total = round(serv + (min(aloj) if aloj else 0.0), 2)
+            if len(aloj) > 1:
+                txt = (f"Servicios {usd(serv)}   +   Alojamiento desde {usd(min(aloj))}"
+                       f"   =   TOTAL desde {usd(total)}")
+            elif aloj:
+                txt = f"Servicios {usd(serv)}   +   Alojamiento {usd(aloj[0])}   =   TOTAL {usd(total)}"
+            else:
+                txt = f"Total opcion: {usd(total)}   (sin alojamiento)"
             try:
-                ow["tot"].configure(text=f"Total opcion: {usd(t)}")
+                ow["tot"].configure(text=txt)
             except Exception:
                 pass
-            if gran == 0.0:
-                gran = t
+            if gran is None:
+                gran = total
         try:
-            self.lbl_tot.configure(text="Total 1a opcion: " + usd(gran))
+            self.lbl_tot.configure(text="Total 1a opcion: " + usd(gran or 0))
         except Exception:
             pass
 

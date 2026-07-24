@@ -1,5 +1,5 @@
 {
-  "version": "11.5",
+  "version": "11.6",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Modulo Comercial compartido entre Felipe y Carlos (sincronizacion en la nube) con indicadores de gestion por persona. Politicas de reserva y vigencia de 1 mes en las cotizaciones y en MICE; las MICE vencidas se depuran solas."
+  "notas": "MICE: se indica el numero de habitaciones sencillas/dobles/triples y el sistema calcula el alojamiento y lo suma a los servicios para dar el total final. PDF mas limpio: texto sin justificar, tabla de alojamiento con total por hotel y resumen de la inversion."
 }

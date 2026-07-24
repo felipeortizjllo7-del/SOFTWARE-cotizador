@@ -1,8 +1,11 @@
 /*************************************************************************
- *  INNOBA - Webhook de sincronizacion  (COTIZACIONES + RESERVAS)
+ *  INNOBA - Webhook de sincronizacion
+ *  (COTIZACIONES + RESERVAS + SOLICITUDES WEB + TAREAS COMERCIALES)
  *  --------------------------------------------------------------------
  *  - Recibe cotizaciones del HTML de los clientes (como hasta ahora).
  *  - Recibe y entrega RESERVAS entre los computadores del equipo.
+ *  - Recibe SOLICITUDES de reserva desde la pagina web (con pasaportes).
+ *  - Comparte las TAREAS del modulo Comercial entre Felipe y Carlos.
  *  Guarda cada registro como una fila en una hoja de calculo que este
  *  mismo script crea automaticamente la primera vez (no hay que crearla).
  *
