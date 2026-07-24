@@ -1,5 +1,5 @@
 {
-  "version": "11.4",
+  "version": "11.5",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "PDF de MICE rediseniado: encabezado en dos columnas alineado, tablas con anchos corregidos, descripciones largas en renglon aparte y saltos de pagina que ya no parten las filas."
+  "notas": "Modulo Comercial compartido entre Felipe y Carlos (sincronizacion en la nube) con indicadores de gestion por persona. Politicas de reserva y vigencia de 1 mes en las cotizaciones y en MICE; las MICE vencidas se depuran solas."
 }

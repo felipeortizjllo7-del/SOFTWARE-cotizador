@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "11.4"
+VERSION = "11.5"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -161,8 +161,12 @@ def _trm_valida(v):
 # Quien realiza la cotizacion (nombre, cargo) -> firma del PDF
 COTIZADORES = [
     ("Felipe Ortiz Jaramillo", "Gerente - Innoba DMC"),
-    ("Carlos Ortiz Jaramillo", "Gerente Comercial - Innoba DMC"),
+    ("Carlos Andres Ortiz Jaramillo", "Gerente Comercial - Innoba DMC"),
 ]
+
+# Vigencia de una cotizacion: 1 mes desde que se elabora. Pasado ese mes se
+# depura del sistema (salvo que este Ganada o En seguimiento).
+VIGENCIA_MESES = 1
 
 def periodo_por_fecha(fecha):
     """Segun la fecha de IDA -> (descuento_pesos, margen_hotel, margen_terrestre).
@@ -359,6 +363,7 @@ def registrar_cotizacion(rec):
     if not rec.get("uid"):
         rec["uid"] = "COTX-" + uuid.uuid4().hex[:12]
     rec.setdefault("origen", "Escritorio")
+    rec["vence"] = vence_el(rec.get("fecha", "")).strftime("%d/%m/%Y")
     data["items"].append(rec)
     guardar_cotizaciones(data)
     try:
@@ -1791,6 +1796,18 @@ def generar_pdf(cfg, datos, bloques, total, ruta_salida):
             pdf.set_font("Helvetica", "", 9); pdf.set_text_color(*PDF_TXT)
             pdf.cell(0, 5, T(firma_cargo), ln=1)
 
+    # --- POLITICAS DE RESERVA (pagina propia al final) ---
+    vence_txt = (datos.get("vence", "")
+                 or vence_el(datos.get("fecha", "")).strftime("%d/%m/%Y"))
+    pdf.add_page()
+    pdf.set_fill_color(*PDF_PRIM); pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 8, T("  POLITICAS DE RESERVA - CONDICIONES GENERALES Y DE PAGO"),
+             ln=1, fill=True)
+    pdf.set_text_color(*PDF_TXT); pdf.ln(2)
+    _politicas_reserva(pdf, 15, 180,
+                       vigencia=f"1 mes desde su elaboracion. Esta cotizacion es valida "
+                                f"hasta el {vence_txt}.")
     pdf.output(ruta_salida)
 
 
@@ -2528,30 +2545,173 @@ def guardar_tareas(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-def registrar_tarea(rec):
+def quien_soy(cfg=None):
+    """Nombre de quien esta usando este equipo (para saber que tarea hizo cada uno)."""
+    cfg = cfg if cfg is not None else cargar_config()
+    n = (cfg.get("firma_nombre", "") or "").strip()
+    return n or COTIZADORES[0][0]
+
+
+def persona_de(txt):
+    """Normaliza un nombre a 'Felipe' / 'Carlos' / el nombre tal cual."""
+    cl = str(txt or "").strip().lower()
+    if "felipe" in cl:
+        return "Felipe"
+    if "carlos" in cl:
+        return "Carlos"
+    return str(txt or "").strip() or "(sin asignar)"
+
+
+def _ahora_iso():
+    return datetime.datetime.now().isoformat(timespec="seconds")
+
+
+def registrar_tarea(rec, cfg=None):
+    try:
+        importar_tareas_nube()      # traer lo ultimo para no repetir consecutivo
+    except Exception:
+        pass
     data = cargar_tareas()
-    data["seq"] = int(data.get("seq", 0)) + 1
+    mx = int(data.get("seq", 0) or 0)
+    for it in data["items"]:
+        try:
+            mx = max(mx, int(re.sub(r"\D", "", str(it.get("numero", "0"))) or 0))
+        except Exception:
+            pass
+    data["seq"] = mx + 1
     rec = dict(rec)
     rec["numero"] = f"TAR-{data['seq']:04d}"
+    rec.setdefault("uid", "TARX-" + uuid.uuid4().hex[:12])
     rec.setdefault("fecha_creacion", datetime.date.today().isoformat())
+    rec.setdefault("creador", quien_soy(cfg))
+    rec["actualizado"] = _ahora_iso()
     data["items"].append(rec)
     guardar_tareas(data)
+    threading.Thread(target=enviar_tarea_nube, args=(dict(rec),), daemon=True).start()
     return rec
 
 
-def actualizar_tarea(numero, cambios):
+def actualizar_tarea(numero, cambios, uid=None):
     data = cargar_tareas()
+    tocada = None
+    if uid:
+        for it in data["items"]:
+            if str(it.get("uid")) == str(uid):
+                it.update(cambios); tocada = it; break
+    if tocada is None:
+        for it in data["items"]:
+            if it.get("numero") == numero:
+                it.update(cambios); tocada = it; break
+    if tocada is not None:
+        tocada.setdefault("uid", "TARX-" + uuid.uuid4().hex[:12])
+        tocada["actualizado"] = _ahora_iso()
+    guardar_tareas(data)
+    if tocada is not None:
+        threading.Thread(target=enviar_tarea_nube, args=(dict(tocada),), daemon=True).start()
+
+
+def eliminar_tarea(numero, uid=None):
+    data = cargar_tareas()
+    def _es(it):
+        if uid:
+            return str(it.get("uid")) == str(uid)
+        return it.get("numero") == numero
+    fuera = [it for it in data["items"] if _es(it)]
+    data["items"] = [it for it in data["items"] if not _es(it)]
+    guardar_tareas(data)
+    for it in fuera:
+        if it.get("uid"):
+            threading.Thread(target=enviar_borrado_nube,
+                             args=("tarea", it["uid"]), daemon=True).start()
+
+
+# ---- Sincronizacion de TAREAS en la nube (mismo webhook, tipo=tarea) ----
+def enviar_tarea_nube(rec):
+    """Sube (o actualiza) una tarea para que Felipe y Carlos vean lo mismo."""
+    if not WEBHOOK_URL or not rec.get("uid"):
+        return False
+    try:
+        payload = {k: v for k, v in rec.items() if not str(k).startswith("_")}
+        payload["tipo"] = "tarea"
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        req = urllib.request.Request(
+            WEBHOOK_URL, data=body, method="POST",
+            headers={"Content-Type": "text/plain;charset=utf-8",
+                     "User-Agent": "CotizadorInnoba"})
+        with urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=15) as r:
+            r.read()
+        return True
+    except Exception:
+        return False
+
+
+def importar_tareas_nube():
+    """Trae las tareas de la nube y las mezcla por 'uid'. Gana la version mas
+       reciente (campo 'actualizado'). Devuelve cuantas entraron o cambiaron."""
+    if not WEBHOOK_URL or not WEBHOOK_KEY:
+        return 0
+    try:
+        url = (WEBHOOK_URL + ("&" if "?" in WEBHOOK_URL else "?")
+               + "key=" + WEBHOOK_KEY + "&tipo=tarea")
+        req = urllib.request.Request(url, headers={"User-Agent": "CotizadorInnoba"})
+        with urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=20) as r:
+            remotas = json.loads(r.read().decode("utf-8", "ignore")).get("items", []) or []
+    except Exception:
+        return 0
+    data = cargar_tareas()
+    por_uid = {str(it.get("uid")): it for it in data["items"] if it.get("uid")}
+    borradas = {str(rt.get("uid") or rt.get("id")) for rt in remotas
+                if rt.get("_accion") == "borrar"}
+    nuevas = 0
+    for rt in remotas:
+        uid = str(rt.get("uid") or rt.get("id") or "")
+        if not uid or rt.get("_accion") == "borrar" or not rt.get("titulo"):
+            continue
+        rt = {k: v for k, v in rt.items() if k != "tipo"}
+        loc = por_uid.get(uid)
+        if loc is None:
+            data["items"].append(rt); por_uid[uid] = rt; nuevas += 1
+        elif str(rt.get("actualizado", "")) > str(loc.get("actualizado", "")):
+            loc.update(rt); nuevas += 1
+    if borradas:
+        antes = len(data["items"])
+        data["items"] = [it for it in data["items"] if str(it.get("uid")) not in borradas]
+        nuevas += antes - len(data["items"])
+    # el consecutivo local nunca queda por debajo de lo que ya existe
+    mx = int(data.get("seq", 0) or 0)
     for it in data["items"]:
-        if it.get("numero") == numero:
-            it.update(cambios)
-            break
-    guardar_tareas(data)
+        try:
+            mx = max(mx, int(re.sub(r"\D", "", str(it.get("numero", "0"))) or 0))
+        except Exception:
+            pass
+    data["seq"] = mx
+    if nuevas:
+        guardar_tareas(data)
+    return nuevas
 
 
-def eliminar_tarea(numero):
-    data = cargar_tareas()
-    data["items"] = [it for it in data["items"] if it.get("numero") != numero]
-    guardar_tareas(data)
+def subir_tareas_exe():
+    """Sube las tareas locales que aun no esten en la nube (por ejemplo las creadas
+       antes de que existiera la sincronizacion)."""
+    data = cargar_tareas(); cambio = False; subidas = 0
+    for it in data["items"]:
+        if it.get("nube_ok"):
+            continue
+        if not it.get("uid"):
+            it["uid"] = "TARX-" + uuid.uuid4().hex[:12]; cambio = True
+        it.setdefault("actualizado", _ahora_iso())
+        if enviar_tarea_nube(it):
+            it["nube_ok"] = True; cambio = True; subidas += 1
+    if cambio:
+        guardar_tareas(data)
+    return subidas
+
+
+def sincronizar_tareas_nube():
+    """Sube lo local y baja lo de los demas. Devuelve (subidas, bajadas)."""
+    s = subir_tareas_exe()
+    b = importar_tareas_nube()
+    return s, b
 
 
 def _parse_fecha_iso(s):
@@ -2616,6 +2776,96 @@ def indicadores_comerciales():
     ind["reservas_mes_usd"] = round(sum(float(r.get("monto", 0) or 0) for r in res_mes
                                         if r.get("estado") != "Anulada"), 2)
     return ind
+
+
+def indicadores_por_persona(mes=None):
+    """Medicion de gestion por persona (Felipe / Carlos / quien sea).
+       mes = 'YYYY-MM' para acotar; None = todo el historico.
+       Devuelve una lista de dict, ordenada por ventas de mayor a menor."""
+    def en_mes_iso(s):
+        return (not mes) or (_mes_de_iso(s or "") == mes)
+
+    def en_mes_fecha(s):
+        if not mes:
+            return True
+        f = parse_fecha(s or "")
+        return bool(f) and f.strftime("%Y-%m") == mes
+
+    filas = {}
+
+    def fila(nombre):
+        return filas.setdefault(nombre, {
+            "persona": nombre, "tareas": 0, "completadas": 0, "vencidas": 0,
+            "cot_n": 0, "cot_usd": 0.0, "ganadas": 0, "ganadas_usd": 0.0,
+            "perdidas": 0, "seguimiento": 0, "reservas_n": 0, "reservas_usd": 0.0})
+
+    # --- Tareas de gestion ---
+    for t in cargar_tareas().get("items", []):
+        if not en_mes_iso(t.get("fecha_creacion", "")):
+            continue
+        f = fila(persona_de(t.get("responsable") or t.get("creador")))
+        f["tareas"] += 1
+        est = estado_tarea_efectivo(t)
+        if est == "Completada":
+            f["completadas"] += 1
+        elif est == "Vencida":
+            f["vencidas"] += 1
+
+    # --- Cotizaciones ---
+    for c in cargar_cotizaciones().get("items", []):
+        if not en_mes_fecha(c.get("fecha", "")):
+            continue
+        f = fila(persona_de(c.get("cotizado_por") or c.get("asesor")))
+        monto = float(c.get("total", 0) or 0)
+        f["cot_n"] += 1; f["cot_usd"] += monto
+        est = c.get("estado", "")
+        if est == "Ganada":
+            f["ganadas"] += 1; f["ganadas_usd"] += monto
+        elif est == "Perdida":
+            f["perdidas"] += 1
+        elif est == "En seguimiento":
+            f["seguimiento"] += 1
+
+    # --- Reservas (quien la cerro) ---
+    for r in cargar_reservas().get("items", []):
+        if r.get("estado") == "Anulada" or not en_mes_iso(r.get("fecha_creacion", "")):
+            continue
+        quien = r.get("cotizado_por") or r.get("creador") or ""
+        if not quien:
+            continue
+        f = fila(persona_de(quien))
+        f["reservas_n"] += 1
+        f["reservas_usd"] += float(r.get("monto", 0) or 0)
+
+    out = []
+    for f in filas.values():
+        f["conversion"] = round(100.0 * f["ganadas"] / f["cot_n"], 1) if f["cot_n"] else 0.0
+        f["cumplimiento"] = round(100.0 * f["completadas"] / f["tareas"], 1) if f["tareas"] else 0.0
+        f["ticket"] = round(f["ganadas_usd"] / f["ganadas"], 2) if f["ganadas"] else 0.0
+        f["cot_usd"] = round(f["cot_usd"], 2)
+        f["ganadas_usd"] = round(f["ganadas_usd"], 2)
+        f["reservas_usd"] = round(f["reservas_usd"], 2)
+        out.append(f)
+    out.sort(key=lambda x: -x["ganadas_usd"])
+    return out
+
+
+def exportar_indicadores_persona(ruta, mes=None):
+    """Excel con la medicion de gestion por persona."""
+    from openpyxl import Workbook
+    wb = Workbook(); ws = wb.active; ws.title = "Indicadores"
+    ws.append(["Persona", "Tareas", "Completadas", "Vencidas", "% Cumplimiento",
+               "Cotizaciones", "USD cotizado", "Ganadas", "USD ganado", "Perdidas",
+               "En seguimiento", "% Conversion", "Ticket promedio",
+               "Reservas", "USD reservas"])
+    for f in indicadores_por_persona(mes):
+        ws.append([f["persona"], f["tareas"], f["completadas"], f["vencidas"], f["cumplimiento"],
+                   f["cot_n"], f["cot_usd"], f["ganadas"], f["ganadas_usd"], f["perdidas"],
+                   f["seguimiento"], f["conversion"], f["ticket"],
+                   f["reservas_n"], f["reservas_usd"]])
+    _estilo_encabezado_xlsx(ws); _autoancho_xlsx(ws)
+    wb.save(ruta)
+    return ruta
 
 
 def indicadores_cotizaciones():
@@ -3274,20 +3524,19 @@ def generar_voucher_cliente(cfg, res, ruta):
     pdf.output(ruta)
 
 
-def _condiciones_cliente(pdf, cfg):
-    """Pagina de Condiciones Generales y de Pago en el voucher del cliente."""
+def _politicas_reserva(pdf, x, w, vigencia=None):
+    """Politicas de reserva / condiciones generales y de pago. Se usan igual en el
+       voucher del cliente y en las cotizaciones (incluidas las de MICE).
+       vigencia = texto de validez de la oferta; si no se pasa, '30 dias'."""
     T = pdf._t
-    pdf.add_page()
-    _os_band(pdf, "CONDICIONES GENERALES Y DE PAGO")
-    pdf.ln(2)
 
     def titulo(txt):
-        pdf.set_x(12); pdf.set_font("Helvetica", "B", 9); pdf.set_text_color(*PDF_PRIM)
-        pdf.multi_cell(186, 4.8, T(txt))
+        pdf.set_x(x); pdf.set_font("Helvetica", "B", 9); pdf.set_text_color(*PDF_PRIM)
+        pdf.multi_cell(w, 4.8, T(txt))
 
     def cuerpo(txt):
-        pdf.set_x(12); pdf.set_font("Helvetica", "", 8.3); pdf.set_text_color(*PDF_TXT)
-        pdf.multi_cell(186, 4.4, T(txt)); pdf.ln(1.2)
+        pdf.set_x(x); pdf.set_font("Helvetica", "", 8.3); pdf.set_text_color(*PDF_TXT)
+        pdf.multi_cell(w, 4.4, T(txt)); pdf.ln(1.2)
 
     def item(tit, cpo):
         titulo(tit); cuerpo(cpo)
@@ -3298,7 +3547,7 @@ def _condiciones_cliente(pdf, cfg):
     item("Forma de pago:",
          "1 mes antes de la llegada del grupo. Por link de pagos con sobrecargo del 3%, o "
          "transferencia bancaria a la cuenta de ahorros BANISTMO PANAMA 0120179743.")
-    item("Validez de la oferta:", "30 dias.")
+    item("Validez de la oferta:", vigencia or "30 dias.")
     item("Pago:",
          "El pago debe realizarse con 30 dias de antelacion a la llegada de los pasajeros. De no "
          "presentarse el pago no se garantiza la reserva y queda sujeta a cambio de tarifas y "
@@ -3310,8 +3559,8 @@ def _condiciones_cliente(pdf, cfg):
               "el 50% del valor pagado.",
               "Si la cancelacion se realiza con 10 dias o menos a la llegada de los pasajeros, no "
               "se realiza devolucion del dinero pagado."):
-        pdf.set_x(14); pdf.set_font("Helvetica", "", 8.3); pdf.set_text_color(*PDF_TXT)
-        pdf.multi_cell(184, 4.4, T("-  " + b))
+        pdf.set_x(x + 2); pdf.set_font("Helvetica", "", 8.3); pdf.set_text_color(*PDF_TXT)
+        pdf.multi_cell(w - 2, 4.4, T("-  " + b))
     pdf.ln(1.5)
 
     cuerpo("La presente cotizacion no implica reserva ni bloqueo de lugares. Todas las tarifas "
@@ -3353,13 +3602,21 @@ def _condiciones_cliente(pdf, cfg):
          "su correcta recepcion. Para consultar el Aviso de Privacidad completo o sus "
          "modificaciones, visite www.innobadmc.com")
     pdf.ln(2)
-    pdf.set_x(12); pdf.set_font("Helvetica", "", 8.3); pdf.set_text_color(*PDF_TXT)
-    pdf.multi_cell(186, 4.4, T("Cordialmente,"))
+    pdf.set_x(x); pdf.set_font("Helvetica", "", 8.3); pdf.set_text_color(*PDF_TXT)
+    pdf.multi_cell(w, 4.4, T("Cordialmente,"))
     pdf.set_font("Helvetica", "B", 9); pdf.set_text_color(*PDF_PRIM)
-    pdf.set_x(12); pdf.multi_cell(186, 4.6, T("Felipe Ortiz Jaramillo"))
+    pdf.set_x(x); pdf.multi_cell(w, 4.6, T("Felipe Ortiz Jaramillo"))
     pdf.set_font("Helvetica", "", 8.3); pdf.set_text_color(*PDF_TXT)
-    pdf.set_x(12); pdf.multi_cell(186, 4.4, T("GERENTE GENERAL  -  INNOBA DMC\n"
-                                              "Cel: +57 313 595 2944   ·   Correo: felipe@innobadmc.com"))
+    pdf.set_x(x); pdf.multi_cell(w, 4.4, T("GERENTE GENERAL  -  INNOBA DMC\n"
+                                           "Cel: +57 313 595 2944   ·   Correo: felipe@innobadmc.com"))
+
+
+def _condiciones_cliente(pdf, cfg):
+    """Pagina de Condiciones Generales y de Pago en el voucher del cliente."""
+    pdf.add_page()
+    _os_band(pdf, "CONDICIONES GENERALES Y DE PAGO")
+    pdf.ln(2)
+    _politicas_reserva(pdf, 12, 186)
 
 
 def _voucher_itinerario(pdf, texto):
@@ -8745,9 +9002,9 @@ class VentanaTareaDetalle(ctk.CTkToplevel):
             messagebox.showwarning("Falta el titulo", "Escribe el titulo de la tarea.", parent=self)
             return
         if self.tarea.get("numero"):
-            actualizar_tarea(self.tarea["numero"], datos)
+            actualizar_tarea(self.tarea["numero"], datos, uid=self.tarea.get("uid"))
         else:
-            self.tarea = registrar_tarea(datos)
+            self.tarea = registrar_tarea(datos, self.cfg)
         if self.on_save:
             self.on_save()
         messagebox.showinfo("Guardado", "Tarea guardada.", parent=self)
@@ -8775,6 +9032,7 @@ class ModuloComercial(ctk.CTkToplevel):
         self.configure(fg_color=BG)
         self.geometry("1180x720")
         self.filtro = tk.StringVar(value="Todas")
+        self.persona = tk.StringVar(value="Todas")
         self._build()
         self.after(60, self._max)
 
@@ -8822,12 +9080,19 @@ class ModuloComercial(ctk.CTkToplevel):
         ctk.CTkButton(hb, text="+ Nueva tarea", width=140, height=36, corner_radius=10, fg_color=GREEN,
                       hover_color=GREEN_H, font=("Segoe UI", 12, "bold"),
                       command=self._nueva_tarea).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(hb, text="📈 Indicadores", width=130, height=36, corner_radius=10,
+                      fg_color=BLUE, hover_color=NAVY2, font=("Segoe UI", 12, "bold"),
+                      command=self._indicadores).pack(side="left", padx=(0, 8))
         ctk.CTkButton(hb, text="🏆 Contactos", width=130, height=36, corner_radius=10,
                       fg_color="#D9A400", hover_color="#B7791F", font=("Segoe UI", 12, "bold"),
                       command=self._ranking_contactos).pack(side="left", padx=(0, 8))
         ctk.CTkButton(hb, text="📊 Reporte", width=110, height=36, corner_radius=10, fg_color="#7A5AB5",
                       hover_color="#63459A", font=("Segoe UI", 12, "bold"),
-                      command=self._reporte).pack(side="left")
+                      command=self._reporte).pack(side="left", padx=(0, 8))
+        self.btn_sync = ctk.CTkButton(hb, text="☁ Sincronizar", width=125, height=36,
+                                      corner_radius=10, fg_color=NAVY2, hover_color=NAVY,
+                                      font=("Segoe UI", 12, "bold"), command=self._sincronizar)
+        self.btn_sync.pack(side="left")
 
         # Indicadores
         self.kpis = ctk.CTkFrame(self, fg_color="transparent"); self.kpis.pack(fill="x", padx=18, pady=(12, 4))
@@ -8838,14 +9103,64 @@ class ModuloComercial(ctk.CTkToplevel):
                          placeholder_text="Buscar tarea por titulo, cliente o responsable...")
         e.pack(side="left", fill="x", expand=True)
         e.bind("<KeyRelease>", lambda ev: self._pintar())
-        ctk.CTkLabel(bar, text="Ver:", text_color=MUTED).pack(side="left", padx=(10, 4))
+        ctk.CTkLabel(bar, text="Estado:", text_color=MUTED).pack(side="left", padx=(10, 4))
         ctk.CTkOptionMenu(bar, variable=self.filtro,
                           values=["Todas", "Pendiente", "En progreso", "Vencida", "Completada"],
-                          width=150, height=36, fg_color=NAVY, button_color=NAVY2,
+                          width=140, height=36, fg_color=NAVY, button_color=NAVY2,
+                          command=lambda _v=None: self._pintar()).pack(side="left")
+        ctk.CTkLabel(bar, text="Persona:", text_color=MUTED).pack(side="left", padx=(10, 4))
+        ctk.CTkOptionMenu(bar, variable=self.persona, values=self._personas(),
+                          width=170, height=36, fg_color=NAVY, button_color=NAVY2,
                           command=lambda _v=None: self._pintar()).pack(side="left")
 
         self.lista = ctk.CTkScrollableFrame(self, fg_color=BG); self.lista.pack(fill="both", expand=True, padx=18, pady=(4, 14))
         self._refrescar()
+        self._sync_bg()
+
+    def _personas(self):
+        """Todos los que aparecen en las tareas + los cotizadores fijos."""
+        vistos = {persona_de(c[0]) for c in COTIZADORES}
+        for t in cargar_tareas().get("items", []):
+            vistos.add(persona_de(t.get("responsable") or t.get("creador")))
+        vistos.discard("(sin asignar)")
+        return ["Todas"] + sorted(vistos)
+
+    def _sync_bg(self):
+        """Baja lo que hicieron los demas sin bloquear la ventana."""
+        def trabajo():
+            try:
+                n = sum(sincronizar_tareas_nube())
+            except Exception:
+                n = 0
+            if n:
+                try:
+                    self.after(0, self._refrescar)
+                except Exception:
+                    pass
+        threading.Thread(target=trabajo, daemon=True).start()
+
+    def _sincronizar(self):
+        self.btn_sync.configure(state="disabled", text="Sincronizando...")
+
+        def trabajo():
+            try:
+                s, b = sincronizar_tareas_nube()
+                msg = f"Subidas: {s}\nRecibidas de los demas: {b}"
+            except Exception as e:
+                msg = "No se pudo sincronizar:\n" + str(e)
+
+            def fin():
+                self.btn_sync.configure(state="normal", text="☁ Sincronizar")
+                self._refrescar()
+                messagebox.showinfo("Sincronizacion", msg, parent=self)
+            try:
+                self.after(0, fin)
+            except Exception:
+                pass
+        threading.Thread(target=trabajo, daemon=True).start()
+
+    def _indicadores(self):
+        VentanaIndicadoresPersona(self)
 
     def _refrescar(self):
         self._pintar_kpis()
@@ -8876,18 +9191,22 @@ class ModuloComercial(ctk.CTkToplevel):
         items = list(reversed(cargar_tareas().get("items", [])))
         q = self.q.get().lower().strip()
         filt = self.filtro.get()
+        pers = self.persona.get()
         vistos = 0
         for t in items:
             est = estado_tarea_efectivo(t)
             if filt != "Todas" and est != filt:
+                continue
+            if pers != "Todas" and persona_de(t.get("responsable") or t.get("creador")) != pers:
                 continue
             if q and q not in json.dumps(t, ensure_ascii=False).lower():
                 continue
             vistos += 1
             self._fila(t, est)
         if vistos == 0:
-            ctk.CTkLabel(self.lista, text="Sin tareas. Crea una con '+ Nueva tarea'.",
-                         text_color=MUTED).pack(pady=24)
+            txt = ("Sin tareas. Crea una con '+ Nueva tarea'." if filt == "Todas" and pers == "Todas"
+                   else "Ninguna tarea coincide con el filtro.")
+            ctk.CTkLabel(self.lista, text=txt, text_color=MUTED).pack(pady=24)
 
     def _fila(self, t, est):
         fila = ctk.CTkFrame(self.lista, fg_color=ESTADO_TAREA_FILA.get(est, CARD2), corner_radius=10)
@@ -8908,6 +9227,10 @@ class ModuloComercial(ctk.CTkToplevel):
         if n:
             sub += f"   ·   Checklist {h}/{n}"
         ctk.CTkLabel(info, text=sub, text_color=MUTED, font=("Segoe UI", 11)).pack(anchor="w")
+        creador = t.get("creador", "")
+        if creador:
+            ctk.CTkLabel(info, text="Creada por " + creador, text_color=BLUE,
+                         font=("Segoe UI", 10)).pack(anchor="w")
         ce = t.get("cliente_estado", "")
         if ce and ce != "Sin clasificar":
             col = {"Cliente actual (vigente en compra)": GREEN, "Descartado": RED}.get(ce, "#D9A400")
@@ -8932,12 +9255,12 @@ class ModuloComercial(ctk.CTkToplevel):
         VentanaTareaDetalle(self, dict(t), self.cfg, on_save=self._refrescar)
 
     def _completar(self, t):
-        actualizar_tarea(t.get("numero", ""), {"estado": "Completada"})
+        actualizar_tarea(t.get("numero", ""), {"estado": "Completada"}, uid=t.get("uid"))
         self._refrescar()
 
     def _eliminar(self, t):
         if messagebox.askyesno("Eliminar tarea", f"Eliminar la tarea '{t.get('titulo','')}'?"):
-            eliminar_tarea(t.get("numero", ""))
+            eliminar_tarea(t.get("numero", ""), uid=t.get("uid"))
             self._refrescar()
 
     def _nueva_tarea(self):
@@ -8954,6 +9277,108 @@ class ModuloComercial(ctk.CTkToplevel):
         DialogoReporteMes(self, "Reporte de tareas comerciales",
                           "Descarga un Excel con las tareas de gestion.",
                           meses, exportar_reporte_tareas, "Reporte_tareas")
+
+
+class VentanaIndicadoresPersona(ctk.CTkToplevel):
+    """Medicion de gestion por persona (Felipe / Carlos): tareas, cotizaciones,
+       conversion, ventas y reservas. Se puede ver por mes o todo el historico."""
+    COLS = [("Persona", 150), ("Tareas", 60), ("Compl.", 60), ("Venc.", 55),
+            ("% Cumpl.", 75), ("Cotiz.", 60), ("Ganadas", 65), ("% Conv.", 70),
+            ("USD ganado", 110), ("Ticket", 90), ("Reservas", 70), ("USD reservas", 110)]
+
+    def __init__(self, master):
+        super().__init__(master)
+        self.title("Indicadores de gestion por persona")
+        self.geometry("1120x620"); self.configure(fg_color=BG)
+        self.transient(master); self.grab_set()
+
+        top = ctk.CTkFrame(self, fg_color="transparent"); top.pack(fill="x", padx=16, pady=(14, 4))
+        ctk.CTkLabel(top, text="📈  Indicadores de gestion por persona", text_color=NAVY,
+                     font=("Segoe UI", 16, "bold")).pack(side="left")
+        ctk.CTkButton(top, text="⬇ Descargar Excel", height=34, fg_color=GREEN,
+                      hover_color=GREEN_H, command=self._exportar).pack(side="right")
+
+        self.meses = self._meses()
+        self.v_mes = tk.StringVar(value=self.meses[0])
+        bar = ctk.CTkFrame(self, fg_color="transparent"); bar.pack(fill="x", padx=16, pady=(4, 6))
+        ctk.CTkLabel(bar, text="Periodo:", text_color=MUTED).pack(side="left", padx=(0, 6))
+        ctk.CTkOptionMenu(bar, variable=self.v_mes, values=self.meses, width=180, height=34,
+                          fg_color=NAVY, button_color=NAVY2,
+                          command=lambda _v=None: self._pintar()).pack(side="left")
+        ctk.CTkLabel(bar, text="Las tareas se cuentan por responsable; las cotizaciones y "
+                     "reservas, por quien las hizo.", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(side="left", padx=12)
+
+        hdr = ctk.CTkFrame(self, fg_color=NAVY, corner_radius=6); hdr.pack(fill="x", padx=16)
+        for txt, w in self.COLS:
+            ctk.CTkLabel(hdr, text=txt, text_color="#FFFFFF", font=("Segoe UI", 11, "bold"),
+                         width=w, anchor="w").pack(side="left", padx=4, pady=6)
+        self.box = ctk.CTkScrollableFrame(self, fg_color=CARD)
+        self.box.pack(fill="both", expand=True, padx=16, pady=(2, 14))
+        self._pintar()
+
+    def _meses(self):
+        ms = set()
+        for t in cargar_tareas().get("items", []):
+            m = _mes_de_iso(t.get("fecha_creacion", ""))
+            if m:
+                ms.add(m)
+        for c in cargar_cotizaciones().get("items", []):
+            f = parse_fecha(c.get("fecha", ""))
+            if f:
+                ms.add(f.strftime("%Y-%m"))
+        for r in cargar_reservas().get("items", []):
+            m = _mes_de_iso(r.get("fecha_creacion", ""))
+            if m:
+                ms.add(m)
+        return ["Todo el historico"] + sorted(ms, reverse=True)
+
+    def _mes_sel(self):
+        m = self.v_mes.get()
+        return None if m == "Todo el historico" else m
+
+    def _pintar(self):
+        for w in self.box.winfo_children():
+            w.destroy()
+        filas = indicadores_por_persona(self._mes_sel())
+        if not filas:
+            ctk.CTkLabel(self.box, text="Aun no hay gestion registrada en este periodo.",
+                         text_color=MUTED).pack(pady=24)
+            return
+        for i, f in enumerate(filas):
+            fg = "#FFFFFF" if i % 2 == 0 else CARD2
+            row = ctk.CTkFrame(self.box, fg_color=fg, corner_radius=8); row.pack(fill="x", pady=2)
+            vals = [
+                (f["persona"], NAVY, "bold"),
+                (str(f["tareas"]), TEXT, "normal"),
+                (str(f["completadas"]), GREEN_H, "normal"),
+                (str(f["vencidas"]), RED if f["vencidas"] else MUTED, "normal"),
+                (f"{f['cumplimiento']}%", GREEN_H if f["cumplimiento"] >= 70 else "#D9A400", "bold"),
+                (str(f["cot_n"]), TEXT, "normal"),
+                (str(f["ganadas"]), GREEN_H, "normal"),
+                (f"{f['conversion']}%", GREEN_H if f["conversion"] >= 20 else "#D9A400", "bold"),
+                (usd(f["ganadas_usd"]), NAVY, "bold"),
+                (usd(f["ticket"]), MUTED, "normal"),
+                (str(f["reservas_n"]), BLUE, "normal"),
+                (usd(f["reservas_usd"]), NAVY, "normal"),
+            ]
+            for (txt, col, peso), (_h, w) in zip(vals, self.COLS):
+                ctk.CTkLabel(row, text=txt, text_color=col, width=w, anchor="w",
+                             font=("Segoe UI", 11, peso)).pack(side="left", padx=4, pady=6)
+
+    def _exportar(self):
+        mes = self._mes_sel()
+        ruta = filedialog.asksaveasfilename(
+            title="Guardar indicadores", defaultextension=".xlsx",
+            initialfile=f"Indicadores_{mes or 'historico'}.xlsx",
+            filetypes=[("Excel", "*.xlsx")])
+        if not ruta:
+            return
+        try:
+            exportar_indicadores_persona(ruta, mes)
+            os.startfile(ruta)
+        except Exception as e:
+            messagebox.showerror("Error", str(e), parent=self)
 
 
 class VentanaRankingContactos(ctk.CTkToplevel):
@@ -9441,14 +9866,44 @@ def guardar_mice(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+def vence_el(fecha_txt, meses=VIGENCIA_MESES):
+    """Fecha hasta la que es valida una cotizacion (1 mes desde su elaboracion)."""
+    f = parse_fecha(fecha_txt or "")
+    if not f:
+        f = datetime.date.today()
+    return add_months(f, meses)
+
+
 def registrar_mice(rec):
     data = cargar_mice()
     data["seq"] = int(data.get("seq", 0)) + 1
     rec = dict(rec); rec["numero"] = f"MICE-{data['seq']:05d}"
     if not rec.get("uid"):
         rec["uid"] = "MICE-" + uuid.uuid4().hex[:12]
+    rec.setdefault("fecha", datetime.date.today().strftime("%d/%m/%Y"))
+    rec["vence"] = vence_el(rec.get("fecha", "")).strftime("%d/%m/%Y")
     data["items"].append(rec); guardar_mice(data)
     return rec["numero"]
+
+
+def depurar_mice_vencidas():
+    """Borra las cotizaciones MICE que ya pasaron su mes de vigencia. Respeta las
+       que estan Ganadas o En seguimiento. Devuelve cuantas elimino."""
+    data = cargar_mice()
+    hoy = datetime.date.today()
+    quedan, borradas = [], 0
+    for it in data.get("items", []):
+        if it.get("estado") in ("Ganada", "En seguimiento"):
+            quedan.append(it); continue
+        limite = parse_fecha(it.get("vence", "")) or vence_el(it.get("fecha", ""))
+        if limite and limite < hoy:
+            borradas += 1
+        else:
+            quedan.append(it)
+    if borradas:
+        data["items"] = quedan
+        guardar_mice(data)
+    return borradas
 
 
 def actualizar_mice(numero, cambios):
@@ -9625,6 +10080,7 @@ def generar_pdf_mice(cfg, rec, ruta):
     ops = rec.get("opciones", []) or [{}]
     x0 = 15                      # margen izquierdo
     limite = lambda: pdf.h - 20  # donde hay que saltar de pagina
+    vence_txt = rec.get("vence", "") or vence_el(rec.get("fecha", "")).strftime("%d/%m/%Y")
     for i, op in enumerate(ops):
         pdf.add_page()
         pdf.set_auto_page_break(False)     # los saltos se controlan a mano
@@ -9641,7 +10097,7 @@ def generar_pdf_mice(cfg, rec, ruta):
             ("Evento", rec.get("evento", "")), ("Ciudad", op.get("ciudad", "")),
             ("No. de pasajeros", rec.get("pax", "")), ("Fechas del evento", rec.get("fechas_evento", "")),
             ("No. de cotizacion", rec.get("numero", "")), ("Fecha", rec.get("fecha", "")),
-            ("Asesor", rec.get("cotizado_por", "")),
+            ("Asesor", rec.get("cotizado_por", "")), ("Valida hasta", vence_txt),
         ])
 
         # ---------------- Hoteles ----------------
@@ -9773,7 +10229,18 @@ def generar_pdf_mice(cfg, rec, ruta):
                     pdf.add_page()
                     pdf.set_font("Helvetica", "", 8.5); pdf.set_text_color(*PDF_TXT)
                 pdf.set_x(x0); pdf.cell(MICE_W, 4.8, T(parrafo), ln=1)
+
+    # ---- Politicas de reserva (pagina propia al final) ----
     pdf.set_auto_page_break(True, margin=18)
+    pdf.add_page()
+    pdf.set_x(x0); pdf.set_fill_color(*PDF_PRIM); pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(MICE_W, 8, T("  POLITICAS DE RESERVA - CONDICIONES GENERALES Y DE PAGO"),
+             ln=1, fill=True)
+    pdf.set_text_color(*PDF_TXT); pdf.ln(2)
+    _politicas_reserva(pdf, x0, MICE_W,
+                       vigencia=f"1 mes desde su elaboracion. Esta cotizacion es valida "
+                                f"hasta el {vence_txt}.")
     pdf.output(ruta)
     return ruta
 
@@ -10256,6 +10723,10 @@ class ModuloMICE(ctk.CTkToplevel):
             pass
         self.title(f"MICE / Eventos - INNOBA Colombia DMC   v{VERSION}")
         self.configure(fg_color=BG); self.geometry("1180x720")
+        try:
+            depurar_mice_vencidas()   # 1 mes de vigencia desde que se elabora
+        except Exception:
+            pass
         self._build()
         self.after(60, self._max)
 
@@ -10339,8 +10810,21 @@ class ModuloMICE(ctk.CTkToplevel):
         ctk.CTkLabel(info, text=(it.get("empresa", "") or "(sin empresa)"), text_color=TEXT,
                      font=("Segoe UI", 13, "bold")).pack(anchor="w")
         ctk.CTkLabel(info, text=f"{it.get('evento','')}  ·  {it.get('pax','')} pax  ·  "
-                     f"{len(it.get('opciones', []))} opcion(es)", text_color=MUTED,
+                     f"{len(it.get('opciones', []))} opcion(es)  ·  "
+                     f"{it.get('cotizado_por','') or 'sin asesor'}", text_color=MUTED,
                      font=("Segoe UI", 11)).pack(anchor="w")
+        vnc = parse_fecha(it.get("vence", "")) or vence_el(it.get("fecha", ""))
+        if vnc:
+            dias = (vnc - datetime.date.today()).days
+            if it.get("estado") in ("Ganada", "En seguimiento"):
+                txt, col = f"Valida hasta {vnc.strftime('%d/%m/%Y')} (no se depura)", MUTED
+            elif dias < 0:
+                txt, col = "VENCIDA - se elimina al abrir el modulo", RED
+            elif dias <= 7:
+                txt, col = f"Vence en {dias} dia(s) - {vnc.strftime('%d/%m/%Y')}", "#D9A400"
+            else:
+                txt, col = f"Valida hasta {vnc.strftime('%d/%m/%Y')}", MUTED
+            ctk.CTkLabel(info, text=txt, text_color=col, font=("Segoe UI", 10)).pack(anchor="w")
         ctk.CTkLabel(fila, text=usd(total_mice(it)), text_color=NAVY,
                      font=("Segoe UI", 13, "bold")).grid(row=0, column=2, rowspan=2, padx=10)
         ctk.CTkLabel(fila, text=it.get("estado", "Pendiente"),

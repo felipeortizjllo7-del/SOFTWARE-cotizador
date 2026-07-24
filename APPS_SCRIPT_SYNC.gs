@@ -100,11 +100,13 @@ function doGet(e) {
   return _json({ items: _leer(tipo) });
 }
 
-// 'reserva'->reservas ; 'solicitud'->solicitudes ; cualquier otra cosa -> cotizaciones
+// 'reserva'->reservas ; 'solicitud'->solicitudes ; 'tarea'->tareas ;
+// cualquier otra cosa -> cotizaciones
 function _tipo(t) {
   t = String(t || '').toLowerCase();
   if (t === 'reserva' || t === 'reservas') return 'reservas';
   if (t === 'solicitud' || t === 'solicitudes') return 'solicitudes';
+  if (t === 'tarea' || t === 'tareas') return 'tareas';
   return 'cotizaciones';
 }
 
