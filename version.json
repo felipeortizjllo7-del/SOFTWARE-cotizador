@@ -1,5 +1,5 @@
 {
-  "version": "11.2",
+  "version": "11.3",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 11.2 - Reserva web: proteccion para que una solicitud NUNCA se pierda (si Drive no esta autorizado, la solicitud se guarda igual sin los archivos) y se ignoran registros vacios o anulados para que no creen ordenes en blanco."
+  "notas": "Corrige error 'too many values to unpack' al descargar el voucher del cliente; ahora el voucher del cliente tambien muestra el numero de vuelo de cada pasajero."
 }

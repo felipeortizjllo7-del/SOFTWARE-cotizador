@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "11.2"
+VERSION = "11.3"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -3180,18 +3180,26 @@ def generar_voucher_cliente(cfg, res, ruta):
     pdf.ln(1)
     pdf.set_x(12); pdf.set_font("Helvetica", "B", 9); pdf.set_fill_color(*PDF_PRIM)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(96, 7, T("PASAJEROS"), border=1, fill=True, align="C")
-    pdf.cell(46, 7, T("IDENTIFICACION"), border=1, fill=True, align="C")
-    pdf.cell(44, 7, T("TELEFONO"), border=1, ln=1, fill=True, align="C")
+    pdf.cell(70, 7, T("PASAJEROS"), border=1, fill=True, align="C")
+    pdf.cell(40, 7, T("IDENTIFICACION"), border=1, fill=True, align="C")
+    pdf.cell(38, 7, T("TELEFONO"), border=1, fill=True, align="C")
+    pdf.cell(38, 7, T("VUELO"), border=1, ln=1, fill=True, align="C")
     pax = pasajeros_de(res)
     if not pax:
-        pax = [(res.get("pax_txt", "") or "-", "", "")]
+        pax = [(res.get("pax_txt", "") or "-", "", "", "")]
     pdf.set_text_color(*PDF_TXT)
-    for nom, doc, tel in pax:
+    for p in pax:
+        nom = p[0] if len(p) > 0 else ""
+        doc = p[1] if len(p) > 1 else ""
+        tel = p[2] if len(p) > 2 else ""
+        vue = p[3] if len(p) > 3 else ""
+        if not vue:
+            vue = res.get("os_vuelo_llegada", "") or ""
         pdf.set_x(12); pdf.set_font("Helvetica", "", 8.5)
-        pdf.cell(96, 6, T(" " + nom), border=1)
-        pdf.cell(46, 6, T(" " + doc), border=1, align="C")
-        pdf.cell(44, 6, T(" " + tel), border=1, ln=1, align="C")
+        pdf.cell(70, 6, T(" " + nom), border=1)
+        pdf.cell(40, 6, T(" " + doc), border=1, align="C")
+        pdf.cell(38, 6, T(" " + tel), border=1, align="C")
+        pdf.cell(38, 6, T(" " + str(vue)[:22]), border=1, ln=1, align="C")
 
     # --- Datos generales ---
     pdf.ln(1)
