@@ -1,5 +1,5 @@
 {
-  "version": "11.3",
+  "version": "11.4",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Corrige error 'too many values to unpack' al descargar el voucher del cliente; ahora el voucher del cliente tambien muestra el numero de vuelo de cada pasajero."
+  "notas": "PDF de MICE rediseniado: encabezado en dos columnas alineado, tablas con anchos corregidos, descripciones largas en renglon aparte y saltos de pagina que ya no parten las filas."
 }

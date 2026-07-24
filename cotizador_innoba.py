@@ -60,7 +60,7 @@ CONFIG_PATH = os.path.join(datos_dir(), "config_empresa.json")
 # ============================================================================
 # IMPORTANTE: este numero se incrementa en cada ajuste (lo hace publicar_version.py).
 # Esquema resumido de 2 digitos: 1.0 -> 1.1 -> ... -> 1.9 -> 2.0
-VERSION = "11.3"
+VERSION = "11.4"
 GITHUB_OWNER = "felipeortizjllo7-del"
 GITHUB_REPO = "SOFTWARE-cotizador"
 # Webhook (Google Apps Script /exec) por donde el HTML de los clientes envia sus
@@ -9552,96 +9552,228 @@ class MICEPDF(CotizacionPDF):
     pass
 
 
+# Ancho util de la hoja (A4 con margenes de 15 mm) y descripcion que se saca
+# a un renglon aparte de ancho completo en vez de apretarla en la columna.
+MICE_W = 180
+MICE_DESC_CORTA = 78
+
+
+def _mice_alto(pdf, w, h, txt):
+    """Alto que ocupara un texto dentro de una celda de ancho w (sin dibujarlo)."""
+    if not str(txt or "").strip():
+        return h
+    try:
+        lineas = pdf.multi_cell(w, h, pdf._t(str(txt)), border=0, align="L",
+                                dry_run=True, output="LINES")
+        return h * max(1, len(lineas))
+    except Exception:
+        return h
+
+
+def _mice_cabecera_tabla(pdf):
+    """Encabezado de la tabla de minuto a minuto (se repite en cada pagina)."""
+    T = pdf._t
+    pdf.set_fill_color(*PDF_CLARO); pdf.set_text_color(*PDF_PRIM)
+    pdf.set_font("Helvetica", "B", 8.5)
+    pdf.set_x(pdf.l_margin)
+    for w, txt, al in ((22, " DIA", "L"), (42, " SERVICIO", "L"), (52, " DESCRIPCION", "L"),
+                       (14, "CANT", "C"), (24, "UNIT. ", "R"), (26, "TOTAL ", "R")):
+        pdf.cell(w, 7, T(txt), border=1, fill=True, align=al)
+    pdf.ln(7)
+    pdf.set_text_color(*PDF_TXT); pdf.set_font("Helvetica", "", 8.5)
+
+
+def _mice_info(pdf, pares):
+    """Bloque de datos en dos columnas: etiqueta gris + valor, siempre alineados."""
+    T = pdf._t
+    pares = [(e, str(v)) for e, v in pares if str(v or "").strip()]
+    x0 = pdf.l_margin
+    we, wv = 38, 52          # etiqueta + valor  (38+52)*2 = 180
+    for i in range(0, len(pares), 2):
+        fila = pares[i:i + 2]
+        alto = 6.4
+        for j, (et, val) in enumerate(fila):
+            alto = max(alto, _mice_alto(pdf, wv - 2, 5.2, val) + 1.2)
+        y = pdf.get_y()
+        for j, (et, val) in enumerate(fila):
+            x = x0 + j * (we + wv)
+            pdf.set_xy(x, y)
+            pdf.set_fill_color(*PDF_CLARO); pdf.set_text_color(*PDF_PRIM)
+            pdf.set_font("Helvetica", "B", 8.5)
+            pdf.cell(we, alto, T(" " + et), border=1, fill=True)
+            pdf.set_text_color(*PDF_TXT); pdf.set_font("Helvetica", "", 8.5)
+            pdf.set_xy(x + we, y)
+            pdf.multi_cell(wv, alto / max(1, len(_particiones(pdf, wv - 2, 5.2, val))),
+                           T(" " + val), border=1, align="L")
+        # si la fila quedo impar, cerrar el espacio sobrante con un recuadro vacio
+        if len(fila) == 1:
+            pdf.set_xy(x0 + we + wv, y)
+            pdf.cell(we + wv, alto, "", border=1)
+        pdf.set_xy(x0, y + alto)
+
+
+def _particiones(pdf, w, h, txt):
+    try:
+        return pdf.multi_cell(w, h, pdf._t(str(txt)), border=0, align="L",
+                              dry_run=True, output="LINES") or [""]
+    except Exception:
+        return [""]
+
+
 def generar_pdf_mice(cfg, rec, ruta):
     pdf = MICEPDF(cfg); T = pdf._t
     ops = rec.get("opciones", []) or [{}]
+    x0 = 15                      # margen izquierdo
+    limite = lambda: pdf.h - 20  # donde hay que saltar de pagina
     for i, op in enumerate(ops):
         pdf.add_page()
+        pdf.set_auto_page_break(False)     # los saltos se controlan a mano
         pdf.ln(2)
         pdf.set_fill_color(*PDF_PRIM); pdf.set_text_color(255, 255, 255)
         pdf.set_font("Helvetica", "B", 12)
         tit = op.get("nombre") or op.get("ciudad") or f"OPCION {i + 1}"
-        pdf.cell(0, 9, T("COTIZACION MICE - " + tit), ln=1, fill=True, align="C")
-        pdf.set_text_color(*PDF_TXT); pdf.ln(2)
-        info = [("Empresa / Cliente", rec.get("empresa", "")), ("Contacto", rec.get("contacto", "")),
-                ("Evento", rec.get("evento", "")), ("Ciudad", op.get("ciudad", "")),
-                ("No. de pasajeros", str(rec.get("pax", "") or "")),
-                ("Fechas del evento", rec.get("fechas_evento", "")),
-                ("No. de cotizacion", rec.get("numero", "")), ("Fecha", rec.get("fecha", "")),
-                ("Asesor", rec.get("cotizado_por", ""))]
-        for et, val in info:
-            if val:
-                pdf.set_font("Helvetica", "B", 9); pdf.cell(46, 5.6, T(et + ":"), border=0)
-                pdf.set_font("Helvetica", "", 9); pdf.multi_cell(0, 5.6, T(str(val)))
-        # Hoteles
+        pdf.set_x(x0)
+        pdf.cell(MICE_W, 9, T("COTIZACION MICE - " + tit), ln=1, fill=True, align="C")
+        pdf.set_text_color(*PDF_TXT); pdf.ln(2.5)
+
+        _mice_info(pdf, [
+            ("Empresa / Cliente", rec.get("empresa", "")), ("Contacto", rec.get("contacto", "")),
+            ("Evento", rec.get("evento", "")), ("Ciudad", op.get("ciudad", "")),
+            ("No. de pasajeros", rec.get("pax", "")), ("Fechas del evento", rec.get("fechas_evento", "")),
+            ("No. de cotizacion", rec.get("numero", "")), ("Fecha", rec.get("fecha", "")),
+            ("Asesor", rec.get("cotizado_por", "")),
+        ])
+
+        # ---------------- Hoteles ----------------
         hoteles = op.get("hoteles", [])
         if hoteles:
-            pdf.ln(2); pdf.set_fill_color(*PDF_CLARO); pdf.set_text_color(*PDF_PRIM)
+            pdf.ln(3)
+            pdf.set_x(x0); pdf.set_fill_color(*PDF_PRIM); pdf.set_text_color(255, 255, 255)
             pdf.set_font("Helvetica", "B", 9)
-            pdf.cell(52, 7, T(" HOTEL"), border=1, fill=True)
-            pdf.cell(24, 7, T("ALIMENT."), border=1, fill=True, align="C")
-            pdf.cell(22, 7, T("CATEGORIA"), border=1, fill=True, align="C")
-            pdf.cell(14, 7, T("NOCHES"), border=1, fill=True, align="C")
-            pdf.cell(24, 7, T("SENCILLA"), border=1, fill=True, align="R")
-            pdf.cell(24, 7, T("DOBLE"), border=1, fill=True, align="R")
-            pdf.cell(0, 7, T("TRIPLE"), border=1, fill=True, align="R", ln=1)
-            pdf.set_text_color(*PDF_TXT); pdf.set_font("Helvetica", "", 9)
-            for h in hoteles:
+            pdf.cell(MICE_W, 7, T("  ALOJAMIENTO"), ln=1, fill=True)
+            pdf.set_x(x0); pdf.set_fill_color(*PDF_CLARO); pdf.set_text_color(*PDF_PRIM)
+            pdf.set_font("Helvetica", "B", 8.5)
+            for w, txt, al in ((52, " HOTEL", "L"), (24, "ALIMENT.", "C"), (22, "CATEGORIA", "C"),
+                               (14, "NOCHES", "C"), (23, "SENCILLA ", "R"), (23, "DOBLE ", "R"),
+                               (22, "TRIPLE ", "R")):
+                pdf.cell(w, 7, T(txt), border=1, fill=True, align=al)
+            pdf.ln(7)
+            pdf.set_text_color(*PDF_TXT); pdf.set_font("Helvetica", "", 8.5)
+            for k, h in enumerate(hoteles):
                 try:
-                    noc = int(float(h.get("noches", 1) or 1))
+                    noc = max(1, int(float(h.get("noches", 1) or 1)))
                 except Exception:
                     noc = 1
-                noc = max(1, noc)
                 def _tot(acc):
                     try:
                         return float(h.get(acc, 0) or 0) * noc
                     except Exception:
                         return 0.0
-                pdf.cell(52, 6.5, T(" " + str(h.get("hotel", ""))[:36]), border=1)
-                pdf.cell(24, 6.5, T(str(h.get("alimentacion", ""))[:12]), border=1, align="C")
-                pdf.cell(22, 6.5, T(str(h.get("categoria", ""))), border=1, align="C")
-                pdf.cell(14, 6.5, T(str(noc)), border=1, align="C")
-                pdf.cell(24, 6.5, T(usd(_tot("sencilla"))), border=1, align="R")
-                pdf.cell(24, 6.5, T(usd(_tot("doble"))), border=1, align="R")
-                pdf.cell(0, 6.5, T(usd(_tot("triple"))), border=1, align="R", ln=1)
-            pdf.set_font("Helvetica", "I", 8)
-            pdf.cell(0, 5, T("Valores por persona por TODO el alojamiento "
-                             "(precio por noche x numero de noches)."), ln=1)
-        # Minuto a minuto
-        pdf.ln(2); pdf.set_fill_color(*PDF_PRIM); pdf.set_text_color(255, 255, 255)
+                if pdf.get_y() + 7 > limite():
+                    pdf.add_page(); pdf.set_y(pdf.get_y())
+                zebra = (k % 2 == 1)
+                pdf.set_fill_color(247, 249, 252)
+                pdf.set_x(x0)
+                pdf.cell(52, 6.5, T(" " + str(h.get("hotel", ""))[:38]), border=1, fill=zebra)
+                pdf.cell(24, 6.5, T(str(h.get("alimentacion", ""))[:13]), border=1, align="C", fill=zebra)
+                pdf.cell(22, 6.5, T(str(h.get("categoria", ""))), border=1, align="C", fill=zebra)
+                pdf.cell(14, 6.5, T(str(noc)), border=1, align="C", fill=zebra)
+                pdf.cell(23, 6.5, T(usd(_tot("sencilla")) + " "), border=1, align="R", fill=zebra)
+                pdf.cell(23, 6.5, T(usd(_tot("doble")) + " "), border=1, align="R", fill=zebra)
+                pdf.cell(22, 6.5, T(usd(_tot("triple")) + " "), border=1, align="R", ln=1, fill=zebra)
+            pdf.set_x(x0); pdf.set_font("Helvetica", "I", 7.5); pdf.set_text_color(120, 120, 120)
+            pdf.cell(MICE_W, 5, T("Valores por persona por todo el alojamiento "
+                                  "(precio por noche x numero de noches)."), ln=1)
+            pdf.set_text_color(*PDF_TXT)
+
+        # ---------------- Minuto a minuto ----------------
+        pdf.ln(3)
+        if pdf.get_y() + 24 > limite():
+            pdf.add_page()
+        pdf.set_x(x0); pdf.set_fill_color(*PDF_PRIM); pdf.set_text_color(255, 255, 255)
         pdf.set_font("Helvetica", "B", 9)
-        pdf.cell(0, 7, T(" MINUTO A MINUTO"), ln=1, fill=True)
-        pdf.set_fill_color(*PDF_CLARO); pdf.set_text_color(*PDF_PRIM); pdf.set_font("Helvetica", "B", 8.5)
-        W = [22, 34, 66, 12, 22, 24]
-        pdf.cell(W[0], 6.5, T(" FECHA"), border=1, fill=True)
-        pdf.cell(W[1], 6.5, T("ITEM"), border=1, fill=True)
-        pdf.cell(W[2], 6.5, T("DESCRIPCION"), border=1, fill=True)
-        pdf.cell(W[3], 6.5, T("CANT"), border=1, fill=True, align="C")
-        pdf.cell(W[4], 6.5, T("UNIT."), border=1, fill=True, align="R")
-        pdf.cell(W[5], 6.5, T("TOTAL"), border=1, fill=True, align="R", ln=1)
-        pdf.set_text_color(*PDF_TXT); pdf.set_font("Helvetica", "", 8.5)
-        x0 = pdf.l_margin
-        for ln in op.get("lineas", []):
-            cant = float(ln.get("cantidad", 0) or 0); unit = float(ln.get("unitario", 0) or 0)
+        pdf.cell(MICE_W, 7, T("  MINUTO A MINUTO"), ln=1, fill=True)
+        _mice_cabecera_tabla(pdf)
+
+        W = (22, 42, 52, 14, 24, 26)
+        for k, ln in enumerate(op.get("lineas", [])):
+            cant = _num(ln.get("cantidad", 0)); unit = _num(ln.get("unitario", 0))
             tot = cant * unit
-            y0 = pdf.get_y()
-            pdf.set_xy(x0, y0); pdf.multi_cell(W[0], 5, T(" " + str(ln.get("dia", ""))), border=1)
-            h1 = pdf.get_y() - y0
-            pdf.set_xy(x0 + W[0], y0); pdf.multi_cell(W[1], 5, T(" " + str(ln.get("item", ""))), border=1)
-            h2 = pdf.get_y() - y0
-            pdf.set_xy(x0 + W[0] + W[1], y0); pdf.multi_cell(W[2], 5, T(" " + str(ln.get("descripcion", ""))), border=1)
-            h3 = pdf.get_y() - y0
-            hh = max(h1, h2, h3, 5)
-            pdf.set_xy(x0 + W[0] + W[1] + W[2], y0); pdf.cell(W[3], hh, T(f"{cant:g}"), border=1, align="C")
-            pdf.cell(W[4], hh, T(usd(unit)), border=1, align="R")
-            pdf.cell(W[5], hh, T(usd(tot)), border=1, align="R", ln=1)
-            pdf.set_y(y0 + hh)
-        pdf.ln(1); pdf.set_font("Helvetica", "B", 11); pdf.set_text_color(*PDF_PRIM)
-        pdf.cell(0, 8, T(f"TOTAL {tit}:   {usd(total_opcion_mice(op))}"), ln=1, align="R")
+            dia = str(ln.get("dia", "") or "")
+            item = str(ln.get("item", "") or "")
+            desc = str(ln.get("descripcion", "") or "").strip()
+            corta = desc if len(desc) <= MICE_DESC_CORTA else ""
+            larga = desc if len(desc) > MICE_DESC_CORTA else ""
+
+            pdf.set_font("Helvetica", "", 8.5)
+            hh = max(6.5, _mice_alto(pdf, W[0] - 2, 5, dia),
+                     _mice_alto(pdf, W[1] - 2, 5, item),
+                     _mice_alto(pdf, W[2] - 2, 5, corta) + 1)
+            # el renglon (y su descripcion larga) no se parte a la mitad
+            alto_larga = 0
+            if larga:
+                pdf.set_font("Helvetica", "", 8)
+                alto_larga = _mice_alto(pdf, MICE_W - 6, 4.4, larga) + 3
+                pdf.set_font("Helvetica", "", 8.5)
+            if pdf.get_y() + hh + min(alto_larga, 40) > limite():
+                pdf.add_page(); _mice_cabecera_tabla(pdf)
+
+            y = pdf.get_y()
+            zebra = (k % 2 == 1)
+            pdf.set_fill_color(247, 249, 252)
+            pdf.set_xy(x0, y); pdf.multi_cell(W[0], hh / max(1, len(_particiones(pdf, W[0] - 2, 5, dia))),
+                                              T(" " + dia), border=1, fill=zebra)
+            pdf.set_xy(x0 + W[0], y)
+            pdf.multi_cell(W[1], hh / max(1, len(_particiones(pdf, W[1] - 2, 5, item))),
+                           T(" " + item), border=1, fill=zebra)
+            pdf.set_xy(x0 + W[0] + W[1], y)
+            if corta:
+                pdf.multi_cell(W[2], hh / max(1, len(_particiones(pdf, W[2] - 2, 5, corta))),
+                               T(" " + corta), border=1, fill=zebra)
+            else:
+                pdf.cell(W[2], hh, T("  (ver detalle abajo)" if larga else ""),
+                         border=1, fill=zebra)
+            pdf.set_xy(x0 + W[0] + W[1] + W[2], y)
+            pdf.cell(W[3], hh, T(f"{cant:g}"), border=1, align="C", fill=zebra)
+            pdf.cell(W[4], hh, T(usd(unit) + " "), border=1, align="R", fill=zebra)
+            pdf.cell(W[5], hh, T(usd(tot) + " "), border=1, align="R", fill=zebra)
+            pdf.set_xy(x0, y + hh)
+
+            if larga:
+                pdf.set_font("Helvetica", "", 8); pdf.set_text_color(90, 90, 90)
+                for parrafo in _particiones(pdf, MICE_W - 6, 4.4, larga):
+                    if pdf.get_y() + 4.4 > limite():
+                        pdf.add_page()
+                        pdf.set_font("Helvetica", "", 8); pdf.set_text_color(90, 90, 90)
+                    pdf.set_x(x0)
+                    pdf.cell(MICE_W, 4.4, T("   " + parrafo), border="LR")
+                    pdf.set_xy(x0, pdf.get_y() + 4.4)
+                pdf.set_x(x0); pdf.cell(MICE_W, 0.6, "", border="LRB", ln=1)
+                pdf.set_text_color(*PDF_TXT); pdf.set_font("Helvetica", "", 8.5)
+
+        # ---------------- Total ----------------
+        if pdf.get_y() + 12 > limite():
+            pdf.add_page()
+        pdf.set_x(x0); pdf.set_fill_color(*PDF_PRIM); pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Helvetica", "B", 10.5)
+        pdf.cell(MICE_W - 44, 9, T("  TOTAL " + tit), border=0, fill=True)
+        pdf.cell(44, 9, T(usd(total_opcion_mice(op)) + "  "), border=0, fill=True, align="R", ln=1)
+        pdf.set_text_color(*PDF_TXT)
+
         notas = rec.get("notas", "")
         if notas:
-            pdf.ln(1); pdf.set_font("Helvetica", "", 8.5); pdf.set_text_color(*PDF_TXT)
-            pdf.multi_cell(0, 5, T("Notas: " + notas))
+            if pdf.get_y() + 14 > limite():
+                pdf.add_page()
+            pdf.ln(3); pdf.set_x(x0)
+            pdf.set_font("Helvetica", "B", 8.5); pdf.set_text_color(*PDF_PRIM)
+            pdf.cell(MICE_W, 5.5, T("NOTAS"), ln=1)
+            pdf.set_font("Helvetica", "", 8.5); pdf.set_text_color(*PDF_TXT)
+            for parrafo in _particiones(pdf, MICE_W, 4.8, notas):
+                if pdf.get_y() + 4.8 > limite():
+                    pdf.add_page()
+                    pdf.set_font("Helvetica", "", 8.5); pdf.set_text_color(*PDF_TXT)
+                pdf.set_x(x0); pdf.cell(MICE_W, 4.8, T(parrafo), ln=1)
+    pdf.set_auto_page_break(True, margin=18)
     pdf.output(ruta)
     return ruta
 
