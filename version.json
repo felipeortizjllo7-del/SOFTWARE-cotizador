@@ -1,6 +1,6 @@
 {
-  "version": "14.1",
+  "version": "14.2",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Cotizador HTML: el precio de los vuelos es SOLO para el cliente (suma en el PDF/total del cliente) y ya NO viaja a INNOBA (.exe) ni en el total ni en el snapshot, igual que el margen de la agencia.",
-  "sha256": "77c81930d9891a00e784155134258e4d07c7ed837bf7a52403ff4bc561b5c9dc"
+  "notas": "Cotizador HTML: casilla 'Incluir vuelos en esta cotizacion'. Si NO se marca, los vuelos no suman al total ni salen en el PDF. Solo cuando se marca influyen (y siempre son solo para el cliente, no van a INNOBA).",
+  "sha256": "36d8b7ca30c8fc4c1cf24bbf4710865ef4bd9032b7817abbd96cd5a2552f3744"
 }
