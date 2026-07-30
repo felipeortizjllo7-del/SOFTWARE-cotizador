@@ -1,6 +1,6 @@
 {
-  "version": "13.8",
+  "version": "13.9",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Reservas: casilla 'Revisado por contabilidad' + campo 'Novedades' (pagos parciales). HTML de reservas: asesoras unificadas (mismo nombre = una sola) y vista de Liquidacion + novedades + revisado. MICE: boton mas compacto. Se cambio 'nino' por 'nino/ninos' con tilde en la interfaz.",
-  "sha256": "6f965a49078264750f91c9d139d2f0778ff489c4ae667322c14a18bd1be5585b"
+  "notas": "Cotizador: el buscador de productos (hoteles y servicios) al armar la cotizacion ahora es insensible a tildes y mayusculas (buscar 'medellin' encuentra 'Medellin').",
+  "sha256": "60543c90c2685026d8133d3cd78f568f3597ad4311243fd6e842db5d88aa335c"
 }
