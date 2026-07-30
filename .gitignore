@@ -1,0 +1,16 @@
+# =====================================================================
+#  REPOSITORIO PUBLICO = SOLO el sitio web (GitHub Pages) + version.json
+#  NUNCA se sube codigo fuente, llaves, ni datos (clientes, tarifas...).
+#  Politica de LISTA BLANCA: se ignora TODO y solo se permite lo de abajo.
+# =====================================================================
+/*
+
+# --- Unico contenido permitido en el repo publico ---
+!/.gitignore
+!/index.html        # Cotizador para clientes (GitHub Pages)
+!/reservas.html     # Modulo de reservas web (con login)
+!/version.json      # Manifiesto de autoactualizacion del .exe
+
+# El instalador .exe se distribuye por "Releases", no por el arbol del repo.
+# Todo lo demas (cotizador_innoba.py, APPS_SCRIPT_SYNC.gs, publicar_version.py,
+# clientes.json, precios_2026.json, *.md, imagenes, etc.) vive SOLO en tu equipo.
