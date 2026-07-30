@@ -102,6 +102,32 @@ async function api(payload){
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function usd(v){const n=parseFloat(v)||0;return "USD "+n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});}
 function aseNom(r){const a=r.asesor;return (a&&typeof a==="object")?(a.nombre||""):(a||"");}
+// --- Unificar asesoras por coincidencia de nombre (mismo primer nombre) ---
+let ASE_CANON={};   // primer-nombre -> nombre a mostrar (el mas completo)
+function normTxt(s){return String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toUpperCase().replace(/\s+/g," ").trim();}
+function canonAse(name){const n=normTxt(name);return n?n.split(" ")[0]:"";}
+function titleCase(s){return String(s||"").toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase());}
+function dispAse(r){const k=canonAse(aseNom(r));return ASE_CANON[k]||titleCase(aseNom(r))||"-";}
+function liquidacionHTML(r){
+ let h="";
+ const cob=(r.items_cobro||[]).filter(x=>x&&(x.desc||x.valor));
+ if(cob.length){
+  const fila=x=>{const v=(parseFloat(x.valor)||0)*(parseInt(x.cant)||1);
+   return `<div style="display:flex;justify-content:space-between;gap:10px"><span>${esc(x.desc||"Item")}${(parseInt(x.cant)||1)>1?` (x${parseInt(x.cant)})`:""}</span><b>${usd(v)}</b></div>`;};
+  const tot=cob.reduce((a,x)=>a+(parseFloat(x.valor)||0)*(parseInt(x.cant)||1),0);
+  h+=`<div style="margin-top:8px;padding:8px 10px;background:#fff;border:1px solid var(--line);border-radius:8px">
+   <div style="color:var(--grey);font-weight:700;font-size:12px;margin-bottom:4px">LIQUIDACIÓN</div>
+   ${cob.map(fila).join("")}
+   <div style="display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:4px;padding-top:4px"><b>Total</b><b>${usd(tot)}</b></div>
+  </div>`;
+ }
+ if((r.novedades||"").trim()){ h+=`<div style="margin-top:6px"><b>Novedades:</b> ${esc(r.novedades)}</div>`; }
+ const por=(r.revisado_contab_por||"").trim();
+ h+=`<div style="margin-top:6px">`+(r.revisado_contab
+   ?`<span class="badge" style="background:var(--green)">✔ Revisado por contabilidad${por?" · "+esc(por):""}</span>`
+   :`<span class="badge" style="background:var(--grey)">Pendiente de revisión contable</span>`)+`</div>`;
+ return h;
+}
 
 async function login(){
  const u=document.getElementById("usuario").value.trim();
@@ -138,8 +164,13 @@ async function cargar(){
    cont.innerHTML='<div class="mut">No se pudieron cargar las reservas.</div>'; return;
   }
   DATA=(res.items||[]).filter(r=>r&&r.uid&&!r._accion&&(r.cliente||r.numero));
-  // llenar filtro de asesoras
-  const ases=[...new Set(DATA.map(aseNom).filter(Boolean))].sort();
+  // llenar filtro de asesoras UNIFICADAS (mismo primer nombre = misma persona)
+  ASE_CANON={};
+  DATA.map(aseNom).filter(Boolean).forEach(nm=>{
+   const k=canonAse(nm); if(!k) return;
+   if(!ASE_CANON[k] || normTxt(nm).length>normTxt(ASE_CANON[k]).length) ASE_CANON[k]=titleCase(nm);
+  });
+  const ases=Object.keys(ASE_CANON).sort().map(k=>ASE_CANON[k]);
   const fa=document.getElementById("fase"); const cur=fa.value;
   fa.innerHTML='<option value="">Todas las asesoras</option>'+ases.map(a=>`<option>${esc(a)}</option>`).join("");
   fa.value=cur;
@@ -161,7 +192,7 @@ function render(){
  const fe=document.getElementById("fest").value;
  let items=DATA.slice().sort((a,b)=>numOf(b)-numOf(a));
  items=items.filter(r=>{
-  if(fa && aseNom(r)!==fa) return false;
+  if(fa && canonAse(aseNom(r))!==canonAse(fa)) return false;
   if(fe && (r.estado||"")!==fe) return false;
   if(q){ const blob=(r.numero+" "+r.cliente+" "+(r.destinos||[]).join(" ")+" "+aseNom(r)+" "+montoBlob(r)).toLowerCase(); if(!blob.includes(q)) return false; }
   return true;
@@ -182,9 +213,10 @@ function render(){
     <select class="estsel" onchange="cambiarEstado('${esc(r.uid)}',this.value)">${opts}</select>
    </div>
    <div class="meta">
-    <b>Asesora:</b> ${esc(aseNom(r)||"-")} &nbsp;·&nbsp; <b>Destinos:</b> ${esc(dest)}<br>
+    <b>Asesora:</b> ${esc(dispAse(r))} &nbsp;·&nbsp; <b>Destinos:</b> ${esc(dest)}<br>
     <b>Fechas:</b> ${esc(r.fechas_viaje||"-")} &nbsp;·&nbsp; <b>Pasajeros:</b> ${esc(r.pax_txt||"-")} &nbsp;·&nbsp; <b>Monto:</b> ${usd(r.monto)}<br>
     <b>Contacto:</b> ${esc(r.contacto||r.os_contacto_principal||"-")}
+    ${liquidacionHTML(r)}
    </div>
   </div>`;
  }).join("");

@@ -1,6 +1,6 @@
 {
-  "version": "13.7",
+  "version": "13.8",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Modulo MICE: boton 'Enviar a reserva' en cada evento. Al cerrar un grupo, se crea la reserva en el modulo Reservas y se elige a que asesora (Valentina, Estefania o Maria Camila) se le asigna; le llega a su modulo y por correo. El MICE queda marcado como Ganado.",
-  "sha256": "4eb04ee7ebffcb4f8b60514c997b8a804e99a022735bf5cdf54d3cd36ce61e16"
+  "notas": "Reservas: casilla 'Revisado por contabilidad' + campo 'Novedades' (pagos parciales). HTML de reservas: asesoras unificadas (mismo nombre = una sola) y vista de Liquidacion + novedades + revisado. MICE: boton mas compacto. Se cambio 'nino' por 'nino/ninos' con tilde en la interfaz.",
+  "sha256": "6f965a49078264750f91c9d139d2f0778ff489c4ae667322c14a18bd1be5585b"
 }
