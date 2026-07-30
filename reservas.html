@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reservas · INNOBA Colombia DMC</title>
+<style>
+:root{--navy:#102547;--navy2:#0b1b36;--blue:#1e5fa5;--gold:#bf9e60;--grey:#606a78;--line:#e0e4ea;--card:#f7f9fc;--green:#1e965a;--red:#b3352a;--amber:#c98a12;}
+*{box-sizing:border-box;font-family:'Segoe UI',Arial,sans-serif}
+body{margin:0;background:#eef2f7;color:#1b2330}
+.hidden{display:none!important}
+/* login */
+.loginwrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
+ background:linear-gradient(160deg,#102547,#0b1b36)}
+.logincard{background:#fff;border-radius:18px;max-width:400px;width:100%;padding:34px 30px;box-shadow:0 20px 60px #0006;text-align:center}
+.brand{font-weight:800;color:var(--navy);font-size:22px;letter-spacing:.5px}
+.brand b{color:var(--blue)}
+.brand small{display:block;font-weight:600;color:var(--grey);font-size:12px;letter-spacing:3px;margin-top:2px}
+.logincard h2{color:var(--navy);margin:18px 0 4px;font-size:20px}
+.logincard p{color:var(--grey);font-size:13px;margin:0 0 18px}
+.lb{display:block;text-align:left;font-size:12px;color:var(--grey);margin:10px 0 4px}
+input,select{width:100%;height:44px;border:1px solid var(--line);border-radius:10px;padding:0 12px;font-size:15px;outline:none}
+input:focus,select:focus{border-color:var(--blue)}
+.btn{border:none;border-radius:10px;padding:12px 18px;font-weight:700;font-size:15px;cursor:pointer}
+.btn-navy{background:var(--navy);color:#fff;width:100%;margin-top:18px}
+.btn-navy:hover{background:var(--blue)}
+.err{color:var(--red);font-size:13px;margin-top:10px;min-height:18px}
+.gold{height:2px;background:var(--gold);width:60px;margin:14px auto}
+/* app */
+header{background:var(--navy);color:#fff;padding:12px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+header .brand2{font-weight:800;font-size:18px}header .brand2 b{color:#7fb0e6}
+header .sp{flex:1}
+header .who{font-size:13px;color:#cfe}
+.btn-out{background:transparent;border:1px solid #ffffff66;color:#fff;padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:700}
+.bar{background:#fff;border-bottom:1px solid var(--line);padding:12px 20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.bar input,.bar select{height:40px;width:auto;min-width:180px}
+.count{color:var(--grey);font-size:13px;margin-left:auto}
+.wrap{max-width:1100px;margin:0 auto;padding:16px}
+.rcard{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px}
+.rtop{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.num{font-weight:800;color:var(--navy);font-size:16px;min-width:70px}
+.cli{font-weight:700;font-size:15px}
+.badge{color:#fff;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:700}
+.meta{color:var(--grey);font-size:13px;margin-top:6px;line-height:1.7}
+.meta b{color:#333}
+.rtop .sp{flex:1}
+.estsel{height:36px;border-radius:8px;border:1px solid var(--line);padding:0 8px;font-size:13px}
+.mut{color:var(--grey);text-align:center;padding:40px;font-size:15px}
+@media(max-width:600px){.num{min-width:auto}}
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="login" class="loginwrap">
+ <div class="logincard">
+  <div class="brand">INNO<b>V</b>A <span>Colombia DMC</span><small>C O L O M B I A   D M C</small></div>
+  <div class="gold"></div>
+  <h2>Módulo de Reservas</h2>
+  <p>Acceso exclusivo del equipo INNOBA</p>
+  <label class="lb">Usuario</label>
+  <input id="usuario" type="text" autocomplete="username" placeholder="tu usuario">
+  <label class="lb">Contraseña</label>
+  <input id="clave" type="password" autocomplete="current-password" placeholder="tu contraseña">
+  <button class="btn btn-navy" id="btnLogin" onclick="login()">Ingresar</button>
+  <div class="err" id="loginErr"></div>
+ </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app" class="hidden">
+ <header>
+  <div class="brand2">INNO<b>V</b>A · Reservas</div>
+  <div class="sp"></div>
+  <span class="who" id="who"></span>
+  <button class="btn-out" onclick="logout()">Salir</button>
+ </header>
+ <div class="bar">
+  <input id="q" type="text" placeholder="Buscar por orden de servicio, cliente, destino, asesora o monto (valor vendido)..." oninput="render()">
+  <select id="fase" onchange="render()"><option value="">Todas las asesoras</option></select>
+  <select id="fest" onchange="render()">
+   <option value="">Todos los estados</option>
+   <option>Confirmada</option><option>Confirmada con pago</option><option>Aplazada</option><option>Anulada</option>
+  </select>
+  <button class="btn-out" style="border-color:var(--navy);color:var(--navy)" onclick="cargar()">↻ Actualizar</button>
+  <span class="count" id="count"></span>
+ </div>
+ <div class="wrap" id="lista"></div>
+</div>
+
+<script>
+const WEBHOOK_URL="https://script.google.com/macros/s/AKfycbzzl9r500lei3AdM2LnIgtw6_n9wmvx1mDlnNPL-xccCX6Bsovb4PbLJBEX9bElYJIpBg/exec";
+let TOKEN=sessionStorage.getItem("inb_res_token")||"";
+let NOMBRE=sessionStorage.getItem("inb_res_nombre")||"";
+let DATA=[];
+const ESTCOL={"Confirmada":"var(--amber)","Confirmada con pago":"var(--green)","Aplazada":"var(--amber)","Anulada":"var(--red)"};
+
+async function api(payload){
+ const r=await fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
+ return await r.json();
+}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function usd(v){const n=parseFloat(v)||0;return "USD "+n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});}
+function aseNom(r){const a=r.asesor;return (a&&typeof a==="object")?(a.nombre||""):(a||"");}
+
+async function login(){
+ const u=document.getElementById("usuario").value.trim();
+ const c=document.getElementById("clave").value;
+ const err=document.getElementById("loginErr"); err.textContent="";
+ const b=document.getElementById("btnLogin"); b.disabled=true; b.textContent="Ingresando...";
+ try{
+  const res=await api({tipo:"login",usuario:u,clave:c});
+  if(res&&res.ok){
+   TOKEN=res.token; NOMBRE=res.nombre;
+   sessionStorage.setItem("inb_res_token",TOKEN); sessionStorage.setItem("inb_res_nombre",NOMBRE);
+   entrar();
+  }else{ err.textContent=(res&&res.error)||"No se pudo ingresar."; }
+ }catch(e){ err.textContent="Error de conexión. Intenta de nuevo."; }
+ b.disabled=false; b.textContent="Ingresar";
+}
+function entrar(){
+ document.getElementById("login").classList.add("hidden");
+ document.getElementById("app").classList.remove("hidden");
+ document.getElementById("who").textContent=NOMBRE;
+ cargar();
+}
+async function logout(){
+ try{ await api({tipo:"logout",token:TOKEN}); }catch(e){}
+ TOKEN=""; sessionStorage.removeItem("inb_res_token"); sessionStorage.removeItem("inb_res_nombre");
+ location.reload();
+}
+async function cargar(){
+ const cont=document.getElementById("lista"); cont.innerHTML='<div class="mut">Cargando reservas...</div>';
+ try{
+  const res=await api({tipo:"reservas_ver",token:TOKEN});
+  if(!res||!res.ok){
+   if(res&&res.error==="sesion"){ alert("Tu sesión expiró. Ingresa de nuevo."); logout(); return; }
+   cont.innerHTML='<div class="mut">No se pudieron cargar las reservas.</div>'; return;
+  }
+  DATA=(res.items||[]).filter(r=>r&&r.uid&&!r._accion&&(r.cliente||r.numero));
+  // llenar filtro de asesoras
+  const ases=[...new Set(DATA.map(aseNom).filter(Boolean))].sort();
+  const fa=document.getElementById("fase"); const cur=fa.value;
+  fa.innerHTML='<option value="">Todas las asesoras</option>'+ases.map(a=>`<option>${esc(a)}</option>`).join("");
+  fa.value=cur;
+  render();
+ }catch(e){ cont.innerHTML='<div class="mut">Error de conexión.</div>'; }
+}
+function numOf(r){return parseInt(String(r.numero||"0").replace(/\D/g,""))||0;}
+// distintas formas de escribir el monto para poder buscar por "valor vendido / monto de cierre"
+function montoBlob(r){
+ const m=parseFloat(r.monto);
+ if(isNaN(m)) return "";
+ const s=new Set([String(r.monto),String(m),m.toFixed(0),m.toFixed(2),
+                  m.toLocaleString("en-US"),m.toLocaleString("en-US",{minimumFractionDigits:2})]);
+ return [...s].join(" ");
+}
+function render(){
+ const q=document.getElementById("q").value.toLowerCase().trim();
+ const fa=document.getElementById("fase").value;
+ const fe=document.getElementById("fest").value;
+ let items=DATA.slice().sort((a,b)=>numOf(b)-numOf(a));
+ items=items.filter(r=>{
+  if(fa && aseNom(r)!==fa) return false;
+  if(fe && (r.estado||"")!==fe) return false;
+  if(q){ const blob=(r.numero+" "+r.cliente+" "+(r.destinos||[]).join(" ")+" "+aseNom(r)+" "+montoBlob(r)).toLowerCase(); if(!blob.includes(q)) return false; }
+  return true;
+ });
+ const cont=document.getElementById("lista");
+ document.getElementById("count").textContent=items.length+" reserva(s)";
+ if(!items.length){ cont.innerHTML='<div class="mut">No hay reservas que coincidan.</div>'; return; }
+ cont.innerHTML=items.map(r=>{
+  const est=r.estado||"Confirmada"; const col=ESTCOL[est]||"var(--grey)";
+  const dest=(r.destinos||[]).join(", ")||"-";
+  const opts=["Confirmada","Confirmada con pago","Aplazada","Anulada"].map(o=>`<option${o===est?" selected":""}>${o}</option>`).join("");
+  return `<div class="rcard">
+   <div class="rtop">
+    <span class="num">N. ${esc(r.numero||"")}</span>
+    <span class="cli">${esc(r.cliente||"(sin cliente)")}</span>
+    <span class="badge" style="background:${col}">${esc(est)}</span>
+    <span class="sp"></span>
+    <select class="estsel" onchange="cambiarEstado('${esc(r.uid)}',this.value)">${opts}</select>
+   </div>
+   <div class="meta">
+    <b>Asesora:</b> ${esc(aseNom(r)||"-")} &nbsp;·&nbsp; <b>Destinos:</b> ${esc(dest)}<br>
+    <b>Fechas:</b> ${esc(r.fechas_viaje||"-")} &nbsp;·&nbsp; <b>Pasajeros:</b> ${esc(r.pax_txt||"-")} &nbsp;·&nbsp; <b>Monto:</b> ${usd(r.monto)}<br>
+    <b>Contacto:</b> ${esc(r.contacto||r.os_contacto_principal||"-")}
+   </div>
+  </div>`;
+ }).join("");
+}
+async function cambiarEstado(uid,estado){
+ try{
+  const res=await api({tipo:"reserva_estado",token:TOKEN,uid:uid,estado:estado});
+  if(res&&res.ok){ const r=DATA.find(x=>String(x.uid)===String(uid)); if(r)r.estado=estado; render(); }
+  else if(res&&res.error==="sesion"){ alert("Sesión expirada."); logout(); }
+  else alert("No se pudo cambiar el estado.");
+ }catch(e){ alert("Error de conexión."); }
+}
+
+// auto-entrar si ya hay token
+if(TOKEN){ entrar(); }
+document.getElementById("clave").addEventListener("keydown",e=>{if(e.key==="Enter")login();});
+</script>
+</body>
+</html>
