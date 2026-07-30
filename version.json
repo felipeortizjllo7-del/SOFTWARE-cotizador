@@ -1,6 +1,6 @@
 {
-  "version": "13.9",
+  "version": "14.0",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Cotizador: el buscador de productos (hoteles y servicios) al armar la cotizacion ahora es insensible a tildes y mayusculas (buscar 'medellin' encuentra 'Medellin').",
-  "sha256": "60543c90c2685026d8133d3cd78f568f3597ad4311243fd6e842db5d88aa335c"
+  "notas": "Cotizador HTML: nueva seccion VUELOS (aereos) - precio manual que suma al total, numero y horas de llegada/salida, y vuelos internos con boton Agregar. Sale todo en el PDF de la cotizacion.",
+  "sha256": "313bab691cf33f9d758f17ad814a160190af4ef336321da7ac6573b689b875eb"
 }
