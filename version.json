@@ -1,6 +1,6 @@
 {
-  "version": "13.6",
+  "version": "13.7",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Modulo MICE: filas coloreadas por estado (verde ganados, amarillo seguimiento, rojo perdidos) y nueva barra de indicadores de gestion (ganados, ganado USD, ticket promedio, en seguimiento, perdidos, tasa de cierre, pipeline).",
-  "sha256": "19b1854946e9cafd74a4c45978d1ccdd483b19d4815700f9161125bcb11fbbd1"
+  "notas": "Modulo MICE: boton 'Enviar a reserva' en cada evento. Al cerrar un grupo, se crea la reserva en el modulo Reservas y se elige a que asesora (Valentina, Estefania o Maria Camila) se le asigna; le llega a su modulo y por correo. El MICE queda marcado como Ganado.",
+  "sha256": "4eb04ee7ebffcb4f8b60514c997b8a804e99a022735bf5cdf54d3cd36ce61e16"
 }
