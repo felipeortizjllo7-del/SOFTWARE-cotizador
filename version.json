@@ -1,6 +1,6 @@
 {
-  "version": "14.0",
+  "version": "14.1",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Cotizador HTML: nueva seccion VUELOS (aereos) - precio manual que suma al total, numero y horas de llegada/salida, y vuelos internos con boton Agregar. Sale todo en el PDF de la cotizacion.",
-  "sha256": "313bab691cf33f9d758f17ad814a160190af4ef336321da7ac6573b689b875eb"
+  "notas": "Cotizador HTML: el precio de los vuelos es SOLO para el cliente (suma en el PDF/total del cliente) y ya NO viaja a INNOBA (.exe) ni en el total ni en el snapshot, igual que el margen de la agencia.",
+  "sha256": "77c81930d9891a00e784155134258e4d07c7ed837bf7a52403ff4bc561b5c9dc"
 }
