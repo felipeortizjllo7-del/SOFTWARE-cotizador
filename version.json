@@ -1,6 +1,6 @@
 {
-  "version": "13.5",
+  "version": "13.6",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Seguridad: rotacion de llaves del webhook y limpieza del repositorio (ya no expone codigo ni datos). El modulo de reservas y MICE siguen igual.",
-  "sha256": "53f0ec43fb260bdcf842bb7db693f97a9b575c23806bf6999e700d38024b8406"
+  "notas": "Modulo MICE: filas coloreadas por estado (verde ganados, amarillo seguimiento, rojo perdidos) y nueva barra de indicadores de gestion (ganados, ganado USD, ticket promedio, en seguimiento, perdidos, tasa de cierre, pipeline).",
+  "sha256": "19b1854946e9cafd74a4c45978d1ccdd483b19d4815700f9161125bcb11fbbd1"
 }
