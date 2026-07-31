@@ -1,6 +1,6 @@
 {
-  "version": "14.5",
+  "version": "14.6",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Reservas: contabilidad puede confirmar el pago (Revisado) y escribir Novedades desde el modulo web. Los soportes de pago del .exe ahora se suben a Drive y se ven en el HTML de reservas. (Requiere re-desplegar el Apps Script.)",
-  "sha256": "abc9a955b26ab520cb0de8e586c79d37e0f702c27fdca9a23d27d2b89bb84672"
+  "notas": "Reservas HTML: contabilidad ahora ve la LIQUIDACION FINANCIERA (ventas, gastos, utilidad, rentabilidad, bonificacion) de cada reserva. El .exe guarda ese calculo al liquidar y se ve en la web.",
+  "sha256": "d95bf4cd855ec13ae1b1dfc94277690a282029f0a8bb7ad02ff47b2e47d49d68"
 }

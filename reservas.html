@@ -101,6 +101,8 @@ async function api(payload){
 }
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function usd(v){const n=parseFloat(v)||0;return "USD "+n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});}
+function cop(v){const n=Math.round(parseFloat(v)||0);return "$ "+n.toLocaleString("es-CO");}
+function filaLC(l,v){return `<div style="display:flex;justify-content:space-between;gap:10px"><span>${l}</span><b>${cop(v)}</b></div>`;}
 function aseNom(r){const a=r.asesor;return (a&&typeof a==="object")?(a.nombre||""):(a||"");}
 // --- Unificar asesoras por coincidencia de nombre (mismo primer nombre) ---
 let ASE_CANON={};   // primer-nombre -> nombre a mostrar (el mas completo)
@@ -116,9 +118,23 @@ function liquidacionHTML(r){
    return `<div style="display:flex;justify-content:space-between;gap:10px"><span>${esc(x.desc||"Item")}${(parseInt(x.cant)||1)>1?` (x${parseInt(x.cant)})`:""}</span><b>${usd(v)}</b></div>`;};
   const tot=cob.reduce((a,x)=>a+(parseFloat(x.valor)||0)*(parseInt(x.cant)||1),0);
   h+=`<div style="margin-top:8px;padding:8px 10px;background:#fff;border:1px solid var(--line);border-radius:8px">
-   <div style="color:var(--grey);font-weight:700;font-size:12px;margin-bottom:4px">LIQUIDACIÓN</div>
+   <div style="color:var(--grey);font-weight:700;font-size:12px;margin-bottom:4px">DETALLE DE COBROS AL CLIENTE</div>
    ${cob.map(fila).join("")}
    <div style="display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:4px;padding-top:4px"><b>Total</b><b>${usd(tot)}</b></div>
+  </div>`;
+ }
+ // Liquidación financiera (ventas - gastos = utilidad) — del módulo Liquidación del .exe
+ const lc=r.liq_calc;
+ if(lc){
+  h+=`<div style="margin-top:8px;padding:10px;background:#fff;border:1px solid var(--line);border-radius:8px">
+   <div style="color:var(--grey);font-weight:700;font-size:12px;margin-bottom:6px">LIQUIDACIÓN FINANCIERA${lc.forma_pago?` · ${esc(lc.forma_pago)}`:""}${lc.trm?` · TRM ${cop(lc.trm)}`:""}</div>
+   ${filaLC("Ventas",lc.ventas)}
+   ${filaLC("Gastos operativos",lc.operativos)}
+   ${filaLC("Gastos financieros",lc.financieros)}
+   ${filaLC("Total gastos",lc.total_gasto)}
+   <div style="display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:5px;padding-top:5px"><b>Utilidad</b><b style="color:${(lc.utilidad>=0)?"var(--green)":"var(--red)"}">${cop(lc.utilidad)}</b></div>
+   <div style="display:flex;justify-content:space-between;color:var(--grey);font-size:12px;margin-top:2px"><span>Rentabilidad</span><span>${((lc.rent||0)*100).toFixed(1)}%</span></div>
+   <div style="display:flex;justify-content:space-between;color:var(--grey);font-size:12px"><span>Bonificación 3%</span><span>${cop(lc.bonif)}</span></div>
   </div>`;
  }
  // Soportes de pago (subidos a la nube desde el .exe)
