@@ -1,6 +1,6 @@
 {
-  "version": "14.4",
+  "version": "14.5",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Cotizador HTML: la temporada (Alta/Baja) ahora se detecta AUTOMATICAMENTE segun la fecha de viaje y el calendario 2026-2027 por destino. El cliente ya no elige la temporada: el sistema trae la tarifa correcta. Destinos sin tarifa Alta (Bogota, etc.) quedan en Baja; Santa Marta usa el calendario del Caribe.",
-  "sha256": "d260e77b2d5eafd131d8c98761a7ade159677276381cddf8d3fd20bc05805a53"
+  "notas": "Reservas: contabilidad puede confirmar el pago (Revisado) y escribir Novedades desde el modulo web. Los soportes de pago del .exe ahora se suben a Drive y se ven en el HTML de reservas. (Requiere re-desplegar el Apps Script.)",
+  "sha256": "abc9a955b26ab520cb0de8e586c79d37e0f702c27fdca9a23d27d2b89bb84672"
 }

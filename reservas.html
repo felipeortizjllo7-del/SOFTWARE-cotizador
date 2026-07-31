@@ -121,12 +121,37 @@ function liquidacionHTML(r){
    <div style="display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:4px;padding-top:4px"><b>Total</b><b>${usd(tot)}</b></div>
   </div>`;
  }
- if((r.novedades||"").trim()){ h+=`<div style="margin-top:6px"><b>Novedades:</b> ${esc(r.novedades)}</div>`; }
- const por=(r.revisado_contab_por||"").trim();
- h+=`<div style="margin-top:6px">`+(r.revisado_contab
-   ?`<span class="badge" style="background:var(--green)">✔ Revisado por contabilidad${por?" · "+esc(por):""}</span>`
-   :`<span class="badge" style="background:var(--grey)">Pendiente de revisión contable</span>`)+`</div>`;
+ // Soportes de pago (subidos a la nube desde el .exe)
+ const sop=(r.soportes_pago_url||[]).filter(Boolean);
+ h+=`<div style="margin-top:8px"><b>Soportes de pago:</b> `+
+   (sop.length?sop.map((u,i)=>`<a href="${esc(u)}" target="_blank" rel="noopener" style="color:var(--blue);font-weight:700;margin-right:12px">📎 Soporte ${i+1}</a>`).join("")
+    :`<span class="mut">Sin soportes en la nube todavía</span>`)+`</div>`;
+ // Contabilidad: confirmar pago (revisado) + novedades  — EDITABLE
+ const uid=esc(r.uid); const por=(r.revisado_contab_por||"").trim();
+ h+=`<div style="margin-top:8px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff">
+   <label style="display:flex;align-items:center;gap:8px;font-weight:700;color:var(--navy);cursor:pointer">
+    <input type="checkbox" id="rev_${uid}" ${r.revisado_contab?"checked":""} style="width:18px;height:18px">
+    Revisado por contabilidad — pago confirmado${(r.revisado_contab&&por)?` <span class="mut" style="font-weight:400">· ${esc(por)}</span>`:""}
+   </label>
+   <textarea id="nov_${uid}" placeholder="Novedades (pagos parciales, abonos, saldos pendientes...)"
+     style="width:100%;min-height:54px;margin-top:8px;border:1px solid var(--line);border-radius:8px;padding:8px;font-size:14px;font-family:inherit">${esc(r.novedades||"")}</textarea>
+   <button id="rvb_${uid}" class="btn btn-navy" style="width:auto;margin-top:8px;padding:10px 20px" onclick="guardarRevision('${uid}')">Guardar</button>
+  </div>`;
  return h;
+}
+async function guardarRevision(uid){
+ const chk=document.getElementById("rev_"+uid), nov=document.getElementById("nov_"+uid), btn=document.getElementById("rvb_"+uid);
+ const revisado=chk?chk.checked:false, novedades=nov?nov.value:"";
+ if(btn){btn.disabled=true;btn.textContent="Guardando...";}
+ try{
+  const res=await api({tipo:"reserva_revisado",token:TOKEN,uid:uid,revisado:revisado,novedades:novedades});
+  if(res&&res.ok){
+   const r=DATA.find(x=>String(x.uid)===String(uid));
+   if(r){r.revisado_contab=revisado;r.novedades=novedades;r.revisado_contab_por=res.por||(revisado?NOMBRE:"");}
+   render();
+  }else if(res&&res.error==="sesion"){ alert("Tu sesión expiró. Ingresa de nuevo."); logout(); }
+  else { alert("No se pudo guardar."); if(btn){btn.disabled=false;btn.textContent="Guardar";} }
+ }catch(e){ alert("Error de conexión."); if(btn){btn.disabled=false;btn.textContent="Guardar";} }
 }
 
 async function login(){
