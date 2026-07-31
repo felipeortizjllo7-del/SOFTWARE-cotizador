@@ -1,6 +1,6 @@
 {
-  "version": "14.2",
+  "version": "14.3",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Cotizador HTML: casilla 'Incluir vuelos en esta cotizacion'. Si NO se marca, los vuelos no suman al total ni salen en el PDF. Solo cuando se marca influyen (y siempre son solo para el cliente, no van a INNOBA).",
-  "sha256": "36d8b7ca30c8fc4c1cf24bbf4710865ef4bd9032b7817abbd96cd5a2552f3744"
+  "notas": "Historial de cotizaciones: filtro por rango de fechas (Desde / Hasta) junto al buscador, mas boton para limpiar. El buscador de texto tambien encuentra por fecha.",
+  "sha256": "1e49e1eb282816b99fe8e9e0519411c9bf1d25382953c33072ba2213da9efabc"
 }
