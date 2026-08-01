@@ -1,6 +1,6 @@
 {
-  "version": "14.8",
+  "version": "14.9",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Cotizador HTML y .exe: se agrega acomodacion CUADRUPLE (ocupacion 4). Casilla de habitaciones cuadruples, precio por persona, total y columna en el PDF. La tarifa cuadruple de cada hotel sale del tarifario cuando se suban los precios (mientras tanto muestra N/D, sin afectar nada).",
-  "sha256": "700950f99684afd5b077f80b3703814d5d999757ac08cda6b5091e7a0ca44f0f"
+  "notas": "Modulo MICE: boton 'Tarifario' en Hoteles y en Minuto a minuto. Trae del tarifario los hoteles (tarifa por persona/noche por acomodacion) y los servicios (precio por persona) con las mismas formulas del cotizador; la temporada se decide por las fechas del evento. Todo sigue editable a mano.",
+  "sha256": "1f78c46d016c2dcdc1b6d58033e012c0030e53c21a5bf5be625c7ce9a6f61818"
 }
