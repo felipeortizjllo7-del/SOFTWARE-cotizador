@@ -1,6 +1,6 @@
 {
-  "version": "14.6",
+  "version": "14.7",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Reservas HTML: contabilidad ahora ve la LIQUIDACION FINANCIERA (ventas, gastos, utilidad, rentabilidad, bonificacion) de cada reserva. El .exe guarda ese calculo al liquidar y se ve en la web.",
-  "sha256": "d95bf4cd855ec13ae1b1dfc94277690a282029f0a8bb7ad02ff47b2e47d49d68"
+  "notas": "Cotizador .exe: la temporada (Alta/Baja) se detecta AUTOMATICAMENTE por la fecha de viaje usando el calendario 2026-2027 por destino (igual que el HTML). Destinos sin calendario mantienen el selector manual.",
+  "sha256": "d751df47eee3e6fab8079e6304996e5df3187b747b0f600b2cd3581515af6f52"
 }
