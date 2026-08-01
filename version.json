@@ -1,6 +1,6 @@
 {
-  "version": "14.9",
+  "version": "15.0",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Modulo MICE: boton 'Tarifario' en Hoteles y en Minuto a minuto. Trae del tarifario los hoteles (tarifa por persona/noche por acomodacion) y los servicios (precio por persona) con las mismas formulas del cotizador; la temporada se decide por las fechas del evento. Todo sigue editable a mano.",
-  "sha256": "1f78c46d016c2dcdc1b6d58033e012c0030e53c21a5bf5be625c7ce9a6f61818"
+  "notas": "MICE: al traer un hotel del tarifario, se PRECARGAN las noches calculadas de las fechas del evento (solo pones el numero de habitaciones).",
+  "sha256": "f69af36e95e92edaf4bd1518427885cf204a9f1a42a538b184f62a5f57bc5860"
 }
