@@ -94,6 +94,7 @@ let TOKEN=sessionStorage.getItem("inb_res_token")||"";
 let NOMBRE=sessionStorage.getItem("inb_res_nombre")||"";
 let DATA=[];
 const ESTCOL={"Confirmada":"var(--amber)","Confirmada con pago":"var(--green)","Aplazada":"var(--amber)","Anulada":"var(--red)"};
+const ESTBG={"Confirmada":"#FFF6DA","Confirmada con pago":"#E4F6EC","Aplazada":"#FFF6DA","Anulada":"#FCE7E5"};
 
 async function api(payload){
  const r=await fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
@@ -242,10 +243,10 @@ function render(){
  document.getElementById("count").textContent=items.length+" reserva(s)";
  if(!items.length){ cont.innerHTML='<div class="mut">No hay reservas que coincidan.</div>'; return; }
  cont.innerHTML=items.map(r=>{
-  const est=r.estado||"Confirmada"; const col=ESTCOL[est]||"var(--grey)";
+  const est=r.estado||"Confirmada"; const col=ESTCOL[est]||"var(--grey)"; const bg=ESTBG[est]||"#fff";
   const dest=(r.destinos||[]).join(", ")||"-";
   const opts=["Confirmada","Confirmada con pago","Aplazada","Anulada"].map(o=>`<option${o===est?" selected":""}>${o}</option>`).join("");
-  return `<div class="rcard">
+  return `<div class="rcard" style="background:${bg};border-left:6px solid ${col}">
    <div class="rtop">
     <span class="num">N. ${esc(r.numero||"")}</span>
     <span class="cli">${esc(r.cliente||"(sin cliente)")}</span>

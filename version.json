@@ -1,6 +1,6 @@
 {
-  "version": "15.1",
+  "version": "15.2",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Correccion de precios de MENORES (cotizador HTML y .exe): 0-11 meses y 1 anio = cortesia; 2-9 anios en servicio COMPARTIDO pagan como adulto (100%) y en PRIVADO 50%; hotel solo 4-9 anios a (70.000/0,88)/TRM (margen fijo). Antes 3-9 pagaban 50% en compartido y el hotel empezaba en 3 anios.",
-  "sha256": "fea6b4489b68071fce4e64a074da4bd28b6df523aae25240ba5025a25b64156e"
+  "notas": "Reservas HTML: tarjetas coloreadas por estado (verde=Confirmada con pago; amarillo=Confirmada/Aplazada sin pago; rojo=Anulada). El .exe ya lo hacia. Nota: las 169 reservas importadas de Bitrix ya estan en la nube; usar Sincronizar/Actualizar para verlas.",
+  "sha256": "290e356683de5950bf08c3539b5f18434e69b6e4d8232c77c852175e2de7e21c"
 }
