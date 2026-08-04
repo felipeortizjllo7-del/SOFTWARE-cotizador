@@ -1,6 +1,6 @@
 {
-  "version": "15.3",
+  "version": "15.5",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "PDF de cotizacion (HTML y .exe): la tabla de opciones de hotel ahora deja CLARO y resaltado que el precio por persona YA INCLUYE alojamiento, traslados y actividades (para evitar confusion).",
-  "sha256": "5c1dcf40eaef49ca8e2cedbbc267f0e706a763e117e3d25730c0ef7182a4f751"
+  "notas": "v15.4: Sincronizar de reservas mucho mas rapido y sin congelar la ventana (corre en 2do plano; solo sube lo que cambio, no las cientos de reservas cada vez).",
+  "sha256": "d7fe98933213abf45827c5039ac049398afa91494ea067074a9f852be31ca729"
 }
