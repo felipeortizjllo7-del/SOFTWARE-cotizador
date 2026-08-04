@@ -1,6 +1,6 @@
 {
-  "version": "15.5",
+  "version": "15.6",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v15.4: Sincronizar de reservas mucho mas rapido y sin congelar la ventana (corre en 2do plano; solo sube lo que cambio, no las cientos de reservas cada vez).",
-  "sha256": "d7fe98933213abf45827c5039ac049398afa91494ea067074a9f852be31ca729"
+  "notas": "Voucher individual de guia: ahora muestra la fecha del dia del tour (la que se escribe en la fila), no la fecha de inicio de la reserva.",
+  "sha256": "765a3f558842ee38aaa7f592a1195f2588ff7c71b2e75629a9d046456a2e524c"
 }
