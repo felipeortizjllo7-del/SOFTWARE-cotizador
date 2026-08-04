@@ -1,6 +1,6 @@
 {
-  "version": "15.6",
+  "version": "15.7",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Voucher individual de guia: ahora muestra la fecha del dia del tour (la que se escribe en la fila), no la fecha de inicio de la reserva.",
-  "sha256": "765a3f558842ee38aaa7f592a1195f2588ff7c71b2e75629a9d046456a2e524c"
+  "notas": "Voucher al cliente: ahora se puede elegir el logo de INNOBA o subir el logo y nombre de la agencia cliente (white-label) por cada reserva.",
+  "sha256": "67099fad2836ebc7333da4ff283a2be9de63a7b345a4a0f430cfe7ddf7d575c8"
 }
