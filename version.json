@@ -1,6 +1,6 @@
 {
-  "version": "15.2",
+  "version": "15.3",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Reservas HTML: tarjetas coloreadas por estado (verde=Confirmada con pago; amarillo=Confirmada/Aplazada sin pago; rojo=Anulada). El .exe ya lo hacia. Nota: las 169 reservas importadas de Bitrix ya estan en la nube; usar Sincronizar/Actualizar para verlas.",
-  "sha256": "290e356683de5950bf08c3539b5f18434e69b6e4d8232c77c852175e2de7e21c"
+  "notas": "PDF de cotizacion (HTML y .exe): la tabla de opciones de hotel ahora deja CLARO y resaltado que el precio por persona YA INCLUYE alojamiento, traslados y actividades (para evitar confusion).",
+  "sha256": "5c1dcf40eaef49ca8e2cedbbc267f0e706a763e117e3d25730c0ef7182a4f751"
 }
