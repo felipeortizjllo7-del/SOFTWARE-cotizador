@@ -1,6 +1,6 @@
 {
-  "version": "15.7",
+  "version": "15.8",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Voucher al cliente: ahora se puede elegir el logo de INNOBA o subir el logo y nombre de la agencia cliente (white-label) por cada reserva.",
-  "sha256": "67099fad2836ebc7333da4ff283a2be9de63a7b345a4a0f430cfe7ddf7d575c8"
+  "notas": "Medellin: agregadas las tarifas de habitacion CUADRUPLE (temporada baja y alta) en cotizador .exe y HTML, con la misma formula de precio.",
+  "sha256": "d6d642aea00c7c587f0419534cb58527f2e33371c2b778dd236b34cb1aa6aa84"
 }
