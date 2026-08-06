@@ -1,6 +1,6 @@
 {
-  "version": "15.9",
+  "version": "16.0",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Medellin: nuevo hotel CALLE FLORA (baja y alta, con cuadruple). Eje Cafetero: tarifa actualizada de HOTEL LAS CAMELIAS (baja y alta).",
-  "sha256": "d0995958078ed5146f400b821b018f19318a1bab96e41866430dc7721e4d386d"
+  "notas": "Clientes/Empresas: boton claro '🗑 Borrar' en cada contacto (con confirmacion); si la empresa ya existe, el borrado se guarda al instante.",
+  "sha256": "b9ff405090ed91fba8daa3213072c8d4dceba230d9daccae61ce9e352e9db0a7"
 }
