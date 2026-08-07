@@ -1,6 +1,6 @@
 {
-  "version": "16.1",
+  "version": "16.2",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Medellin: nueva experiencia 'Visita a Jardin en Privado' (terrestre privado, precio por tamano de grupo) en cotizador .exe y HTML, con la formula estandar.",
-  "sha256": "4d61940ee1b84b2600bae1b097ead5319c239e05435a90d4a89def0582c9b673"
+  "notas": "Cartagena: nueva experiencia 'Visita a Barranquilla en Carnaval' (terrestre privado, precio por tamano de grupo).",
+  "sha256": "6717810a7d778bdfe1a7de06ca168c9e5305e122b191204df88a28182efd09fd"
 }
