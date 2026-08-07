@@ -1,6 +1,6 @@
 {
-  "version": "16.3",
+  "version": "16.4",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Cotizaciones: al editar/regenerar una cotizacion ahora se actualiza la MISMA (no se crea una nueva). Solo 'Nueva cotizacion' inicia otra. Evita duplicados en el historial.",
-  "sha256": "1be4f4024d878f8d9d928b094cf4304745cb614beb815d32cc4f45b979417949"
+  "notas": "Cambio de asesora: Maria Camila Urrego pasa a ser Narly Yuliana Florez Galindez. Al abrir esta version, cada equipo aplica el cambio solo (config y reservas).",
+  "sha256": "443aa4b22c07ee3c729418cff78ca8678545bda18494a1cc56f0a0bb3fe3048a"
 }
