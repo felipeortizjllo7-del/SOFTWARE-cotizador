@@ -1,6 +1,6 @@
 {
-  "version": "16.2",
+  "version": "16.3",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Cartagena: nueva experiencia 'Visita a Barranquilla en Carnaval' (terrestre privado, precio por tamano de grupo).",
-  "sha256": "6717810a7d778bdfe1a7de06ca168c9e5305e122b191204df88a28182efd09fd"
+  "notas": "Cotizaciones: al editar/regenerar una cotizacion ahora se actualiza la MISMA (no se crea una nueva). Solo 'Nueva cotizacion' inicia otra. Evita duplicados en el historial.",
+  "sha256": "1be4f4024d878f8d9d928b094cf4304745cb614beb815d32cc4f45b979417949"
 }
