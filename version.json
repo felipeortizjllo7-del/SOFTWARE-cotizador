@@ -1,6 +1,6 @@
 {
-  "version": "16.5",
+  "version": "16.6",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Nuevos destinos GUATAPE y NAPOLES (con hoteles y tours propios) para armar multidestino regional (ej. Medellin + 1 noche en Guatape/Doradal). No cambia ningun destino existente.",
-  "sha256": "5cc027328cd087a7193fdb69bce301b9153a619270e53c872f7a72173ce01b66"
+  "notas": "Nuevos destinos para multidestino regional: Guatape y Napoles (con hoteles), y Villa de Leyva, Isla del Rosario, Santa Rosa de Cabal y Jardin Antioquia (con tours; hoteles se agregan luego). Descriptivos de tours actualizados desde TARIFARIO-TOURS 2026.",
+  "sha256": "5d711a726e2ce2356c15bbcdfd09607e6cda71b2f092817ef3c731c7103b5b0a"
 }
