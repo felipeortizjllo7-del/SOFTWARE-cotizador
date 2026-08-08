@@ -1,6 +1,6 @@
 {
-  "version": "16.4",
+  "version": "16.5",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Cambio de asesora: Maria Camila Urrego pasa a ser Narly Yuliana Florez Galindez. Al abrir esta version, cada equipo aplica el cambio solo (config y reservas).",
-  "sha256": "443aa4b22c07ee3c729418cff78ca8678545bda18494a1cc56f0a0bb3fe3048a"
+  "notas": "Nuevos destinos GUATAPE y NAPOLES (con hoteles y tours propios) para armar multidestino regional (ej. Medellin + 1 noche en Guatape/Doradal). No cambia ningun destino existente.",
+  "sha256": "5cc027328cd087a7193fdb69bce301b9153a619270e53c872f7a72173ce01b66"
 }
