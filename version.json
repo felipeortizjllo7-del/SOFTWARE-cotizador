@@ -1,6 +1,6 @@
 {
-  "version": "16.8",
+  "version": "16.9",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Medellin: agregado HOTEL MORGANA (baja y alta) al tarifario del cotizador .exe y HTML, con la formula estandar. No cambia ningun otro hotel/destino. Ademas: PDF de MICE mas estetico (titulo y total con acento dorado) y correccion del texto alternativas/suma.",
-  "sha256": "703a5320f97f9f5c14c09da51cb9f5adf04843467732d4bb995af84bad3efc91"
+  "notas": "Cotizaciones: la depuracion de cotizaciones vencidas (mas de 1 mes, que no sean Ganada/En seguimiento ni reserva) ahora tambien corre sola al abrir la app, no solo al entrar al historial.",
+  "sha256": "4068e708976664eac3055c463278ef4244015c98115e1c6fc51e501810da6886"
 }
