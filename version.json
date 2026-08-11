@@ -1,6 +1,6 @@
 {
-  "version": "16.9",
+  "version": "17.0",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Cotizaciones: la depuracion de cotizaciones vencidas (mas de 1 mes, que no sean Ganada/En seguimiento ni reserva) ahora tambien corre sola al abrir la app, no solo al entrar al historial.",
-  "sha256": "4068e708976664eac3055c463278ef4244015c98115e1c6fc51e501810da6886"
+  "notas": "Cotizaciones: al enviar una cotizacion a reserva ahora se puede ELEGIR a que asesora se le asigna (Valentina, Estefania o Narly), igual que en el modulo MICE.",
+  "sha256": "2e808dd8c4d3d9b32a2e9181ef8dc4c032165cfb82c6ccbc819ebe54c900d520"
 }
