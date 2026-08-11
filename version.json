@@ -1,6 +1,6 @@
 {
-  "version": "16.6",
+  "version": "16.7",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Nuevos destinos para multidestino regional: Guatape y Napoles (con hoteles), y Villa de Leyva, Isla del Rosario, Santa Rosa de Cabal y Jardin Antioquia (con tours; hoteles se agregan luego). Descriptivos de tours actualizados desde TARIFARIO-TOURS 2026.",
-  "sha256": "5d711a726e2ce2356c15bbcdfd09607e6cda71b2f092817ef3c731c7103b5b0a"
+  "notas": "MICE: cuando una opcion tiene varios hoteles ahora puedes elegir si son 'alternativas' (el cliente elige uno) o 'se SUMAN' (varias noches en distintos hoteles, ej. Decameron + hotel en Cartagena). En modo suma, el total incluye TODOS los hoteles + los terrestres.",
+  "sha256": "fe50d492732b49710c25a4cc21220307977e8844dd159300118ce8afe1d4625d"
 }
