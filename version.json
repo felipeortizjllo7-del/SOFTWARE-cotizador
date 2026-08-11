@@ -1,6 +1,6 @@
 {
-  "version": "17.0",
+  "version": "17.1",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Cotizaciones: al enviar una cotizacion a reserva ahora se puede ELEGIR a que asesora se le asigna (Valentina, Estefania o Narly), igual que en el modulo MICE.",
-  "sha256": "2e808dd8c4d3d9b32a2e9181ef8dc4c032165cfb82c6ccbc819ebe54c900d520"
+  "notas": "Cotizador: 'Cotizado por' ahora incluye a Valentina, Estefania y Yuliana (Narly) en .exe y HTML. Si una de ellas cotiza, al enviar a reserva se le asigna a ella misma (preseleccionada). Modulo Comercial: indicadores/ventas por persona ahora miden a Felipe, Carlos, Valentina, Estefania y Yuliana.",
+  "sha256": "4045585498c2ce1f9dc382d438ca64ffa66b8e4b2960d2ed96a393b5ec956d0a"
 }
