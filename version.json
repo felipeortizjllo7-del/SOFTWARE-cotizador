@@ -1,6 +1,6 @@
 {
-  "version": "17.2",
+  "version": "17.3",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Modulo Comercial: (1) Indicadores por persona ahora mide SOLO al equipo interno (Felipe, Carlos, Valentina, Estefania, Yuliana), no a los contactos de agencia. (2) Nuevo reporte 'Clientes que mas venden' (agencias, sin el equipo). (3) Nuevo 'Bonos': liquidador de bonificaciones del mes (punto de equilibrio, ventas validas por asesora, freelance) segun el modelo (1,75/2,25%).",
-  "sha256": "f8d7293e523857ba8f0db12522a40e889d9642969f8fac2ca1ae97e36f954a31"
+  "notas": "Modulo Comercial: Indicadores por persona mide SOLO al equipo interno; nuevo reporte 'Clientes que mas venden'; nuevo 'Bonos' para liquidar bonificaciones del mes (PE, ventas validas, freelance) segun el modelo 1,75/2,25%.",
+  "sha256": "14b719c4d5aa9558a4a642ebb1fc9f1f8b10780c5a167dd7ba5ed60de17cd4c4"
 }
