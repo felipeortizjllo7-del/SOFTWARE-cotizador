@@ -1,6 +1,6 @@
 {
-  "version": "17.1",
+  "version": "17.2",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Cotizador: 'Cotizado por' ahora incluye a Valentina, Estefania y Yuliana (Narly) en .exe y HTML. Si una de ellas cotiza, al enviar a reserva se le asigna a ella misma (preseleccionada). Modulo Comercial: indicadores/ventas por persona ahora miden a Felipe, Carlos, Valentina, Estefania y Yuliana.",
-  "sha256": "4045585498c2ce1f9dc382d438ca64ffa66b8e4b2960d2ed96a393b5ec956d0a"
+  "notas": "Modulo Comercial: (1) Indicadores por persona ahora mide SOLO al equipo interno (Felipe, Carlos, Valentina, Estefania, Yuliana), no a los contactos de agencia. (2) Nuevo reporte 'Clientes que mas venden' (agencias, sin el equipo). (3) Nuevo 'Bonos': liquidador de bonificaciones del mes (punto de equilibrio, ventas validas por asesora, freelance) segun el modelo (1,75/2,25%).",
+  "sha256": "f8d7293e523857ba8f0db12522a40e889d9642969f8fac2ca1ae97e36f954a31"
 }
