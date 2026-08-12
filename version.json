@@ -1,6 +1,6 @@
 {
-  "version": "17.3",
+  "version": "17.4",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Modulo Comercial: Indicadores por persona mide SOLO al equipo interno; nuevo reporte 'Clientes que mas venden'; nuevo 'Bonos' para liquidar bonificaciones del mes (PE, ventas validas, freelance) segun el modelo 1,75/2,25%.",
-  "sha256": "14b719c4d5aa9558a4a642ebb1fc9f1f8b10780c5a167dd7ba5ed60de17cd4c4"
+  "notas": "Cotizaciones: campo PAIS en el cotizador HTML; el historial muestra el pais (o lo infiere del codigo telefonico) y se puede buscar por pais. Modulo Comercial: nuevo reporte 'Asesores de agencia' (contactos de las agencias de otros paises), separado del equipo interno de INNOBA.",
+  "sha256": "e564c5162d8c17bcc81246a1208639c6c90a3bad7a44db5249a8bf35c09d31c9"
 }
