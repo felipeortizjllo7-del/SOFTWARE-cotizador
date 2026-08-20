@@ -1,6 +1,6 @@
 {
-  "version": "18.8",
+  "version": "19.4",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v18.8 - Filtro por pais en cotizaciones y MICE; clientes clicables con vendedor; MICE suma en indicadores; proveedores por destino en reservas con envio de confirmacion; correo por asesora y seguimiento a 8 dias; filtro por mes del viaje y venta del mes en reservas; boton depurar fechas; selector calendario; historial 'Ver todas' y responsable de seguimiento con color (sincronizado); liquidacion con 'Todas', todos los meses y buscador por numero.",
-  "sha256": "726eb18fec786705bd66b2642b3bd7fa8b7e97aaf4b4165b68d2d39c52c6e72b"
+  "notas": "v19.4 - Cotizador web: tabla de opciones de hotel (sumando destinos) con columnas de ancho fijo para que los nombres largos no se encabalguen y se lean bien. Corregido el dato de Medellin (hoteles temporada Alta ya no muestran '[HOTEL EN GUATAPE]'). Ventana de seguimiento no queda tapada por la barra de tareas. Reservas: filtros por valor/cliente/fecha/numero y ordenar por fecha. Cotizaciones: eliminar por rango de fechas, filtro por asesora. Base de proveedores (CSV) con buscador para autollenar el voucher. Liquidacion con 'Todas' y buscador.",
+  "sha256": "afa6b3db9776ff183d813ec5cccf0656009a2bd0d009a4d95ecb51f1e394ed3c"
 }
