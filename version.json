@@ -1,6 +1,6 @@
 {
-  "version": "19.4",
+  "version": "20.4",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v19.4 - Cotizador web: tabla de opciones de hotel (sumando destinos) con columnas de ancho fijo para que los nombres largos no se encabalguen y se lean bien. Corregido el dato de Medellin (hoteles temporada Alta ya no muestran '[HOTEL EN GUATAPE]'). Ventana de seguimiento no queda tapada por la barra de tareas. Reservas: filtros por valor/cliente/fecha/numero y ordenar por fecha. Cotizaciones: eliminar por rango de fechas, filtro por asesora. Base de proveedores (CSV) con buscador para autollenar el voucher. Liquidacion con 'Todas' y buscador.",
-  "sha256": "afa6b3db9776ff183d813ec5cccf0656009a2bd0d009a4d95ecb51f1e394ed3c"
+  "notas": "v20.4 - Cotizador: nuevo descuento del dolar por ano de viaje (2026 TRM-100 margenes normales; 2027+ TRM-200 margenes hotel 0.83/terrestre 0.69), en la app y en el cotizador web. Incluye Cotizacion Express, Paquetes de Concierto (afiche grande), filtros y bonificacion 1.75% en Liquidacion, y convertir prospecto a cliente.",
+  "sha256": "49d0ccaa07ad9959932d72054ee537ac9068581297ce3f161264767e7af76bf8"
 }
