@@ -156,6 +156,46 @@ function liquidacionHTML(r){
   </div>`;
  return h;
 }
+// --- Detalle completo de servicios y proveedores (igual que el .exe, solo lectura) ---
+const ESTP_COL={"Reservado con pago":"var(--green)","Reservado sin pago":"var(--amber)","Pendiente":"var(--grey)"};
+function detalleServiciosHTML(r){
+ const dd=r.destinos_detalle||[];
+ if(!Array.isArray(dd)||!dd.length)
+  return '<div class="mut" style="margin-top:6px">Esta reserva no tiene servicios detallados (o se creo en una version anterior del sistema).</div>';
+ const CAT=[["hotel","Hotel"],["transporte","Transporte / Traslados"],["guia","Guia"],["actividad","Actividades / Tours"]];
+ let h='<div style="margin-top:8px">';
+ dd.forEach(d=>{
+  const cats=CAT.filter(([k])=>(d[k]||[]).some(s=>s&&s.servicio));
+  if(!cats.length) return;
+  h+=`<div style="margin-top:6px;padding:8px 10px;background:#fff;border:1px solid var(--line);border-radius:8px">
+   <div style="color:var(--navy);font-weight:700;margin-bottom:4px">📍 ${esc(d.nombre||"Destino")}</div>`;
+  cats.forEach(([k,lbl])=>{
+   const servs=(d[k]||[]).filter(s=>s&&s.servicio);
+   h+=`<div style="margin:5px 0 2px;color:var(--blue);font-weight:700;font-size:12px">${lbl}</div>`;
+   servs.forEach(s=>{
+    const ep=s.estado_prov||"Pendiente"; const c=ESTP_COL[ep]||"var(--grey)";
+    const extra=[s.fecha_in?("Llegada "+s.fecha_in):"", s.fecha_out?("Salida "+s.fecha_out):"",
+      (s.fecha&&!s.fecha_in)?("Fecha "+s.fecha):"", s.hora?("Hora "+s.hora):"",
+      s.origen?("Origen "+s.origen):"", s.destino?("Destino "+s.destino):"",
+      s.vehiculo?("Vehiculo "+s.vehiculo):""].filter(Boolean).join(" · ");
+    h+=`<div style="padding:5px 8px;border-bottom:1px solid #eef2f8">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+       <b>${esc(s.servicio)}</b>
+       <span class="badge" style="background:${c};font-size:11px">${esc(ep)}</span>
+      </div>
+      <div class="mut" style="font-size:12px">Proveedor: ${esc(s.proveedor||"-")}${s.correo?(" · "+esc(s.correo)):""}${s.enviado?" · ✅ voucher enviado "+esc(s.fecha_envio||""):""}</div>
+      ${extra?`<div class="mut" style="font-size:12px">${esc(extra)}</div>`:""}
+      ${s.observacion?`<div class="mut" style="font-size:12px">Detalle: ${esc(s.observacion)}</div>`:""}
+     </div>`;
+   });
+  });
+  h+='</div>';
+ });
+ h+='</div>';
+ return h;
+}
+function toggleDet(uid){const d=document.getElementById("det_"+uid); if(d) d.classList.toggle("hidden");}
+
 async function guardarRevision(uid){
  const chk=document.getElementById("rev_"+uid), nov=document.getElementById("nov_"+uid), btn=document.getElementById("rvb_"+uid);
  const revisado=chk?chk.checked:false, novedades=nov?nov.value:"";
@@ -258,6 +298,11 @@ function render(){
     <b>Asesora:</b> ${esc(dispAse(r))} &nbsp;·&nbsp; <b>Destinos:</b> ${esc(dest)}<br>
     <b>Fechas:</b> ${esc(r.fechas_viaje||"-")} &nbsp;·&nbsp; <b>Pasajeros:</b> ${esc(r.pax_txt||"-")} &nbsp;·&nbsp; <b>Monto:</b> ${usd(r.monto)}<br>
     <b>Contacto:</b> ${esc(r.contacto||r.os_contacto_principal||"-")}
+    <div style="margin-top:8px">
+     <button class="btn btn-navy" style="width:auto;padding:8px 16px;font-size:13px"
+       onclick="toggleDet('${esc(r.uid)}')">🧳 Ver servicios y proveedores</button>
+    </div>
+    <div id="det_${esc(r.uid)}" class="hidden">${detalleServiciosHTML(r)}</div>
     ${liquidacionHTML(r)}
    </div>
   </div>`;
