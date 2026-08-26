@@ -276,7 +276,14 @@ function render(){
  items=items.filter(r=>{
   if(fa && canonAse(aseNom(r))!==canonAse(fa)) return false;
   if(fe && (r.estado||"")!==fe) return false;
-  if(q){ const blob=(r.numero+" "+r.cliente+" "+(r.destinos||[]).join(" ")+" "+aseNom(r)+" "+montoBlob(r)).toLowerCase(); if(!blob.includes(q)) return false; }
+  if(q){
+   const blob=(r.numero+" "+r.cliente+" "+(r.destinos||[]).join(" ")+" "+aseNom(r)+" "+montoBlob(r)).toLowerCase();
+   // Buscar por VALOR sin importar puntos/comas/decimales: se comparan solo digitos
+   const qDig=q.replace(/\D/g,"");
+   const montoDig=String(Math.round(parseFloat(r.monto)||0));
+   const okValor=(qDig.length>=2 && montoDig.includes(qDig));
+   if(!blob.includes(q) && !okValor) return false;
+  }
   return true;
  });
  const cont=document.getElementById("lista");
