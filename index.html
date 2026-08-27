@@ -82,8 +82,9 @@ display:flex;align-items:center;gap:16px;margin-top:6px}
  body>*{display:none!important}
  #print{display:block!important}
  @page{margin:14mm}
+ *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
 }
-#print{color:#16233d;font-size:12px}
+#print{color:#16233d;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 #print .ph{display:flex;align-items:center;gap:14px;border-bottom:2px solid var(--navy);padding-bottom:8px}
 #print .ph img{height:52px}
 #print .pe{color:var(--navy);font-size:20px;font-weight:700}
