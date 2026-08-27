@@ -1,6 +1,6 @@
 {
-  "version": "20.4",
+  "version": "20.6",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v20.4 - Cotizador: nuevo descuento del dolar por ano de viaje (2026 TRM-100 margenes normales; 2027+ TRM-200 margenes hotel 0.83/terrestre 0.69), en la app y en el cotizador web. Incluye Cotizacion Express, Paquetes de Concierto (afiche grande), filtros y bonificacion 1.75% en Liquidacion, y convertir prospecto a cliente.",
-  "sha256": "49d0ccaa07ad9959932d72054ee537ac9068581297ce3f161264767e7af76bf8"
+  "notas": "v20.6 - PDF del cotizador: el mensaje 'Este valor POR PERSONA... YA INCLUYE...' ahora en negrilla resaltado y se repite debajo del TOTAL DE LA RESERVA (para que no sumen los valores desagregados). En el .exe y en el cotizador web. Incluye tambien: quitar cotizaciones duplicadas (agencia+persona+destino+monto) con prevencion al sincronizar.",
+  "sha256": "6aab752c8fb8cb798ddb46feba37fe69ce744457032a726cf8675cebd01c0643"
 }
