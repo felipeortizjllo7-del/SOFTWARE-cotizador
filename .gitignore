@@ -13,6 +13,8 @@
 !/reservas.html
 # Manifiesto de autoactualizacion del .exe
 !/version.json
+# Marcador de version de la WEB (auto-recarga del cotizador HTML)
+!/web_version.json
 # Este mismo archivo
 !/.gitignore
 
