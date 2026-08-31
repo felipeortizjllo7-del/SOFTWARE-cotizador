@@ -15,6 +15,8 @@
 !/version.json
 # Marcador de version de la WEB (auto-recarga del cotizador HTML)
 !/web_version.json
+# Marcador de version del modulo de reservas (auto-recarga)
+!/reservas_version.json
 # Este mismo archivo
 !/.gitignore
 

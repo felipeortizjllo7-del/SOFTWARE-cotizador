@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Reservas · INNOBA Colombia DMC</title>
 <style>
 :root{--navy:#102547;--navy2:#0b1b36;--blue:#1e5fa5;--gold:#bf9e60;--grey:#606a78;--line:#e0e4ea;--card:#f7f9fc;--green:#1e965a;--red:#b3352a;--amber:#c98a12;}
@@ -89,6 +92,19 @@ header .who{font-size:13px;color:#cfe}
 </div>
 
 <script>
+// Auto-actualizacion de ESTE modulo (reservas): si se publica una version nueva,
+// la pagina se recarga sola (una vez) para que Angela y demas vean lo ultimo.
+const RES_VERSION="R1";
+const RES_VER_URL="https://raw.githubusercontent.com/felipeortizjllo7-del/SOFTWARE-cotizador/main/reservas_version.json";
+async function chequearReservasWeb(){try{
+  const r=await fetch(RES_VER_URL+"?t="+Date.now(),{cache:"no-store"});if(!r.ok)return;
+  const info=await r.json();const ultima=String(info.reservas||"");
+  if(ultima && ultima!==RES_VERSION){
+    const flag="innoba_res_reload_"+ultima; let ya=false;
+    try{ya=sessionStorage.getItem(flag)==="1";}catch(e){}
+    if(!ya){ try{sessionStorage.setItem(flag,"1");}catch(e){} location.reload(true); }
+  }
+}catch(e){}}
 const WEBHOOK_URL="https://script.google.com/macros/s/AKfycbzzl9r500lei3AdM2LnIgtw6_n9wmvx1mDlnNPL-xccCX6Bsovb4PbLJBEX9bElYJIpBg/exec";
 let TOKEN=sessionStorage.getItem("inb_res_token")||"";
 let NOMBRE=sessionStorage.getItem("inb_res_nombre")||"";
@@ -324,7 +340,8 @@ async function cambiarEstado(uid,estado){
  }catch(e){ alert("Error de conexión."); }
 }
 
-// auto-entrar si ya hay token
+// auto-actualizacion + auto-entrar si ya hay token
+chequearReservasWeb();
 if(TOKEN){ entrar(); }
 document.getElementById("clave").addEventListener("keydown",e=>{if(e.key==="Enter")login();});
 </script>
