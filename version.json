@@ -1,6 +1,6 @@
 {
-  "version": "22.1",
+  "version": "22.2",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v22.1 - Filtro por mes en Liquidacion corregido (cada mes muestra solo sus ordenes); soportes de pago hasta 6 por reserva; PDF de MICE con resumen por persona (Sencilla/Doble/Triple) + 'el evento incluye'; PDF del cotizador con 'el paquete incluye' y opcion detallado/resumen; aviso si un destino no tiene hotel; nombres de hotel bien en PDF multidestino.",
-  "sha256": "b7e60febf10a84af5ec8b4dd6a7b6ac3571d230627aff92a3e238d1289035b9f"
+  "notas": "v22.2 - Modulo Comercial: boton Clientes ahora abre el mismo gestor que Cotizaciones (clientes.json compartido); lo que crees/edites en un modulo se ve en el otro. Se agrego boton Ranking aparte.",
+  "sha256": "13b6500af6b1a813f10ad8e8c283e3b97d1dfa3a1742fafb509712052ee3358a"
 }
