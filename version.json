@@ -1,6 +1,6 @@
 {
-  "version": "22.2",
+  "version": "22.3",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v22.2 - Modulo Comercial: boton Clientes ahora abre el mismo gestor que Cotizaciones (clientes.json compartido); lo que crees/edites en un modulo se ve en el otro. Se agrego boton Ranking aparte.",
-  "sha256": "13b6500af6b1a813f10ad8e8c283e3b97d1dfa3a1742fafb509712052ee3358a"
+  "notas": "v22.3 - Villa de Leyva: hoteles Palmas, Verona y San Agustin Plaza (precio por habitacion, se convierte a por persona) y actividad Tour aguas termales + pozos azules + valle de los dinosaurios (130.000 por persona).",
+  "sha256": "64f559eb412283db002369ad93c095178c27409b20ba22b4cf0c3abe98fc1196"
 }
