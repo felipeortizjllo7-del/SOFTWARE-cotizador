@@ -1,6 +1,6 @@
 {
-  "version": "22.3",
+  "version": "22.4",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v22.3 - Villa de Leyva: hoteles Palmas, Verona y San Agustin Plaza (precio por habitacion, se convierte a por persona) y actividad Tour aguas termales + pozos azules + valle de los dinosaurios (130.000 por persona).",
-  "sha256": "64f559eb412283db002369ad93c095178c27409b20ba22b4cf0c3abe98fc1196"
+  "notas": "v22.4 - Villa de Leyva: nuevas actividades Pozos Azules (10.000), Gondava (30.000) y Termales (40.000 adulto / 35.000 nino). Se agrego soporte de PRECIO DE NINO propio por actividad (campo 'nino'); los tours sin ese campo siguen igual.",
+  "sha256": "a440ff65ee5c6e65e886e4a5cf7cb4653700077962ab80e4ca29ca8139a75a5d"
 }
