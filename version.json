@@ -1,6 +1,6 @@
 {
-  "version": "22.5",
+  "version": "22.6",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v22.5 - Liquidacion: nuevo selector 'Filtrar por' Creacion (venta) o Viaje (tour), para traer solo las ordenes cuyo tour/servicio cae en el mes elegido. Lista de meses acotada a rango plausible (evita anos por error de digitacion).",
-  "sha256": "e049786fa2f4146909c0e76d2667a6c2387977d1d0a5915548a4e454f8c65139"
+  "notas": "v22.6 - Liquidacion: nombres de asesora unificados (Valentina Velasquez, Estefania Ruiz, Yuliana Florez, Maria Camila Urrego) en la tabla, las tarjetas de bonificacion y el Excel; el Excel ahora incluye columna 'Fechas de viaje'. Filtro por mes (creacion/viaje) trae solo las ordenes de ese mes.",
+  "sha256": "50acb1df63f9e474fd223d7f73213d2ae91fdd3d97a1ec0f8bd58e900b9c749b"
 }
