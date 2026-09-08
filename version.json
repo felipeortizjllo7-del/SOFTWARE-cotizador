@@ -1,6 +1,6 @@
 {
-  "version": "22.6",
+  "version": "22.7",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v22.6 - Liquidacion: nombres de asesora unificados (Valentina Velasquez, Estefania Ruiz, Yuliana Florez, Maria Camila Urrego) en la tabla, las tarjetas de bonificacion y el Excel; el Excel ahora incluye columna 'Fechas de viaje'. Filtro por mes (creacion/viaje) trae solo las ordenes de ese mes.",
-  "sha256": "50acb1df63f9e474fd223d7f73213d2ae91fdd3d97a1ec0f8bd58e900b9c749b"
+  "notas": "v22.7 - Liquidacion: ahora SINCRONIZA al abrir (baja las reservas nuevas y cambios de las asesoras desde la nube) y tiene boton Sincronizar. Antes usaba solo el archivo local y no mostraba lo que hacian las asesoras.",
+  "sha256": "0141ad3ef4dcd967e729447680e65c23f6e6fe62d9f3f63038a0cb6cd7b13794"
 }
