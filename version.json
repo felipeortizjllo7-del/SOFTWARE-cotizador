@@ -1,6 +1,6 @@
 {
-  "version": "22.7",
+  "version": "22.8",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v22.7 - Liquidacion: ahora SINCRONIZA al abrir (baja las reservas nuevas y cambios de las asesoras desde la nube) y tiene boton Sincronizar. Antes usaba solo el archivo local y no mostraba lo que hacian las asesoras.",
-  "sha256": "0141ad3ef4dcd967e729447680e65c23f6e6fe62d9f3f63038a0cb6cd7b13794"
+  "notas": "v22.8 - Sincronizacion de reservas a prueba de conflictos: GANA la version mas reciente (marca de tiempo en cada edicion). Asi los gastos/liquidaciones que cargan las asesoras ya NO se pisan al sincronizar, y se ven en todos los equipos. La Liquidacion sincroniza al abrir.",
+  "sha256": "7f2910b53cf0d6ff84707db55e5dec401c63ec285a305dc6e3213fc4793b52dd"
 }
