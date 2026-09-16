@@ -1,6 +1,6 @@
 {
-  "version": "22.8",
+  "version": "22.9",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v22.8 - Sincronizacion de reservas a prueba de conflictos: GANA la version mas reciente (marca de tiempo en cada edicion). Asi los gastos/liquidaciones que cargan las asesoras ya NO se pisan al sincronizar, y se ven en todos los equipos. La Liquidacion sincroniza al abrir.",
-  "sha256": "7f2910b53cf0d6ff84707db55e5dec401c63ec285a305dc6e3213fc4793b52dd"
+  "notas": "v22.9 - MICE: corregido el RESUMEN FINAL por persona. El pax del evento se toma bien (si el pax quedo en 0/1, usa la cantidad de los hoteles) para que los servicios se dividan por persona; antes salian precios ~50x inflados. Se quito la columna CAT. (mostraba el numero de pax, no una categoria).",
+  "sha256": "2ea7064b846bb9f3ae23156f0747a68cea3ad46e5fbed64ab4e659c1a6731391"
 }
