@@ -1,6 +1,6 @@
 {
-  "version": "22.9",
+  "version": "23.0",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v22.9 - MICE: corregido el RESUMEN FINAL por persona. El pax del evento se toma bien (si el pax quedo en 0/1, usa la cantidad de los hoteles) para que los servicios se dividan por persona; antes salian precios ~50x inflados. Se quito la columna CAT. (mostraba el numero de pax, no una categoria).",
-  "sha256": "2ea7064b846bb9f3ae23156f0747a68cea3ad46e5fbed64ab4e659c1a6731391"
+  "notas": "Version 23.0 del Cotizador INNOBA.",
+  "sha256": "7f4492c246e1c72cd6d4db060a7a075530c2978e40f90e59bf990849eeb1b6a2"
 }
