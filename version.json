@@ -1,6 +1,6 @@
 {
-  "version": "23.0",
+  "version": "23.1",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 23.0 del Cotizador INNOBA.",
-  "sha256": "7f4492c246e1c72cd6d4db060a7a075530c2978e40f90e59bf990849eeb1b6a2"
+  "notas": "Version 23.1 del Cotizador INNOBA.",
+  "sha256": "bfdbe99cba86392ff6f382547960be6ec29319a5cf2bdc71a43ce7347bfb9a95"
 }
