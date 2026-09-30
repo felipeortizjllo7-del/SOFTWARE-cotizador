@@ -1,6 +1,6 @@
 {
-  "version": "24.7",
+  "version": "24.8",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v24.7: Contrato de conciertos reemplazado por la version revisada (paquetes con ingreso a conciertos, anticipo 70%). Cada reserva de concierto entra al modulo de Reservas (orden de servicio) y permanece en el cuadro del concierto; se corrige el nombre de la asesora y se vincula la orden con su reserva.",
-  "sha256": "cfb08d6685f7c28e21074b99c46063a4830846103dfc21a57370cd1903fc214d"
+  "notas": "v24.8: Cuadro de concierto -> boton 'Enviar a Reservas' (crea la orden de servicio solo cuando la orden esta Pagada 70% + Boleta enviada); las reservas web quedan primero solo en el cuadro. Vitrina: cargadas localidades/hoteles/tours de 9 conciertos que estaban sin datos (Anuel, Camila, Beele, Calvin Harris, Chayanne, De Chayanne, Laura Pausini, Marilyn Manson). Karol G con 3 fechas (4,5,6 dic).",
+  "sha256": "ed3e5d73fe50105f35d8c51aa3ac22c3b9d538a659aec1e8183497cf540dcd53"
 }
