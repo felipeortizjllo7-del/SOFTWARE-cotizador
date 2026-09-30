@@ -1,6 +1,6 @@
 {
-  "version": "24.9",
+  "version": "25.0",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v24.9: Gestion de disponibilidad por concierto -> marcar SOLD OUT (concierto), subir/bajar localidades sin perder los hoteles/precios del PDF, y alternativas. Vitrina: cinta SOLD OUT + lista de espera; solo muestra localidades disponibles.",
-  "sha256": "f9f761e536e35c7ec2becc61ec887807cf1d0ad8e8c1fa2f364a5718741751f7"
+  "notas": "v25.0: El boton 'Enviar a Reservas' del cuadro ahora es siempre visible y clickeable; si la orden aun no esta Pagada (70%) + Boleta enviada, explica que falta. Columna Acciones mas ancha.",
+  "sha256": "988f84235626fa991b27e2230dce534deddbeb042447035b325a3f928da5988c"
 }
