@@ -11,6 +11,9 @@
 !/index.html
 # Modulo de reservas web (con login)
 !/reservas.html
+# Vitrina de conciertos (galeria publica para clientes)
+!/conciertos.html
+!/conciertos_version.json
 # Manifiesto de autoactualizacion del .exe
 !/version.json
 # Marcador de version de la WEB (auto-recarga del cotizador HTML)
