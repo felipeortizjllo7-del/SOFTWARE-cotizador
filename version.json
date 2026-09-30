@@ -1,6 +1,6 @@
 {
-  "version": "24.5",
+  "version": "24.6",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Version 24.5 del Cotizador INNOBA.",
-  "sha256": "6769b7602ae05cc7d7dd198a5d3bc177d91ea86ada5b0082acd495faa2c008bb"
+  "notas": "v24.6: Cuadro de control por concierto (ordenes, pasajeros, pasaportes, vuelos, pago y evidencia de envio de boleta) + exportar a Excel; boton Publicar concierto a la vitrina; evidencia de conciertos publicados en linea.",
+  "sha256": "2883ffa84a108e45c5d4edafbd570da615605e1cf5672aff11375b7a733fac76"
 }
