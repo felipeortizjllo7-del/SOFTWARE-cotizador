@@ -103,7 +103,6 @@ function abrirReserva(i){const c=DATA[i];CUR=c;
  document.getElementById("m_body").innerHTML=`
   <div class="mut2">${[c.ciudad,c.recinto,c.fecha_txt].filter(Boolean).join(" · ")}</div>
   <div class="sec">1) Localidad</div>${locHtml}
-  <div class="mut2">Ver disponibilidad en la boletera:</div><div>${boletaLinks(c.titulo+" "+c.ciudad)}</div>
   <div class="sec">2) Hotel</div>
   <div class="fld"><label>Hotel</label>${hotHtml}</div>
   <div class="g3">
@@ -251,7 +250,7 @@ function pintar(){
 ["q","fciudad","fmes"].forEach(id=>document.getElementById(id).addEventListener("input",pintar));
 pintar();
 /* auto-actualizacion: si se publico una version nueva, recarga UNA vez */
-const CBUILD="1790797374";
+const CBUILD="1790797409";
 (async function(){try{
  const r=await fetch("conciertos_version.json?t="+Date.now(),{cache:"no-store"});
  const j=await r.json();
