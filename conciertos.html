@@ -97,11 +97,11 @@ function boletaLinks(q){const e=encodeURIComponent(q);
       +`<a class="bol" target="_blank" href="https://www.tuboleta.com/">Tuboleta</a>`
       +`<a class="bol" target="_blank" href="https://taquillalive.com/">TaquillaLive</a>`;}
 function abrirReserva(i){const c=DATA[i];CUR=c;
- CUR._i=i;const locs=(c.localidades||[]).filter(l=>l.nombre);
- const conHot=locs.some(l=>(l.hoteles||[]).length);const tours=c.tours||[];
- const locHtml = locs.length
-   ? locs.map((l,j)=>`<label class="loc ${l.disponible?'':'ag'}"><input type="radio" name="loc" value="${j}" ${l.disponible?'':'disabled'} onchange="selLoc()"> ${l.nombre}${l.disponible?'':' (AGOTADO)'}</label>`).join("")
-   : `<input id="r_loc" placeholder="Escribe la localidad / tribuna que quieres">`;
+ CUR._i=i;const locsDisp=(c.localidades||[]).map((l,idx)=>({l,idx})).filter(o=>o.l.nombre&&o.l.disponible!==false);
+ const conHot=locsDisp.some(o=>(o.l.hoteles||[]).length);const tours=c.tours||[];
+ const locHtml = locsDisp.length
+   ? locsDisp.map(o=>`<label class="loc"><input type="radio" name="loc" value="${o.idx}" onchange="selLoc()"> ${o.l.nombre}</label>`).join("")
+   : `<div class="mut2" style="margin:2px 0 8px">No hay localidades disponibles en este momento; escribe la que te interese y una asesora verificara disponibilidad.</div><input id="r_loc" placeholder="Localidad / tribuna que quieres">`;
  const hotHtml = conHot ? `<select id="r_hotel" onchange="recalc()"><option value="">Elige primero la localidad</option></select>`
                         : `<input id="r_hotel" placeholder="Hotel (opcional)">`;
  document.getElementById("m_tit").textContent="Reservar: "+c.titulo;
@@ -133,10 +133,9 @@ function abrirReserva(i){const c=DATA[i];CUR=c;
    <div class="fld"><label>Vuelo salida</label><input id="r_vout" placeholder="Aerolinea/vuelo + fecha"></div>
    <div class="fld"><label>Hora salida</label><input id="r_hout"></div></div>
   ${tours.length?`<div class="sec">5) Tours opcionales (por persona)</div><div id="r_tours">${tours.map((t,k)=>`<label class="tour"><input type="checkbox" value="${k}" onchange="recalc()"> ${t.n} — ${fmt(t.v)}</label>`).join("")}</div>`:""}
-  <div class="sec">6) Contrato y pago (70%)</div>
-  <label class="tour"><input type="checkbox" id="r_contr"> He leido y acepto el <a href="#" onclick="verContrato();return false;">contrato de servicios</a> (pago del 70% para reservar).</label>
-  <div class="fld"><label>Comprobante del pago del 70% (foto o pantallazo)</label><input id="r_comp" type="file" accept="image/*,application/pdf"></div>
-  <div class="mut2">Pago: transferencia BANISTMO PANAMA (ahorros) 0120179743, o link de pagos (+3%). Sin pago no se confirma la reserva.</div>
+  <div class="sec">6) Contrato</div>
+  <label class="tour"><input type="checkbox" id="r_contr"> He leido y acepto el <a href="#" onclick="verContrato();return false;">contrato de servicios</a>.</label>
+  <div class="mut2">No se cobra nada en este momento. Al recibir tu solicitud, una asesora VERIFICA la disponibilidad de ingreso al concierto y te contacta para confirmar la reserva y coordinar el pago (anticipo del 70%).</div>
   <button class="ok2" id="r_send" onclick="enviarReserva()">Enviar solicitud de reserva</button>`;
  document.getElementById("r_pax").innerHTML="";addPax();
  document.getElementById("ov").classList.add("on");window.scrollTo(0,0);}
@@ -166,8 +165,8 @@ function recalc(){const el=document.getElementById("r_precio");if(!el)return;con
  const per=Math.max(parseInt((document.getElementById("r_boletas")||{}).value||"2")||2,1);
  const toursPP=[...document.querySelectorAll("#r_tours input:checked")].reduce((a,x)=>a+(+CUR.tours[+x.value].v||0),0);
  if(!pa){el.textContent="Elige localidad y hotel para ver el precio.";return;}
- const totPP=pa.pp+toursPP, total=totPP*per, ad=total*0.7;
- el.innerHTML=`Por persona: <b>${fmt(totPP)}</b> &nbsp;·&nbsp; ${per} personas: <b>${fmt(total)}</b><br>Pago para reservar (70%): <b style="color:var(--green)">${fmt(ad)}</b>`;}
+ const totPP=pa.pp+toursPP, total=totPP*per;
+ el.innerHTML=`Por persona: <b>${fmt(totPP)}</b> &nbsp;·&nbsp; ${per} personas: <b>${fmt(total)}</b><br><span style="font-weight:400;color:var(--mut)">Valor de referencia. Una asesora confirma disponibilidad y el pago.</span>`;}
 function cerrar(){document.getElementById("ov").classList.remove("on");}
 function verContrato(){document.getElementById("ctxt").textContent=CONTRATO;document.getElementById("ovc").classList.add("on");}
 function leerArchivo(inp){return new Promise(res=>{const f=inp&&inp.files&&inp.files[0];if(!f){res(["",""]);return;}
@@ -187,7 +186,6 @@ async function enviarReserva(){const c=CUR;
  if(!nom||!tel){alert("Pon tu nombre y tu WhatsApp (con indicativo).");return;}
  if(!document.getElementById("r_contr").checked){alert("Debes aceptar el contrato para reservar.");return;}
  const btn=document.getElementById("r_send");btn.disabled=true;btn.textContent="Enviando...";
- const [cb,cbn]=await leerArchivo(document.getElementById("r_comp"));
  const tsel=[...document.querySelectorAll("#r_tours input:checked")];
  const tours=tsel.map(x=>CUR.tours[+x.value].n);
  const toursV=tsel.reduce((a,x)=>a+(+CUR.tours[+x.value].v||0),0);
@@ -202,15 +200,15 @@ async function enviarReserva(){const c=CUR;
    destinos:[c.ciudad], fechas_viaje:c.fecha_txt,
    concierto:c.titulo, ciudad:c.ciudad, recinto:c.recinto, localidad:loc, hotel:hotel, acomodacion:acN,
    noches:document.getElementById("r_noches").value,
-   boletas:per, tours:tours, total:Math.round(total), pago_70:Math.round(total*0.7),
-   contrato_aceptado:true, comprobante_b64:cb, comprobante_nombre:cbn,
+   boletas:per, tours:tours, total:Math.round(total),
+   contrato_aceptado:true,
    pasajeros:pasajeros,
    vuelos:{llegada:(document.getElementById("r_vin").value||"").trim(),hora_llegada:(document.getElementById("r_hin").value||"").trim(),
            salida:(document.getElementById("r_vout").value||"").trim(),hora_salida:(document.getElementById("r_hout").value||"").trim()},
    fecha:(new Date()).toLocaleDateString("es-CO")};
  try{await fetch(WHP,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(sol)});}catch(e){}
  setTimeout(()=>{cerrar();btn.disabled=false;btn.textContent="Enviar solicitud de reserva";
-   alert("¡Listo! Tu solicitud de reserva de "+c.titulo+" fue enviada a INNOBA DMC.\n\nUna asesora te contactara para confirmar. La reserva se confirma con el pago del 70%.");},900);}
+   alert("¡Listo! Tu solicitud de reserva de "+c.titulo+" fue enviada a INNOBA DMC.\n\nUna asesora VERIFICARA la disponibilidad de ingreso al concierto y te contactara para confirmar la reserva y coordinar el pago.");},900);}
 const COLORS=[["#7b2ff7","#f107a3"],["#2b5876","#4e4376"],["#0f2027","#2c5364"],["#c31432","#240b36"],
  ["#1a2980","#26d0ce"],["#ee0979","#ff6a00"],["#136a8a","#267871"],["#42275a","#734b6d"],
  ["#000428","#004e92"],["#603813","#b29f94"],["#16222a","#3a6073"],["#8e2de2","#4a00e0"]];
@@ -254,7 +252,7 @@ function pintar(){
 ["q","fciudad","fmes"].forEach(id=>document.getElementById(id).addEventListener("input",pintar));
 pintar();
 /* auto-actualizacion: si se publico una version nueva, recarga UNA vez */
-const CBUILD="1790800280";
+const CBUILD="1790800631";
 (async function(){try{
  const r=await fetch("conciertos_version.json?t="+Date.now(),{cache:"no-store"});
  const j=await r.json();
