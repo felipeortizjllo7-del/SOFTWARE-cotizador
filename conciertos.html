@@ -113,7 +113,7 @@ function abrirReserva(i){const c=DATA[i];CUR=c;
   <div class="g3">
    <div class="fld"><label>Acomodacion</label><select id="r_acom" onchange="recalc()"><option value="sen">Sencilla</option><option value="dob" selected>Doble</option><option value="tri">Triple</option></select></div>
    <div class="fld"><label>Noches</label><input id="r_noches" value="${c.noches||''}" placeholder="segun paquete"></div>
-   <div class="fld"><label>N.º de personas (par)</label><input id="r_boletas" type="number" value="2" min="2" step="2" oninput="recalc();pintarPax()"></div></div>
+   <div class="fld"><label>N.º de personas (par)</label><input id="r_boletas" type="number" value="2" min="2" step="2" oninput="recalc()"></div></div>
   ${conHot?`<div id="r_precio" style="background:#eef5ff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-weight:700;color:var(--navy)">Elige localidad y hotel para ver el precio.</div>`:""}
   <div class="sec">3) Datos de quien reserva (contacto)</div>
   <div class="g2">
@@ -122,9 +122,10 @@ function abrirReserva(i){const c=DATA[i];CUR=c;
    <div class="fld"><label>Nacionalidad</label><input id="r_nac"></div>
    <div class="fld"><label>Correo</label><input id="r_mail" type="email"></div>
    <div class="fld"><label>WhatsApp</label><div style="display:flex;gap:6px"><select id="r_cod" style="width:150px;flex:none">${opcsPais()}</select><input id="r_tel" placeholder="numero" style="flex:1"></div></div></div>
-  <div class="sec" style="font-size:14px">Pasajeros (una casilla por persona · ingreso de 2 en 2)</div>
-  <div class="mut2">Nombre y documento de CADA pasajero. El pasajero 1 es quien reserva.</div>
+  <div class="sec" style="font-size:14px">Pasajeros</div>
+  <div class="mut2">Agrega cada pasajero con su nombre y documento. El pasajero 1 es quien reserva. Ingreso de 2 en 2.</div>
   <div id="r_pax"></div>
+  <button type="button" class="bol" style="margin-top:6px;background:#e7f0fb;color:var(--navy)" onclick="addPax()">+ Añadir pasajero</button>
   <div class="sec">4) Vuelos</div>
   <div class="g2">
    <div class="fld"><label>Vuelo llegada</label><input id="r_vin" placeholder="Aerolinea/vuelo + fecha"></div>
@@ -137,22 +138,20 @@ function abrirReserva(i){const c=DATA[i];CUR=c;
   <div class="fld"><label>Comprobante del pago del 70% (foto o pantallazo)</label><input id="r_comp" type="file" accept="image/*,application/pdf"></div>
   <div class="mut2">Pago: transferencia BANISTMO PANAMA (ahorros) 0120179743, o link de pagos (+3%). Sin pago no se confirma la reserva.</div>
   <button class="ok2" id="r_send" onclick="enviarReserva()">Enviar solicitud de reserva</button>`;
- pintarPax();
+ document.getElementById("r_pax").innerHTML="";addPax();
  document.getElementById("ov").classList.add("on");window.scrollTo(0,0);}
-function pintarPax(){const box=document.getElementById("r_pax");if(!box)return;
- const n=Math.max(parseInt((document.getElementById("r_boletas")||{}).value||"2")||2,1);
- const prev=[...box.querySelectorAll(".paxrow")].map(r=>({n:r.querySelector(".pn").value,d:r.querySelector(".pd").value}));
- const nom1=(document.getElementById("r_nom")||{}).value||"", doc1=(document.getElementById("r_doc")||{}).value||"";
- let h="";
- for(let k=0;k<n;k++){const p=prev[k]||{};
-   const dn=(k===0?(p.n||nom1):(p.n||"")).replace(/"/g,"&quot;");
-   const dd=(k===0?(p.d||doc1):(p.d||"")).replace(/"/g,"&quot;");
-   h+=`<div class="paxrow g2" style="margin-bottom:6px"><div class="fld"><label>Pasajero ${k+1} — nombre</label><input class="pn" value="${dn}"></div><div class="fld"><label>Documento / Pasaporte</label><input class="pd" value="${dd}"></div></div>`;}
- box.innerHTML=h;}
+function addPax(nombre,doc){const box=document.getElementById("r_pax");if(!box)return;
+ const div=document.createElement("div");div.className="paxrow";
+ const dn=(nombre||"").replace(/"/g,"&quot;"),dd=(doc||"").replace(/"/g,"&quot;");
+ div.innerHTML=`<div class="g2"><div class="fld"><label>Pasajero <span class="pnum"></span> — nombre</label><input class="pn" value="${dn}"></div><div class="fld"><label>Documento / Pasaporte</label><input class="pd" value="${dd}"></div></div>
+   <div style="text-align:right;margin:-2px 0 8px"><button type="button" class="bol" style="background:#fdeaea;color:var(--red);border-color:#f3c7c7" onclick="delPax(this)">Quitar</button></div>`;
+ box.appendChild(div);renumPax();}
+function delPax(b){if(document.querySelectorAll("#r_pax .paxrow").length<=1)return;b.closest(".paxrow").remove();renumPax();}
+function renumPax(){[...document.querySelectorAll("#r_pax .paxrow .pnum")].forEach((s,i)=>s.textContent=i+1);}
 function syncPax1(){const box=document.getElementById("r_pax");if(!box)return;const r=box.querySelector(".paxrow");if(!r)return;
  const pn=r.querySelector(".pn"),pd=r.querySelector(".pd");
- if(pn&&!pn.dataset.touched)pn.value=(document.getElementById("r_nom")||{}).value||"";
- if(pd&&!pd.dataset.touched)pd.value=(document.getElementById("r_doc")||{}).value||"";}
+ if(pn&&!pn.value)pn.value=(document.getElementById("r_nom")||{}).value||"";
+ if(pd&&!pd.value)pd.value=(document.getElementById("r_doc")||{}).value||"";}
 function selLoc(){const c=CUR;const sel=document.querySelector('#m_body input[name="loc"]:checked');const hs=document.getElementById("r_hotel");
  document.querySelectorAll("#m_body .loc").forEach(l=>l.classList.remove("sel"));
  if(sel)sel.closest(".loc").classList.add("sel");
@@ -255,7 +254,7 @@ function pintar(){
 ["q","fciudad","fmes"].forEach(id=>document.getElementById(id).addEventListener("input",pintar));
 pintar();
 /* auto-actualizacion: si se publico una version nueva, recarga UNA vez */
-const CBUILD="1790797520";
+const CBUILD="1790797683";
 (async function(){try{
  const r=await fetch("conciertos_version.json?t="+Date.now(),{cache:"no-store"});
  const j=await r.json();
