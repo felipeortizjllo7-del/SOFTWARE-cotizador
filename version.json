@@ -1,6 +1,6 @@
 {
-  "version": "25.0",
+  "version": "25.1",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v25.0: El boton 'Enviar a Reservas' del cuadro ahora es siempre visible y clickeable; si la orden aun no esta Pagada (70%) + Boleta enviada, explica que falta. Columna Acciones mas ancha.",
-  "sha256": "988f84235626fa991b27e2230dce534deddbeb042447035b325a3f928da5988c"
+  "notas": "v25.1: En la orden del cuadro se registra el COSTO de compra de la boleta (COP) y con la TRM automatica (dolar-colombia) calcula el costo en USD, mas el PRECIO DE VENTA al cliente y la UTILIDAD; se exportan al Excel. Boton 'Enviar a Reservas' siempre visible.",
+  "sha256": "311ddeba0c56f20d4fa96828a81ea34e915acb88d3d32e0b602ca20efe55251c"
 }
