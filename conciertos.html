@@ -71,7 +71,7 @@ button.btn{border:none;cursor:pointer;font-family:inherit}
   <div class="grid" id="grid"></div>
 </div>
 <div class="foot">Los cupos y localidades estan sujetos a disponibilidad al momento de la reserva. Precios en USD.
-  <br>La reserva se confirma con el pago del 70%. &middot; v24.4</div>
+  <br>La reserva se confirma con el pago del 70%. &middot; v24.5</div>
 <div class="ov" id="ov"><div class="modal">
   <div class="mh"><b id="m_tit">Reservar</b><button class="x" onclick="cerrar()">&times;</button></div>
   <div class="mb" id="m_body"></div>
@@ -197,4 +197,12 @@ function pintar(){
 }
 ["q","fciudad","fmes"].forEach(id=>document.getElementById(id).addEventListener("input",pintar));
 pintar();
+/* auto-actualizacion: si se publico una version nueva, recarga UNA vez */
+const CBUILD="1790788812";
+(async function(){try{
+ const r=await fetch("conciertos_version.json?t="+Date.now(),{cache:"no-store"});
+ const j=await r.json();
+ if(j&&j.build&&String(j.build)!==CBUILD){const k="conc_reload_"+j.build;
+   if(!sessionStorage.getItem(k)){sessionStorage.setItem(k,"1");location.reload(true);}}
+}catch(e){}})();
 </script></body></html>
