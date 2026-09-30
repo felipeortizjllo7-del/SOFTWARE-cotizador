@@ -1,6 +1,6 @@
 {
-  "version": "25.1",
+  "version": "25.2",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v25.1: En la orden del cuadro se registra el COSTO de compra de la boleta (COP) y con la TRM automatica (dolar-colombia) calcula el costo en USD, mas el PRECIO DE VENTA al cliente y la UTILIDAD; se exportan al Excel. Boton 'Enviar a Reservas' siempre visible.",
-  "sha256": "311ddeba0c56f20d4fa96828a81ea34e915acb88d3d32e0b602ca20efe55251c"
+  "notas": "v25.2: Vitrina con seccion 'Proximos eventos a la espera de fecha' (Bruno Mars, Backstreet Boys, Coldplay, Don Omar, Luis Miguel) con afiches teaser; aceptacion del contrato marcada como OBLIGATORIA. Conciertos proximamente nunca se auto-borran.",
+  "sha256": "16119547f94c7910ce5012b43c446ec66f86052b8ca08a81cae4b0205dcf386d"
 }
