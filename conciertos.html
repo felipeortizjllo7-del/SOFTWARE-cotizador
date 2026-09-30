@@ -269,22 +269,22 @@ function pintar(){
  const prox=(fm?[]:DATA.filter(c=>c.proximamente && pasa(c)));
  const g=document.getElementById("grid");g.innerHTML="";
  if(!items.length && !prox.length){g.innerHTML='<div class="vacio">No hay conciertos para este filtro.</div>';return;}
+ if(prox.length){
+   g.insertAdjacentHTML("beforeend",`<div class="mes-h prox-h">🔜 Próximos eventos · a la espera de fecha</div>`);
+   prox.forEach(c=>g.insertAdjacentHTML("beforeend",cardProx(c)));
+ }
  let mesAct=null;
  items.forEach(c=>{
    if(c.mes!==mesAct){mesAct=c.mes;g.insertAdjacentHTML("beforeend",`<div class="mes-h">${mesNom(c.mes)}</div>`);}
    g.insertAdjacentHTML("beforeend",cardNormal(c));
  });
- if(prox.length){
-   g.insertAdjacentHTML("beforeend",`<div class="mes-h prox-h">🔜 Próximos eventos · a la espera de fecha</div>`);
-   prox.forEach(c=>g.insertAdjacentHTML("beforeend",cardProx(c)));
- }
 }
 ["q","fciudad","fmes"].forEach(id=>document.getElementById(id).addEventListener("input",pintar));
 pintar();
 /* auto-actualizacion: si se publico una version nueva, recarga sola. Revisa al abrir,
    cada 2 minutos y al volver a la pestana, para que TODO el que tenga el link se
    actualice sin hacer nada. */
-const CBUILD="1790804693";
+const CBUILD="1790804816";
 async function _chkBuild(){try{
  const r=await fetch("conciertos_version.json?t="+Date.now(),{cache:"no-store"});
  const j=await r.json();
