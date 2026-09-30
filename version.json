@@ -1,6 +1,6 @@
 {
-  "version": "24.8",
+  "version": "24.9",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v24.8: Cuadro de concierto -> boton 'Enviar a Reservas' (crea la orden de servicio solo cuando la orden esta Pagada 70% + Boleta enviada); las reservas web quedan primero solo en el cuadro. Vitrina: cargadas localidades/hoteles/tours de 9 conciertos que estaban sin datos (Anuel, Camila, Beele, Calvin Harris, Chayanne, De Chayanne, Laura Pausini, Marilyn Manson). Karol G con 3 fechas (4,5,6 dic).",
-  "sha256": "ed3e5d73fe50105f35d8c51aa3ac22c3b9d538a659aec1e8183497cf540dcd53"
+  "notas": "v24.9: Gestion de disponibilidad por concierto -> marcar SOLD OUT (concierto), subir/bajar localidades sin perder los hoteles/precios del PDF, y alternativas. Vitrina: cinta SOLD OUT + lista de espera; solo muestra localidades disponibles.",
+  "sha256": "f9f761e536e35c7ec2becc61ec887807cf1d0ad8e8c1fa2f364a5718741751f7"
 }
