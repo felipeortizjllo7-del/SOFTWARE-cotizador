@@ -21,11 +21,12 @@
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 6px 18px rgba(1,57,132,.07);display:flex;flex-direction:column;transition:transform .12s,box-shadow .12s}
 .card:hover{transform:translateY(-3px);box-shadow:0 14px 30px rgba(1,57,132,.16)}
-.banner{height:210px;background-size:cover;background-position:center top;position:relative;display:flex;align-items:flex-end;padding:12px 14px;color:#fff}
-.banner .art{font-size:22px;font-weight:800;line-height:1.1;text-shadow:0 2px 8px rgba(0,0,0,.35)}
-.badge{position:absolute;top:10px;right:10px;background:rgba(255,255,255,.95);color:var(--navy);border-radius:10px;padding:5px 10px;font-weight:800;font-size:13px;text-align:center;line-height:1.05}
+.banner{height:230px;background-color:#0c1a33;background-size:contain;background-position:center;background-repeat:no-repeat;position:relative}
+.banner.grad{display:flex;align-items:center;justify-content:center;font-size:46px;color:rgba(255,255,255,.9)}
+.badge{position:absolute;top:10px;right:10px;background:rgba(255,255,255,.96);color:var(--navy);border-radius:10px;padding:5px 10px;font-weight:800;font-size:13px;text-align:center;line-height:1.05;box-shadow:0 2px 8px rgba(0,0,0,.25)}
 .badge small{display:block;font-size:10px;font-weight:700;color:var(--blue)}
 .body{padding:12px 14px 14px;display:flex;flex-direction:column;gap:8px;flex:1}
+.name{font-size:19px;font-weight:800;color:var(--navy);line-height:1.14}
 .sub{color:var(--muted);font-size:13px;margin-top:-2px}
 .row{display:flex;align-items:center;gap:6px;color:var(--txt);font-size:14px}
 .row .ic{color:var(--blue)}
@@ -82,11 +83,12 @@ function pintar(){
    const col=COLORS[hash(c.titulo)%COLORS.length];
    const locs=(c.localidades||[]).map(l=>`<span class="chip ${l.disponible?'ok':'no'}">${l.nombre}</span>`).join("");
    const msg=encodeURIComponent("Hola INNOBA DMC, me interesa el concierto de "+c.titulo+(c.ciudad?" en "+c.ciudad:"")+(c.fecha_txt?" ("+c.fecha_txt+")":"")+". Quiero cotizar/reservar.");
-   const bg=c.img?`background:linear-gradient(to top,rgba(0,0,0,.80) 6%,rgba(0,0,0,.10) 52%,rgba(0,0,0,.30)),url('${c.img}')`
-                 :`background:linear-gradient(135deg,${col[0]},${col[1]})`;
+   const ban=c.img?`class="banner" style="background-image:url('${c.img}')"`
+                  :`class="banner grad" style="background:linear-gradient(135deg,${col[0]},${col[1]})"`;
    g.insertAdjacentHTML("beforeend",`<div class="card">
-     <div class="banner" style="${bg}">${diaBadge(c.iso)}<div class="art">${c.titulo}</div></div>
+     <div ${ban}>${diaBadge(c.iso)}${c.img?"":"<span>&#127925;</span>"}</div>
      <div class="body">
+       <div class="name">${c.titulo}</div>
        ${c.subtitulo?`<div class="sub">${c.subtitulo}</div>`:""}
        <div class="row"><span class="ic">&#128205;</span>${[c.ciudad,c.recinto].filter(Boolean).join(" &middot; ")||"Ciudad por confirmar"}</div>
        <div class="row"><span class="ic">&#128197;</span>${c.fecha_txt||"Fecha por confirmar"}</div>
