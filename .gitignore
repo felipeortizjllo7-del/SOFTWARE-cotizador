@@ -14,6 +14,9 @@
 # Vitrina de conciertos (galeria publica para clientes)
 !/conciertos.html
 !/conciertos_version.json
+# PDFs del programa de cada concierto (para descargar desde la vitrina)
+!/conciertos_pdf/
+!/conciertos_pdf/*.pdf
 # Manifiesto de autoactualizacion del .exe
 !/version.json
 # Marcador de version de la WEB (auto-recarga del cotizador HTML)
