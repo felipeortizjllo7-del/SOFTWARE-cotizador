@@ -1,6 +1,6 @@
 {
-  "version": "25.3",
+  "version": "25.4",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v25.3: Blindaje de datos de conciertos y ordenes: datos_dir ya no cae a una ruta vacia si %APPDATA% existe; lectura con reintentos + respaldo .bak + fallback a %APPDATA%; copias de seguridad automaticas al guardar. (Los conciertos y el cuadro no vuelven a aparecer vacios si el archivo existe).",
-  "sha256": "4d8868660a5d667d8bbd3b7e7c30a9651547afca9372d573641556ce2586c6cb"
+  "notas": "v25.4: La vitrina de conciertos incluye el PDF del programa de cada concierto para DESCARGAR (boton 'Programa'); al publicar desde el modulo tambien se suben los PDFs.",
+  "sha256": "1568529e3c18aae6ba3c938de58676e26bf59f385527718a7c6747a610c75236"
 }
