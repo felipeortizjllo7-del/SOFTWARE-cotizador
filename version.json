@@ -1,6 +1,6 @@
 {
-  "version": "25.4",
+  "version": "25.5",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v25.4: La vitrina de conciertos incluye el PDF del programa de cada concierto para DESCARGAR (boton 'Programa'); al publicar desde el modulo tambien se suben los PDFs.",
-  "sha256": "1568529e3c18aae6ba3c938de58676e26bf59f385527718a7c6747a610c75236"
+  "notas": "v25.5: Tarifas 2027 actualizadas desde el tarifario (26 hoteles y 3 terrestres con precio nuevo) + 15 hoteles y 6 servicios nuevos; se mantienen las formulas (hotel /0.88, terrestre /0.75, dolar TRM-150/-200).",
+  "sha256": "92d64719f173651537a3b9c5d7f9b1a70a02b98b27fbf1910ec57b9e70bb3abd"
 }

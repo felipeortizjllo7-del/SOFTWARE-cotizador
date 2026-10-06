@@ -292,7 +292,7 @@ pintar();
 /* auto-actualizacion: si se publico una version nueva, recarga sola. Revisa al abrir,
    cada 2 minutos y al volver a la pestana, para que TODO el que tenga el link se
    actualice sin hacer nada. */
-const CBUILD="1791209055";
+const CBUILD="1791246152";
 async function _chkBuild(){try{
  const r=await fetch("conciertos_version.json?t="+Date.now(),{cache:"no-store"});
  const j=await r.json();
