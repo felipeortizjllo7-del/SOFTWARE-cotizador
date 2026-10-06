@@ -1,6 +1,6 @@
 {
-  "version": "25.6",
+  "version": "25.7",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v25.6: diagnostico y blindaje de datos de conciertos/ordenes (registro _debug_conc.log; nunca se sobrescribe con vacio; recuperacion desde backup). Incluye tarifas 2027 actualizadas.",
-  "sha256": "99dae2f421c7aeb7f90f12f16e9e80213b2fead972731aee1c595b4e64b97de6"
+  "notas": "v25.7: descriptivo de 'Visita a Guatape en compartido' actualizado (texto nuevo) y se quito 'desayuno' del incluye. Incluye tarifas 2027 y blindaje de datos de conciertos.",
+  "sha256": "f8dffa2f90651e62a9e3453f7bfb3a403df43d07d73ffcd9d35464dfbab396b6"
 }
