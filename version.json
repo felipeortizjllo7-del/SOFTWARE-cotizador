@@ -1,6 +1,6 @@
 {
-  "version": "25.8",
+  "version": "25.9",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v25.8: arreglo definitivo del fallo de lectura intermitente de conciertos/ordenes: reintentos, MEMORIA en RAM (nunca muestra 0 si ya leyo), reintento automatico en pantalla si el archivo esta ocupado, y blindaje total (nunca sobrescribe con vacio). Registro de diagnostico ampliado.",
-  "sha256": "3ea422c3c4582dbef7e257fdfc5f17841760b44663c5efd323b58ce3d8e009be"
+  "notas": "v25.9: Inventario de BOLETAS por concierto: importar/cargar disponibilidad (localidad, bloque, fila, silla, agencia), ver disponibles vs asignadas por localidad, y ASIGNAR boletas a una orden (se descuentan del inventario). Boton '🎟 Boletas' en el modulo. SOLD OUT a toda la foto en la vitrina.",
+  "sha256": "d0aea5b49ab9cd8050ffa0b214bb02df54a13b2c5843d5ad85d90771de52ea0c"
 }
