@@ -1,6 +1,6 @@
 {
-  "version": "25.13",
+  "version": "25.14",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Blindaje definitivo contra 'conciertos en 0': copias espejo en LOCALAPPDATA y carpeta del programa; si el antivirus bloquea la carpeta de datos, se lee el espejo. Nunca muestra 0 ni borra datos.",
-  "sha256": "bc56e7d9497659155616bcb9253e9af39385ab0a72087ca9ec540a8141368535"
+  "notas": "Tour de Arquitectura en Medellin: precios cargados de 15 a 20 pasajeros (misma buseta, formula de terrestres). Antes quedaban en 0 arriba de 14 pax.",
+  "sha256": "01787108466136b0f0895b3b56d5e2f029a202fff9a9c517293721e32f32ad85"
 }
