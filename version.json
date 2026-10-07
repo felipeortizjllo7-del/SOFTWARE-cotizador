@@ -1,6 +1,6 @@
 {
-  "version": "25.14",
+  "version": "25.15",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Tour de Arquitectura en Medellin: precios cargados de 15 a 20 pasajeros (misma buseta, formula de terrestres). Antes quedaban en 0 arriba de 14 pax.",
-  "sha256": "01787108466136b0f0895b3b56d5e2f029a202fff9a9c517293721e32f32ad85"
+  "notas": "Web: afiches y PDF nunca mas se pierden al publicar la vitrina. El .exe usa un Python con PyMuPDF/Pillow y, si no lo hay, avisa; ademas un blindaje impide sobrescribir la vitrina buena con una sin fotos/PDF.",
+  "sha256": "ac6ff24e52640eaca77a77b068e84936bdb595bff2c0e74bb2779daca467d0c5"
 }
