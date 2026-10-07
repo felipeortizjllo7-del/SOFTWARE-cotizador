@@ -1,6 +1,6 @@
 {
-  "version": "25.10",
+  "version": "25.11",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v25.10: Reservas -> Excel 'Pagos' (confrontar: cliente, correo, monto, valor pagado, fecha de pago, saldo, novedades) + campos Valor pagado/Fecha de pago/Saldo en la reserva; identificacion de cliente por correo cuando queda vacio. Conciertos -> boton 'Publicar en la web' (SOLD OUT/disponibilidad/precios). SOLD OUT a toda la foto.",
-  "sha256": "c6ba4a598e7104483238928d56a041cb19fde7504d1d6a29d66abd9ee8b4d6ee"
+  "notas": "v25.11: Reservas -> boton 'Ventas x cliente' para liquidar comisiones: saca las ventas de un cliente (ej. Allegro) y las agrupa por asesor (une variantes del nombre), con ventas/pagado/saldo y columna de comision % editable. Incluye lo de v25.10 (Excel de pagos, campos de pago, identificacion de cliente, publicar vitrina).",
+  "sha256": "c0494ec9e216d76503fa7ac0518fcb308121c685ebb99184d5ea533a40209394"
 }
