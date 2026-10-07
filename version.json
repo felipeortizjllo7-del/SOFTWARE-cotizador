@@ -1,6 +1,6 @@
 {
-  "version": "25.12",
+  "version": "25.13",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "v25.12: ARREGLO DEFINITIVO del 'conciertos en 0'. Causa: faltaba import time -> los reintentos de lectura NUNCA corrian; y se confiaba en os.path.exists (que a veces da False por bloqueo momentaneo aunque el archivo exista). Ahora: import time; se abre DIRECTO con reintentos ante cualquier error (incl. FileNotFoundError transitorio); + memoria RAM + blindaje + backups + reintento en pantalla. Los datos nunca se borran.",
-  "sha256": "142491268eb8307aeacbf6faa73bd2c4bdfcf2f45d47a1d409c9e8e4d90de42e"
+  "notas": "Blindaje definitivo contra 'conciertos en 0': copias espejo en LOCALAPPDATA y carpeta del programa; si el antivirus bloquea la carpeta de datos, se lee el espejo. Nunca muestra 0 ni borra datos.",
+  "sha256": "bc56e7d9497659155616bcb9253e9af39385ab0a72087ca9ec540a8141368535"
 }
