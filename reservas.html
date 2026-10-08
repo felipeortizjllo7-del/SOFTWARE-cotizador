@@ -79,11 +79,25 @@ header .who{font-size:13px;color:#cfe}
   <button class="btn-out" onclick="logout()">Salir</button>
  </header>
  <div class="bar">
-  <input id="q" type="text" placeholder="Buscar por orden de servicio, cliente, destino, asesora o monto (valor vendido)..." oninput="render()">
+  <input id="q" type="text" style="flex:1 1 220px" placeholder="Buscar por orden de servicio, cliente, destino, asesora o monto (valor vendido)..." oninput="render()">
   <select id="fase" onchange="render()"><option value="">Todas las asesoras</option></select>
+  <select id="fagc" onchange="render()"><option value="">Todas las agencias</option></select>
+  <select id="fanio" onchange="render()" style="min-width:110px"><option value="">Año: todos</option></select>
+  <select id="fmes" onchange="render()" style="min-width:120px">
+   <option value="">Mes: todos</option>
+   <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
+   <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
+   <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
+   <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+  </select>
   <select id="fest" onchange="render()">
    <option value="">Todos los estados</option>
    <option>Confirmada</option><option>Confirmada con pago</option><option>Aplazada</option><option>Anulada</option>
+  </select>
+  <select id="fpago" onchange="render()" style="min-width:170px">
+   <option value="">Pago: todos</option>
+   <option value="pend">Pendientes de pago</option>
+   <option value="pag">Pagadas</option>
   </select>
   <button class="btn-out" style="border-color:var(--navy);color:var(--navy)" onclick="cargar()">↻ Actualizar</button>
   <span class="count" id="count"></span>
@@ -94,7 +108,7 @@ header .who{font-size:13px;color:#cfe}
 <script>
 // Auto-actualizacion de ESTE modulo (reservas): si se publica una version nueva,
 // la pagina se recarga sola (una vez) para que Angela y demas vean lo ultimo.
-const RES_VERSION="R2";
+const RES_VERSION="R3";
 const RES_VER_URL="https://raw.githubusercontent.com/felipeortizjllo7-del/SOFTWARE-cotizador/main/reservas_version.json";
 async function chequearReservasWeb(){try{
   const r=await fetch(RES_VER_URL+"?t="+Date.now(),{cache:"no-store"});if(!r.ok)return;
@@ -112,15 +126,60 @@ let DATA=[];
 const ESTCOL={"Confirmada":"var(--amber)","Confirmada con pago":"var(--green)","Aplazada":"var(--amber)","Anulada":"var(--red)"};
 const ESTBG={"Confirmada":"#FFF6DA","Confirmada con pago":"#E4F6EC","Aplazada":"#FFF6DA","Anulada":"#FCE7E5"};
 
-async function api(payload){
- const r=await fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
- return await r.json();
+function espera(ms){return new Promise(res=>setTimeout(res,ms));}
+// api con REINTENTOS: Google Apps Script a veces responde lento o falla por un instante
+// (arranque en frio, 429, corte momentaneo). Reintenta hasta 3 veces con espera creciente
+// y un tiempo limite por intento, para que NO salga "Error de conexion" por un bache.
+async function api(payload, intentos){
+ intentos = intentos || 3;
+ let ultErr;
+ for(let i=0;i<intentos;i++){
+  try{
+   let signal, to;
+   if(typeof AbortController!=="undefined"){ const c=new AbortController(); signal=c.signal; to=setTimeout(()=>c.abort(),28000); }
+   const r=await fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload),signal});
+   if(to) clearTimeout(to);
+   if(!r.ok){
+    if((r.status>=500 || r.status===429) && i<intentos-1){ ultErr=new Error("HTTP "+r.status); await espera(700*(i+1)); continue; }
+    throw new Error("HTTP "+r.status);
+   }
+   return await r.json();
+  }catch(e){
+   ultErr=e;
+   if(i<intentos-1){ await espera(700*(i+1)); continue; }
+  }
+ }
+ throw ultErr || new Error("conexion");
 }
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function usd(v){const n=parseFloat(v)||0;return "USD "+n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});}
 function cop(v){const n=Math.round(parseFloat(v)||0);return "$ "+n.toLocaleString("es-CO");}
 function filaLC(l,v){return `<div style="display:flex;justify-content:space-between;gap:10px"><span>${l}</span><b>${cop(v)}</b></div>`;}
 function aseNom(r){const a=r.asesor;return (a&&typeof a==="object")?(a.nombre||""):(a||"");}
+// --- Fecha de EJECUCION (viaje): mes y año en que se presta el servicio ---
+const MESES_ES={enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,setiembre:9,octubre:10,noviembre:11,diciembre:12};
+const MESNOM=["","Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+function fechaEjec(r){
+ // 1) fechas estructuradas (os_fecha_in o el inicio de fechas_viaje): dd/mm/aaaa o aaaa-mm-dd
+ const cand=[r.os_fecha_in, (String(r.fechas_viaje||"").split(" al ")[0]||"").trim()];
+ for(const c of cand){
+  if(!c) continue;
+  let m=String(c).match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/); if(m) return {y:+m[3],m:+m[2]};
+  m=String(c).match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/); if(m) return {y:+m[1],m:+m[2]};
+ }
+ // 2) texto en español ("21 al 24 de noviembre de 2026", "2 y 3 de octubre 2026")
+ const s=String(r.fechas_viaje||r.os_fecha_in||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+ const mm=s.match(new RegExp("("+Object.keys(MESES_ES).join("|")+")"));
+ const yy=s.match(/(20\d{2})/);
+ if(mm && yy) return {y:+yy[1],m:MESES_ES[mm[1]]};
+ if(yy) return {y:+yy[1],m:0};   // año conocido, mes no
+ return null;
+}
+function montoNum(r){return parseFloat(r.monto)||0;}
+function pagadoNum(r){const v=r.valor_pagado;return (v===""||v==null)?0:(parseFloat(v)||0);}
+function saldoNum(r){return montoNum(r)-pagadoNum(r);}
+function pendiente(r){return montoNum(r)>0 && saldoNum(r)>0.01;}
+function agenciaDe(r){return String(r.agencia||r.cliente||"").trim();}
 // --- Unificar asesoras por coincidencia de nombre (mismo primer nombre) ---
 let ASE_CANON={};   // primer-nombre -> nombre a mostrar (el mas completo)
 function normTxt(s){return String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toUpperCase().replace(/\s+/g," ").trim();}
@@ -287,8 +346,18 @@ async function cargar(){
   const fa=document.getElementById("fase"); const cur=fa.value;
   fa.innerHTML='<option value="">Todas las asesoras</option>'+ases.map(a=>`<option>${esc(a)}</option>`).join("");
   fa.value=cur;
+  // filtro de AGENCIAS (cliente/agencia) — distintas, orden alfabetico
+  const ags=[...new Set(DATA.map(agenciaDe).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es"));
+  const fg=document.getElementById("fagc"); const curg=fg.value;
+  fg.innerHTML='<option value="">Todas las agencias</option>'+ags.map(a=>`<option>${esc(a)}</option>`).join("");
+  fg.value=curg;
+  // filtro de AÑO de ejecucion (viaje) — del mas reciente al mas antiguo
+  const yrs=[...new Set(DATA.map(r=>{const f=fechaEjec(r);return f?f.y:null;}).filter(Boolean))].sort((a,b)=>b-a);
+  const fy=document.getElementById("fanio"); const cury=fy.value;
+  fy.innerHTML='<option value="">Año: todos</option>'+yrs.map(y=>`<option value="${y}">${y}</option>`).join("");
+  fy.value=cury;
   render();
- }catch(e){ cont.innerHTML='<div class="mut">Error de conexión.</div>'; }
+ }catch(e){ cont.innerHTML='<div class="mut">No se pudo conectar en este momento.<br><button class="btn btn-navy" style="width:auto;margin-top:12px;padding:10px 22px" onclick="cargar()">↻ Reintentar</button></div>'; }
 }
 function numOf(r){return parseInt(String(r.numero||"0").replace(/\D/g,""))||0;}
 // distintas formas de escribir el monto para poder buscar por "valor vendido / monto de cierre"
@@ -303,10 +372,23 @@ function render(){
  const q=document.getElementById("q").value.toLowerCase().trim();
  const fa=document.getElementById("fase").value;
  const fe=document.getElementById("fest").value;
+ const fg=document.getElementById("fagc").value;
+ const fy=document.getElementById("fanio").value;
+ const fm=document.getElementById("fmes").value;
+ const fp=document.getElementById("fpago").value;
  let items=DATA.slice().sort((a,b)=>numOf(b)-numOf(a));
  items=items.filter(r=>{
   if(fa && canonAse(aseNom(r))!==canonAse(fa)) return false;
   if(fe && (r.estado||"")!==fe) return false;
+  if(fg && agenciaDe(r)!==fg) return false;
+  if(fy||fm){
+   const f=fechaEjec(r);
+   if(!f) return false;                              // sin fecha de ejecucion -> fuera al filtrar por fecha
+   if(fy && String(f.y)!==fy) return false;
+   if(fm && String(f.m)!==fm) return false;
+  }
+  if(fp==="pend" && !pendiente(r)) return false;
+  if(fp==="pag"  && !(montoNum(r)>0 && saldoNum(r)<=0.01)) return false;
   if(q){
    const blob=(r.numero+" "+r.cliente+" "+(r.destinos||[]).join(" ")+" "+aseNom(r)+" "+montoBlob(r)).toLowerCase();
    // Buscar por VALOR sin importar puntos/comas/decimales: se comparan solo digitos
@@ -318,8 +400,12 @@ function render(){
   return true;
  });
  const cont=document.getElementById("lista");
- document.getElementById("count").textContent=items.length+" reserva(s)";
- if(!items.length){ cont.innerHTML='<div class="mut">No hay reservas que coincidan.</div>'; return; }
+ // Resumen: cantidad y, si hay filtro de fecha/pago/agencia, los totales (monto/pagado/saldo)
+ let tM=0,tP=0,tS=0; items.forEach(r=>{tM+=montoNum(r);tP+=pagadoNum(r);tS+=saldoNum(r);});
+ let resumen=items.length+" reserva(s)";
+ if(fp||fy||fm||fg){ resumen+=" · Monto "+usd(tM)+" · Pagado "+usd(tP)+" · Saldo "+usd(tS); }
+ document.getElementById("count").textContent=resumen;
+ if(!items.length){ cont.innerHTML='<div class="mut">No hay reservas que coincidan con el filtro.</div>'; return; }
  cont.innerHTML=items.map(r=>{
   const est=r.estado||"Confirmada"; const col=ESTCOL[est]||"var(--grey)"; const bg=ESTBG[est]||"#fff";
   const dest=(r.destinos||[]).join(", ")||"-";
