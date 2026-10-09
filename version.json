@@ -1,6 +1,6 @@
 {
-  "version": "25.16",
+  "version": "25.17",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Blindaje de datos: la carga elige SIEMPRE la version mas nueva (conciertos y ordenes) entre archivo, espejos y backups, y repara el principal si revirtio a una copia vieja. Recupera Santiago Cruz.",
-  "sha256": "860565bf2c713505853f63115ee63b3b59d693c54251e223c553aa95a3d74bd0"
+  "notas": "Inventario de boletas con PRECIOS: costo COP, margen manual y TRM -> venta USD y ganancia por boleta; carga por localidad; import lee Precio unitario, zona y tribuna. La web oculta localidades agotadas y avisa 'pocos cupos' (<=5). Inventario blindado contra perdida de datos.",
+  "sha256": "fed91e9cc58cd40d1ee59fb42d4d1e7eea9d99376614ce400ada8c90f31c6511"
 }
