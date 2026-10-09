@@ -1,6 +1,6 @@
 {
-  "version": "25.19",
+  "version": "25.20",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Correccion de precios: el costo de la boleta con puntos de miles (1.700.000) ahora se lee bien (antes daba 0); aplica a la venta USD y al ingreso del paquete.",
-  "sha256": "8be2bcfb613b1ff0f4f290b7cd2102131f45ba797143950ceaf4b96b922a9970"
+  "notas": "MICE: corregido el RESUMEN GENERAL por persona (TODO INCLUIDO) en eventos multidestino: ahora toma el hotel mas economico de CADA destino y los suma, en vez de sumar todos los hoteles de todos los destinos (daba el doble o mas).",
+  "sha256": "1e7a9200405d09255d88e57b18c676caf2c0d7339879730ca7857303d4c33c5b"
 }
