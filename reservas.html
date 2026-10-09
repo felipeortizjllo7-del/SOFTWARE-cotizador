@@ -108,7 +108,7 @@ header .who{font-size:13px;color:#cfe}
 <script>
 // Auto-actualizacion de ESTE modulo (reservas): si se publica una version nueva,
 // la pagina se recarga sola (una vez) para que Angela y demas vean lo ultimo.
-const RES_VERSION="R3";
+const RES_VERSION="R4";
 const RES_VER_URL="https://raw.githubusercontent.com/felipeortizjllo7-del/SOFTWARE-cotizador/main/reservas_version.json";
 async function chequearReservasWeb(){try{
   const r=await fetch(RES_VER_URL+"?t="+Date.now(),{cache:"no-store"});if(!r.ok)return;
@@ -179,7 +179,27 @@ function montoNum(r){return parseFloat(r.monto)||0;}
 function pagadoNum(r){const v=r.valor_pagado;return (v===""||v==null)?0:(parseFloat(v)||0);}
 function saldoNum(r){return montoNum(r)-pagadoNum(r);}
 function pendiente(r){return montoNum(r)>0 && saldoNum(r)>0.01;}
-function agenciaDe(r){return String(r.agencia||r.cliente||"").trim();}
+// --- Identificar la AGENCIA (lo que contabilidad necesita ver) ---
+// Prioridad: campo propio (agencia/empresa) -> DOMINIO del correo corporativo.
+// El correo ya viaja en los datos (protegidos por login), asi que no se expone
+// nada nuevo; los correos personales (gmail, hotmail...) no identifican agencia.
+const DOM_PERSONAL=new Set(["gmail.com","hotmail.com","outlook.com","outlook.es","hotmail.es",
+ "yahoo.com","yahoo.es","yahoo.com.mx","hotmail.com.mx","yahoo.com.co","hotmail.com.co",
+ "icloud.com","live.com","live.com.mx","me.com","aol.com","msn.com","gmx.com","protonmail.com"]);
+function dominioAgencia(email){
+ const e=String(email||"").trim().toLowerCase(); const at=e.indexOf("@");
+ if(at<0) return ""; const d=e.slice(at+1);
+ if(!d || !d.includes(".") || DOM_PERSONAL.has(d)) return "";
+ return d;
+}
+function agenciaDe(r){
+ const exp=String(r.agencia||r.empresa||r.voucher_agencia||"").trim();
+ if(exp) return exp;
+ return dominioAgencia(r.email||r.correo||"");
+}
+function personaDe(r){
+ return String(r.cliente||"").trim() || String(r.contacto||"").split("+")[0].trim() || "";
+}
 // --- Unificar asesoras por coincidencia de nombre (mismo primer nombre) ---
 let ASE_CANON={};   // primer-nombre -> nombre a mostrar (el mas completo)
 function normTxt(s){return String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toUpperCase().replace(/\s+/g," ").trim();}
@@ -346,10 +366,13 @@ async function cargar(){
   const fa=document.getElementById("fase"); const cur=fa.value;
   fa.innerHTML='<option value="">Todas las asesoras</option>'+ases.map(a=>`<option>${esc(a)}</option>`).join("");
   fa.value=cur;
-  // filtro de AGENCIAS (cliente/agencia) — distintas, orden alfabetico
+  // filtro de AGENCIAS (identificadas por campo propio o dominio del correo)
   const ags=[...new Set(DATA.map(agenciaDe).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es"));
+  const hayNoId=DATA.some(r=>!agenciaDe(r));
   const fg=document.getElementById("fagc"); const curg=fg.value;
-  fg.innerHTML='<option value="">Todas las agencias</option>'+ags.map(a=>`<option>${esc(a)}</option>`).join("");
+  fg.innerHTML='<option value="">Todas las agencias</option>'
+    +ags.map(a=>`<option>${esc(a)}</option>`).join("")
+    +(hayNoId?'<option value="__noid__">⚠ Sin identificar</option>':"");
   fg.value=curg;
   // filtro de AÑO de ejecucion (viaje) — del mas reciente al mas antiguo
   const yrs=[...new Set(DATA.map(r=>{const f=fechaEjec(r);return f?f.y:null;}).filter(Boolean))].sort((a,b)=>b-a);
@@ -380,7 +403,7 @@ function render(){
  items=items.filter(r=>{
   if(fa && canonAse(aseNom(r))!==canonAse(fa)) return false;
   if(fe && (r.estado||"")!==fe) return false;
-  if(fg && agenciaDe(r)!==fg) return false;
+  if(fg){ if(fg==="__noid__"){ if(agenciaDe(r)) return false; } else if(agenciaDe(r)!==fg) return false; }
   if(fy||fm){
    const f=fechaEjec(r);
    if(!f) return false;                              // sin fecha de ejecucion -> fuera al filtrar por fecha
@@ -390,7 +413,7 @@ function render(){
   if(fp==="pend" && !pendiente(r)) return false;
   if(fp==="pag"  && !(montoNum(r)>0 && saldoNum(r)<=0.01)) return false;
   if(q){
-   const blob=(r.numero+" "+r.cliente+" "+(r.destinos||[]).join(" ")+" "+aseNom(r)+" "+montoBlob(r)).toLowerCase();
+   const blob=(r.numero+" "+r.cliente+" "+agenciaDe(r)+" "+(r.email||"")+" "+(r.destinos||[]).join(" ")+" "+aseNom(r)+" "+montoBlob(r)).toLowerCase();
    // Buscar por VALOR sin importar puntos/comas/decimales: se comparan solo digitos
    const qDig=q.replace(/\D/g,"");
    const montoDig=String(Math.round(parseFloat(r.monto)||0));
@@ -410,18 +433,20 @@ function render(){
   const est=r.estado||"Confirmada"; const col=ESTCOL[est]||"var(--grey)"; const bg=ESTBG[est]||"#fff";
   const dest=(r.destinos||[]).join(", ")||"-";
   const opts=["Confirmada","Confirmada con pago","Aplazada","Anulada"].map(o=>`<option${o===est?" selected":""}>${o}</option>`).join("");
+  const agc=agenciaDe(r); const persona=personaDe(r);
+  const agcMeta=agc?esc(agc):'<span style="color:var(--amber);font-weight:700">sin identificar — revisar correo/cliente</span>';
   return `<div class="rcard" style="background:${bg};border-left:6px solid ${col}">
    <div class="rtop">
     <span class="num">N. ${esc(r.numero||"")}</span>
-    <span class="cli">${esc(r.cliente||"(sin cliente)")}</span>
+    <span class="cli" style="${agc?'':'color:var(--amber)'}">${agc?esc(agc):'⚠ Agencia sin identificar'}</span>
     <span class="badge" style="background:${col}">${esc(est)}</span>
     <span class="sp"></span>
     <select class="estsel" onchange="cambiarEstado('${esc(r.uid)}',this.value)">${opts}</select>
    </div>
    <div class="meta">
+    <b>Agencia:</b> ${agcMeta} &nbsp;·&nbsp; <b>Contacto:</b> ${esc(persona||"-")}${r.email?` &nbsp;·&nbsp; <b>Correo:</b> ${esc(r.email)}`:""}<br>
     <b>Asesora:</b> ${esc(dispAse(r))} &nbsp;·&nbsp; <b>Destinos:</b> ${esc(dest)}<br>
-    <b>Fechas:</b> ${esc(r.fechas_viaje||"-")} &nbsp;·&nbsp; <b>Pasajeros:</b> ${esc(r.pax_txt||"-")} &nbsp;·&nbsp; <b>Monto:</b> ${usd(r.monto)}<br>
-    <b>Contacto:</b> ${esc(r.contacto||r.os_contacto_principal||"-")}
+    <b>Fechas:</b> ${esc(r.fechas_viaje||"-")} &nbsp;·&nbsp; <b>Pasajeros:</b> ${esc(r.pax_txt||"-")} &nbsp;·&nbsp; <b>Monto:</b> ${usd(r.monto)}
     <div style="margin-top:8px">
      <button class="btn btn-navy" style="width:auto;padding:8px 16px;font-size:13px"
        onclick="toggleDet('${esc(r.uid)}')">🧳 Ver servicios y proveedores</button>
