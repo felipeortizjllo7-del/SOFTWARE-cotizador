@@ -1,6 +1,6 @@
 {
-  "version": "25.17",
+  "version": "25.18",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Inventario de boletas con PRECIOS: costo COP, margen manual y TRM -> venta USD y ganancia por boleta; carga por localidad; import lee Precio unitario, zona y tribuna. La web oculta localidades agotadas y avisa 'pocos cupos' (<=5). Inventario blindado contra perdida de datos.",
-  "sha256": "fed91e9cc58cd40d1ee59fb42d4d1e7eea9d99376614ce400ada8c90f31c6511"
+  "notas": "Conciertos: 'Nuevo concierto' y 'Armar paquete PDF' fusionados en UNA sola ventana (datos + afiche + localidades con precios e inventario + PDF + publicar). SOLD OUT junto al afiche (cubre la foto en la web). Cantidad de boletas por localidad siembra el inventario.",
+  "sha256": "737bba3a5728076f538cccc097b6822232ae7080411cd3fe408f0d49d7f49ff7"
 }
