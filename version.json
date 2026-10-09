@@ -1,6 +1,6 @@
 {
-  "version": "25.15",
+  "version": "25.16",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Web: afiches y PDF nunca mas se pierden al publicar la vitrina. El .exe usa un Python con PyMuPDF/Pillow y, si no lo hay, avisa; ademas un blindaje impide sobrescribir la vitrina buena con una sin fotos/PDF.",
-  "sha256": "ac6ff24e52640eaca77a77b068e84936bdb595bff2c0e74bb2779daca467d0c5"
+  "notas": "Blindaje de datos: la carga elige SIEMPRE la version mas nueva (conciertos y ordenes) entre archivo, espejos y backups, y repara el principal si revirtio a una copia vieja. Recupera Santiago Cruz.",
+  "sha256": "860565bf2c713505853f63115ee63b3b59d693c54251e223c553aa95a3d74bd0"
 }
