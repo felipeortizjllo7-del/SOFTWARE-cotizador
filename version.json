@@ -1,6 +1,6 @@
 {
-  "version": "25.22",
+  "version": "25.23",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Inventario de boletas: al importar Excel ahora se saltan las hojas Resumen/Precios y las filas TOTAL (no se duplican). Vitrina: el inventario solo oculta localidades si coincide con las del concierto.",
-  "sha256": "2b933ddf04765ca9be89a948b290dedfb393cdcf62a603eed307f26737a1c186"
+  "notas": "La vitrina web se actualiza SOLA: cada vez que subes/cambias boletas (inventario) y cada vez que guardas un concierto (incluye SOLD OUT). Boton 'Actualizar web' en la ventana de Boletas.",
+  "sha256": "6effaa21124e4957c77fe6af564af1ea4d6b4b573d9110559070e69090eef664"
 }
