@@ -1,6 +1,6 @@
 {
-  "version": "25.21",
+  "version": "25.22",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Conciertos vitrina: seleccion de localidad estilo mapa + tarjetas con zonas; muestra SOLO las localidades con inventario (match tolerante de nombres); SOLD OUT grande que oculta el ingreso. La ventana de concierto guarda el mapa del escenario y las zonas/secciones por localidad.",
-  "sha256": "af14ca2ea6dc1460aff33e3c111e0cae0f1e52b9cb54aad3d947d09913fadca4"
+  "notas": "Inventario de boletas: al importar Excel ahora se saltan las hojas Resumen/Precios y las filas TOTAL (no se duplican). Vitrina: el inventario solo oculta localidades si coincide con las del concierto.",
+  "sha256": "2b933ddf04765ca9be89a948b290dedfb393cdcf62a603eed307f26737a1c186"
 }
