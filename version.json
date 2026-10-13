@@ -1,6 +1,6 @@
 {
-  "version": "25.20",
+  "version": "25.21",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "MICE: corregido el RESUMEN GENERAL por persona (TODO INCLUIDO) en eventos multidestino: ahora toma el hotel mas economico de CADA destino y los suma, en vez de sumar todos los hoteles de todos los destinos (daba el doble o mas).",
-  "sha256": "1e7a9200405d09255d88e57b18c676caf2c0d7339879730ca7857303d4c33c5b"
+  "notas": "Conciertos vitrina: seleccion de localidad estilo mapa + tarjetas con zonas; muestra SOLO las localidades con inventario (match tolerante de nombres); SOLD OUT grande que oculta el ingreso. La ventana de concierto guarda el mapa del escenario y las zonas/secciones por localidad.",
+  "sha256": "af14ca2ea6dc1460aff33e3c111e0cae0f1e52b9cb54aad3d947d09913fadca4"
 }
