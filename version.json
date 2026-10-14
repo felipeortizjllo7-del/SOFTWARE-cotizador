@@ -1,6 +1,6 @@
 {
-  "version": "25.23",
+  "version": "25.24",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "La vitrina web se actualiza SOLA: cada vez que subes/cambias boletas (inventario) y cada vez que guardas un concierto (incluye SOLD OUT). Boton 'Actualizar web' en la ventana de Boletas.",
-  "sha256": "6effaa21124e4957c77fe6af564af1ea4d6b4b573d9110559070e69090eef664"
+  "notas": "Al publicar un concierto nuevo se genera y adjunta el PDF del programa (sale el boton 'Programa' en la web). La vitrina reintenta leer fotos/PDF ante bloqueos del antivirus (ya no sale 'pelada').",
+  "sha256": "976b1085c01b564b24fee5511dfb5aef3d44b65889178dc295dd6252b90497d7"
 }
