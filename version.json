@@ -1,6 +1,6 @@
 {
-  "version": "25.25",
+  "version": "25.26",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Publicacion de conciertos mas robusta: ya no se queda en 'Publicando...' para siempre (timeouts en el generado y la subida, con aviso claro si la red o el antivirus demoran). Blindaje de la vitrina reforzado (tope absoluto + marca de agua) para que una pagina 'pelada' nunca pise la buena. OMAR COURTZ con fecha 12-nov y SODA ESTEREO agregado.",
-  "sha256": "219270ebdb4e56a0de7ce205f83f8dbe0dddd91a12357f8696bcbd4043b2a3ee"
+  "notas": "Lista de espera por concierto: en cada concierto Proximamente la web tiene boton de interesados (agencia, nombre, contacto, correo y PRESUPUESTO de inversion) y en el modulo de conciertos aparece el boton 'Espera' con la tabla de interesados de ese concierto (actualiza desde la nube, WhatsApp, exportar a Excel). Ademas: publicar la vitrina ya no falla por bloqueos de OneDrive/antivirus (escritura con reintentos) y el blindaje solo frena el caso catastrofico.",
+  "sha256": "0c70a51277bb9445c0626b2e5be72876ec1481a9e855b36d27c2a1dc180568ba"
 }

@@ -307,9 +307,10 @@ function abrirInteres(i){const c=DATA[i];CUR=c;
    <div class="fld"><label>Correo (opcional)</label><input id="i_mail" type="email"></div>
    <div class="fld"><label>WhatsApp</label><div style="display:flex;gap:6px"><select id="i_cod" style="width:150px;flex:none">${opcsPais()}</select><input id="i_tel" placeholder="numero" style="flex:1"></div></div>
    <div class="fld"><label>N.º de personas (aprox.)</label><input id="i_pax" type="number" value="2" min="1"></div>
+   <div class="fld"><label>Presupuesto de inversión en el concierto</label><input id="i_presu" placeholder="Ej: USD 1.500 por persona / 5 millones en total"></div>
   </div>
   ${ciudadHtml}
-  <div class="fld"><label>Comentario (opcional)</label><input id="i_coment" placeholder="¿Algo que debamos saber? (localidad, presupuesto, etc.)"></div>
+  <div class="fld"><label>Comentario (opcional)</label><input id="i_coment" placeholder="¿Algo más que debamos saber? (localidad preferida, fechas, etc.)"></div>
   <button class="ok2" id="i_send" onclick="enviarInteres()">🔔 Anotarme en la lista de espera</button>`;
  document.getElementById("ov").classList.add("on");window.scrollTo(0,0);}
 async function enviarInteres(){const c=CUR;
@@ -326,6 +327,7 @@ async function enviarInteres(){const c=CUR;
    concierto:c.titulo, ciudad:ciu, ciudad_evento:c.ciudad, recinto:c.recinto,
    destinos:[ciu], fechas_viaje:(c.fecha_txt||"Por confirmar"),
    personas:(parseInt(_v("i_pax")||"1")||1), boletas:(parseInt(_v("i_pax")||"1")||1),
+   presupuesto:_v("i_presu").trim(),
    comentario:_v("i_coment").trim(),
    fecha:(new Date()).toLocaleDateString("es-CO")};
  try{await fetch(WHP,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(sol)});}catch(e){}
@@ -359,7 +361,7 @@ pintar();
 /* auto-actualizacion: si se publico una version nueva, recarga sola. Revisa al abrir,
    cada 2 minutos y al volver a la pestana, para que TODO el que tenga el link se
    actualice sin hacer nada. */
-const CBUILD="1792091677";
+const CBUILD="1792092304";
 async function _chkBuild(){try{
  const r=await fetch("conciertos_version.json?t="+Date.now(),{cache:"no-store"});
  const j=await r.json();
