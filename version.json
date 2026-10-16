@@ -1,6 +1,6 @@
 {
-  "version": "25.27",
+  "version": "25.28",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Reservas web de conciertos: ahora aparecen SOLAS en el Cuadro de ordenes (el Cuadro y el modulo traen las solicitudes web al abrir, boton 'Traer reservas web'). Antes llegaban pero no se veian. Al 'Enviar a Reservas' (pagada 70% + boleta enviada) la orden y sus boletas quedan con el mismo N° de orden de servicio. Reserva web rediseñada con 'Resumen de tu paquete' fijo y opcion cliente final.",
-  "sha256": "7031939230327ea43f080f24adb681c35bdf9ac3bb3f49306c0ccbe8bdf1f44d"
+  "notas": "Cuadro de ordenes: 'Enviar a Reservas' ahora permite pasar una orden al modulo de Reservas aunque NO este pagada/enviada; queda como PENDIENTE DE PAGO (antes lo bloqueaba). Si esta pagada+boleta enviada queda Confirmada. La orden y sus boletas quedan con el N° de la orden de servicio.",
+  "sha256": "3dd6857d90bdc7e855a1f884c32846cecdd06aef526782e6acea859b63b34117"
 }
