@@ -1,6 +1,6 @@
 {
-  "version": "25.28",
+  "version": "25.29",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Cuadro de ordenes: 'Enviar a Reservas' ahora permite pasar una orden al modulo de Reservas aunque NO este pagada/enviada; queda como PENDIENTE DE PAGO (antes lo bloqueaba). Si esta pagada+boleta enviada queda Confirmada. La orden y sus boletas quedan con el N° de la orden de servicio.",
-  "sha256": "3dd6857d90bdc7e855a1f884c32846cecdd06aef526782e6acea859b63b34117"
+  "notas": "Avisos de reservas web de conciertos: cuando entra una reserva (o una de LISTA DE ESPERA) desde la vitrina, el modulo de conciertos y el Cuadro de ordenes lo NOTIFICAN con un aviso (y revisan solos cada 2-3 min). La reserva queda en el cuadro lista para asignar boletas y enviar a Reservas (pendiente de pago o confirmada).",
+  "sha256": "03d59fa94ed9291121ce1a936fa86f6ec5dbe8be67826635cf3e833cc7cca641"
 }
