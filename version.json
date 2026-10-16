@@ -1,6 +1,6 @@
 {
-  "version": "25.26",
+  "version": "25.27",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Lista de espera por concierto: en cada concierto Proximamente la web tiene boton de interesados (agencia, nombre, contacto, correo y PRESUPUESTO de inversion) y en el modulo de conciertos aparece el boton 'Espera' con la tabla de interesados de ese concierto (actualiza desde la nube, WhatsApp, exportar a Excel). Ademas: publicar la vitrina ya no falla por bloqueos de OneDrive/antivirus (escritura con reintentos) y el blindaje solo frena el caso catastrofico.",
-  "sha256": "0c70a51277bb9445c0626b2e5be72876ec1481a9e855b36d27c2a1dc180568ba"
+  "notas": "Reservas web de conciertos: ahora aparecen SOLAS en el Cuadro de ordenes (el Cuadro y el modulo traen las solicitudes web al abrir, boton 'Traer reservas web'). Antes llegaban pero no se veian. Al 'Enviar a Reservas' (pagada 70% + boleta enviada) la orden y sus boletas quedan con el mismo N° de orden de servicio. Reserva web rediseñada con 'Resumen de tu paquete' fijo y opcion cliente final.",
+  "sha256": "7031939230327ea43f080f24adb681c35bdf9ac3bb3f49306c0ccbe8bdf1f44d"
 }
