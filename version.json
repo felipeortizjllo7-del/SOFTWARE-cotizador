@@ -1,6 +1,6 @@
 {
-  "version": "25.30",
+  "version": "25.31",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Cuadro de ordenes de concierto: (1) el N° de orden sigue el consecutivo del modulo de Reservas (la orden y su reserva comparten numero); (2) al 'Enviar a Reservas' se elige QUE ASESORA queda a cargo; (3) nueva columna AGENCIA en el cuadro; (4) cuando en Reservas se registra el pago (>=70%), la orden del cuadro se marca sola como Pagada + boleta comprada.",
-  "sha256": "d89ad922d9a3924fe87e48547ef3f986acdc349e2a2c9e9bd218cb2619ac1b07"
+  "notas": "Aviso por correo cuando entra una reserva o lista de espera desde la web del concierto (ademas del aviso dentro del app). BLINDADO: va en 2do plano y con proteccion total, si el correo falla la reserva igual se crea y nada se rompe. Requiere tener configurado el correo de la empresa (remitente + contrasena SMTP) en Datos de mi empresa.",
+  "sha256": "b5d425a53c2f1e6ddfcad9145bf60850fbb1ee68b1b10e78efe02b62e6fcb171"
 }
