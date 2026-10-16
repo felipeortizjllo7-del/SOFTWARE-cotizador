@@ -53,14 +53,32 @@
 button.btn{border:none;cursor:pointer;font-family:inherit}
 .ov{position:fixed;inset:0;background:rgba(3,15,35,.72);display:none;z-index:50;overflow:auto;padding:16px}
 .ov.on{display:block}
-.modal{max-width:720px;margin:14px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.45)}
-.mh{background:linear-gradient(120deg,#012a63,#1466C7);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center}
-.mh b{font-size:18px}.mh .x{cursor:pointer;font-size:24px;background:none;border:none;color:#fff;line-height:1}
-.mb{padding:14px 18px 18px;display:flex;flex-direction:column;gap:11px}
+.modal{max-width:960px;margin:14px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.45)}
+.mh{background:linear-gradient(120deg,#012a63,#1466C7);color:#fff;padding:15px 20px;display:flex;justify-content:space-between;align-items:center}
+.mh b{font-size:19px}.mh .x{cursor:pointer;font-size:24px;background:none;border:none;color:#fff;line-height:1}
+.mb{padding:16px 20px 20px;display:flex;flex-direction:column;gap:11px}
 .fld label{display:block;font-size:13px;font-weight:700;color:var(--navy);margin-bottom:3px}
-.fld input,.fld select{width:100%;height:40px;border:1px solid var(--line);border-radius:9px;padding:0 10px;font-size:15px}
+.fld input,.fld select{width:100%;height:42px;border:1px solid var(--line);border-radius:10px;padding:0 12px;font-size:15px;background:#fff;transition:border-color .12s,box-shadow .12s}
+.fld input:focus,.fld select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px #d7e6fb}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
-.sec{font-weight:800;color:var(--navy);border-top:1px solid var(--line);padding-top:9px;margin-top:2px;font-size:15px}
+/* --- Layout 2 columnas: formulario + resumen (estilo visitmedellin) --- */
+.resv{display:grid;grid-template-columns:1.7fr 1fr;gap:18px;align-items:start}
+.resv-main{display:flex;flex-direction:column;gap:11px;min-width:0}
+.resv-side{position:sticky;top:8px}
+.rs-card{background:#f7f9fc;border:1px solid var(--line);border-radius:14px;padding:16px 16px 18px}
+.rs-h{font-weight:900;color:var(--navy);font-size:16px;margin-bottom:10px}
+.rs-row{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px dashed #dfe6f0;font-size:13px}
+.rs-row:first-of-type{border-top:none}
+.rs-k{color:var(--muted);font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:.3px}
+.rs-v{color:var(--navy);font-weight:800;text-align:right}
+.rs-total{display:flex;justify-content:space-between;align-items:baseline;margin-top:12px;padding-top:12px;border-top:2px solid #e1e8f2}
+.rs-total .l{font-weight:900;color:var(--navy);font-size:15px}
+.rs-total .v{font-weight:900;color:var(--blue);font-size:22px}
+.rs-note{font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:8px;background:#eef3fb;border-radius:9px;padding:9px 11px}
+.sec{font-weight:800;color:var(--navy);padding:6px 0 2px;margin-top:4px;font-size:15.5px;display:flex;align-items:center;gap:9px}
+.sec::before{content:attr(data-n);flex:none;width:26px;height:26px;border-radius:50%;background:var(--blue);color:#fff;font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center}
+.sec.nonum{border-top:1px solid var(--line);padding-top:10px}
+.sec.nonum::before{display:none}
 .loc{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:9px;padding:8px 10px;cursor:pointer;margin-bottom:5px}
 .loc.sel{border-color:var(--blue);background:#eef5ff}.loc.ag{opacity:.55;cursor:not-allowed}
 /* Seleccion de localidad estilo mapa + tarjetas */
@@ -84,6 +102,11 @@ button.btn{border:none;cursor:pointer;font-family:inherit}
 .tour{display:flex;align-items:center;gap:7px;font-size:14px;padding:3px 0}
 .ok2{background:var(--green);color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:16px;cursor:pointer;width:100%;margin-top:4px}
 .mut2{font-size:12px;color:var(--muted)}
+.agtoggle{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:2px 0 4px;font-size:13.5px;font-weight:700;color:var(--navy)}
+.agtoggle label{display:flex;align-items:center;gap:6px;cursor:pointer}
+.agtoggle input{width:17px;height:17px;accent-color:var(--blue);cursor:pointer}
+.req{color:#c0201f}
+@media(max-width:760px){.resv{grid-template-columns:1fr}.resv-side{position:static}}
 @media(max-width:520px){.top h1{font-size:21px}.grid{grid-template-columns:1fr}.g2,.g3{grid-template-columns:1fr}}
 </style></head><body>
 <div class="top"><div class="in">
@@ -135,21 +158,29 @@ function abrirReserva(i){const c=DATA[i];CUR=c;
    : `<div class="mut2" style="margin:2px 0 8px">No hay localidades disponibles en este momento; escribe la que te interese y una asesora verificara disponibilidad.</div><input id="r_loc" placeholder="Localidad / tribuna que quieres">`;
  const hotHtml = conHot ? `<select id="r_hotel" onchange="recalc()"><option value="">Elige primero la localidad</option></select>`
                         : `<input id="r_hotel" placeholder="Hotel (opcional)">`;
- document.getElementById("m_tit").textContent="Reservar: "+c.titulo;
- document.getElementById("m_body").innerHTML=`
+ document.getElementById("m_tit").textContent=(c.sold_out?"Lista de espera: ":"Reservar: ")+c.titulo;
+ const agenciaBlock = `
+  <div class="agtoggle">
+    <span>¿Eres agencia de viajes?</span>
+    <label><input type="radio" name="tipocli" value="agencia" checked onchange="toggleAgencia()"> Sí, soy agencia</label>
+    <label><input type="radio" name="tipocli" value="final" onchange="toggleAgencia()"> No, soy cliente final</label>
+  </div>
+  <div class="fld" id="r_agencia_wrap"><label>Nombre de la agencia <span class="req">(obligatorio)</span></label><input id="r_agencia" placeholder="Nombre comercial de tu agencia"></div>
+  <div class="mut2" id="r_final_nota" style="display:none">Quedará registrado como <b>Cliente final</b> (no agencia).</div>`;
+ const mainHtml = `
   <div class="mut2">${[c.ciudad,c.recinto,c.fecha_txt].filter(Boolean).join(" · ")}</div>
   ${c.sold_out?`<div class="soldbanner"><span>SOLD OUT</span><div>Este concierto esta AGOTADO. Dejanos tus datos y una asesora te avisa apenas se libere cupo o si hay una alternativa.</div></div>`:``}
   ${c.sold_out?``:`
-  <div class="sec">1) Selecciona tu localidad</div><div class="mut2" style="margin:-2px 0 8px">Elige la zona de gradería para el concierto.</div>${locHtml}
-  <div class="sec">2) Hotel</div>
+  <div class="sec" data-n="1">Selecciona tu localidad</div><div class="mut2" style="margin:-2px 0 8px">Elige la zona de gradería para el concierto.</div>${locHtml}
+  <div class="sec" data-n="2">Hotel y acomodación</div>
   <div class="fld"><label>Hotel</label>${hotHtml}</div>
   <div class="g3">
    <div class="fld"><label>Acomodacion</label><select id="r_acom" onchange="recalc()"><option value="sen">Sencilla</option><option value="dob" selected>Doble</option><option value="tri">Triple</option></select></div>
    <div class="fld"><label>Noches</label><input id="r_noches" value="${c.noches||''}" placeholder="segun paquete"></div>
    <div class="fld"><label>N.º de personas (par)</label><input id="r_boletas" type="number" value="2" min="2" step="2" oninput="recalc()"></div></div>
   ${conHot?`<div id="r_precio" style="background:#eef5ff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-weight:700;color:var(--navy)">Elige localidad y hotel para ver el precio.</div>`:""}`}
-  <div class="sec">${c.sold_out?'Déjanos tus datos (lista de espera)':'3) Datos de quien reserva (contacto)'}</div>
-  <div class="fld"><label>Agencia de viajes <b style="color:#c0201f">(obligatorio)</b></label><input id="r_agencia" placeholder="Nombre de tu agencia de viajes"></div>
+  <div class="sec ${c.sold_out?'nonum':''}" ${c.sold_out?'':'data-n="3"'}>${c.sold_out?'Déjanos tus datos (lista de espera)':'Datos de quien reserva'}</div>
+  ${agenciaBlock}
   <div class="g2">
    <div class="fld"><label>Nombre completo</label><input id="r_nom" oninput="syncPax1()"></div>
    <div class="fld"><label>Documento / Pasaporte</label><input id="r_doc" oninput="syncPax1()"></div>
@@ -157,23 +188,59 @@ function abrirReserva(i){const c=DATA[i];CUR=c;
    <div class="fld"><label>Correo</label><input id="r_mail" type="email"></div>
    <div class="fld"><label>WhatsApp</label><div style="display:flex;gap:6px"><select id="r_cod" style="width:150px;flex:none">${opcsPais()}</select><input id="r_tel" placeholder="numero" style="flex:1"></div></div></div>
   ${c.sold_out?``:`
-  <div class="sec" style="font-size:14px">Pasajeros</div>
+  <div class="sec nonum" style="font-size:14px">Pasajeros</div>
   <div class="mut2">Agrega cada pasajero con su nombre y documento. El pasajero 1 es quien reserva. Ingreso de 2 en 2.</div>
   <div id="r_pax"></div>
   <button type="button" class="bol" style="margin-top:6px;background:#e7f0fb;color:var(--navy)" onclick="addPax()">+ Añadir pasajero</button>
-  <div class="sec">4) Vuelos</div>
+  <div class="sec" data-n="4">Vuelos</div>
   <div class="g2">
    <div class="fld"><label>Vuelo llegada</label><input id="r_vin" placeholder="Aerolinea/vuelo + fecha"></div>
    <div class="fld"><label>Hora llegada</label><input id="r_hin"></div>
    <div class="fld"><label>Vuelo salida</label><input id="r_vout" placeholder="Aerolinea/vuelo + fecha"></div>
    <div class="fld"><label>Hora salida</label><input id="r_hout"></div></div>
-  ${tours.length?`<div class="sec">5) Tours opcionales (por persona)</div><div id="r_tours">${tours.map((t,k)=>`<label class="tour"><input type="checkbox" value="${k}" onchange="recalc()"> ${t.n} — ${fmt(t.v)}</label>`).join("")}</div>`:""}`}
-  <div class="sec">${c.sold_out?'Contrato':'6) Contrato'}</div>
-  <label class="tour"><input type="checkbox" id="r_contr"> He leido y acepto el <a href="#" onclick="verContrato();return false;">contrato de servicios</a>. <b style="color:#c0201f">(obligatorio)</b></label>
+  ${tours.length?`<div class="sec" data-n="5">Tours opcionales (por persona)</div><div id="r_tours">${tours.map((t,k)=>`<label class="tour"><input type="checkbox" value="${k}" onchange="recalc()"> ${t.n} — ${fmt(t.v)}</label>`).join("")}</div>`:""}`}
+  <div class="sec ${c.sold_out?'nonum':''}" ${c.sold_out?'':'data-n="6"'}>Contrato</div>
+  <label class="tour"><input type="checkbox" id="r_contr"> He leido y acepto el <a href="#" onclick="verContrato();return false;">contrato de servicios</a>. <span class="req">(obligatorio)</span></label>
   ${c.sold_out?``:`<div class="mut2">No se cobra nada en este momento. Al recibir tu solicitud, una asesora VERIFICA la disponibilidad de ingreso al concierto y te contacta para confirmar la reserva y coordinar el pago (anticipo del 70%).</div>`}
   <button class="ok2" id="r_send" onclick="enviarReserva()">${c.sold_out?"Enviar a lista de espera":"Enviar solicitud de reserva"}</button>`;
- if(!c.sold_out){document.getElementById("r_pax").innerHTML="";addPax();}
+ const sideHtml = c.sold_out ? "" : `
+  <aside class="resv-side"><div class="rs-card">
+    <div class="rs-h">🎟️ Resumen de tu paquete</div>
+    <div id="r_resumen"></div>
+    <div class="rs-total"><span class="l">Total estimado</span><span class="v" id="rs_total">—</span></div>
+    <div class="rs-note">Valor de referencia. Una asesora confirma disponibilidad y coordina el pago (anticipo del 70%). El cobro se realiza en COP.</div>
+  </div></aside>`;
+ document.getElementById("m_body").innerHTML = c.sold_out
+   ? mainHtml
+   : `<div class="resv"><div class="resv-main">${mainHtml}</div>${sideHtml}</div>`;
+ if(!c.sold_out){document.getElementById("r_pax").innerHTML="";addPax();resumen();}
  document.getElementById("ov").classList.add("on");window.scrollTo(0,0);}
+function toggleAgencia(){
+ const final=((document.querySelector('input[name="tipocli"]:checked')||{}).value==="final");
+ const wrap=document.getElementById("r_agencia_wrap");const nota=document.getElementById("r_final_nota");
+ if(wrap)wrap.style.display=final?"none":"block";
+ if(nota)nota.style.display=final?"block":"none";
+ resumen();}
+function resumen(){
+ const box=document.getElementById("r_resumen");if(!box||!CUR)return;
+ const c=CUR;const pa=precioActual();
+ const per=Math.max(parseInt((document.getElementById("r_boletas")||{}).value||"2")||2,1);
+ const acv=(document.getElementById("r_acom")||{}).value||"dob";
+ const acN=acv==="sen"?"Sencilla":acv==="tri"?"Triple":"Doble";
+ const selr=document.querySelector('#m_body input[name="loc"]:checked');
+ const rl=document.getElementById("r_loc");
+ const loc=pa?pa.loc:(selr?(CUR.localidades[+selr.value]||{}).nombre:(rl?rl.value:""))||"";
+ const hotel=pa?(pa.hotel+(pa.cat?" ("+pa.cat+")":"")):"";
+ const toursSel=[...document.querySelectorAll("#r_tours input:checked")];
+ const toursPP=toursSel.reduce((a,x)=>a+(+CUR.tours[+x.value].v||0),0);
+ const row=(k,v)=>`<div class="rs-row"><span class="rs-k">${k}</span><span class="rs-v">${v||"—"}</span></div>`;
+ let html=row("Concierto",c.titulo)+row("Fecha",c.fecha_txt||"Por confirmar")+row("Localidad",loc);
+ if(hotel)html+=row("Hotel",hotel);
+ html+=row("Acomodación",acN)+row("Personas",per);
+ if(toursSel.length)html+=row("Tours",toursSel.length+" seleccionado(s)");
+ box.innerHTML=html;
+ const tot=document.getElementById("rs_total");
+ if(tot)tot.textContent = pa ? fmt((pa.pp+toursPP)*per) : "—";}
 function addPax(nombre,doc){const box=document.getElementById("r_pax");if(!box)return;
  const div=document.createElement("div");div.className="paxrow";
  const dn=(nombre||"").replace(/"/g,"&quot;"),dd=(doc||"").replace(/"/g,"&quot;");
@@ -196,7 +263,7 @@ function precioActual(){const c=CUR;const sel=document.querySelector('#m_body in
  if(!sel||!hs||hs.tagName!=="SELECT")return null;const loc=c.localidades[+sel.value];const h=(loc.hoteles||[])[+hs.value];if(!h)return null;
  const acom=document.getElementById("r_acom").value;const pp=acom==="sen"?h.sen:acom==="tri"?h.tri:h.dob;
  return {pp:+pp||0, loc:loc.nombre, hotel:h.h, cat:h.cat};}
-function recalc(){const el=document.getElementById("r_precio");if(!el)return;const pa=precioActual();
+function recalc(){resumen();const el=document.getElementById("r_precio");if(!el)return;const pa=precioActual();
  const per=Math.max(parseInt((document.getElementById("r_boletas")||{}).value||"2")||2,1);
  const toursPP=[...document.querySelectorAll("#r_tours input:checked")].reduce((a,x)=>a+(+CUR.tours[+x.value].v||0),0);
  if(!pa){el.textContent="Elige localidad y hotel para ver el precio.";return;}
@@ -215,13 +282,15 @@ async function enviarReserva(){const c=CUR;
       loc=selr?CUR.localidades[+selr.value].nombre:(rl?rl.value.trim():"");
       const hx=document.getElementById("r_hotel");hotel=hx?(hx.value||"").trim():"";}
  const nom=(document.getElementById("r_nom").value||"").trim();
- const agencia=(document.getElementById("r_agencia").value||"").trim();
+ const esFinal=((document.querySelector('input[name="tipocli"]:checked')||{}).value==="final");
+ let agencia=(document.getElementById("r_agencia").value||"").trim();
+ if(esFinal) agencia="Cliente final";
  const cod=(document.getElementById("r_cod")||{}).value||"";const numtel=(document.getElementById("r_tel").value||"").trim();
  const tel=numtel?((cod&&cod!=="+other"?cod+" ":"")+numtel):"";
  if(!c.sold_out && !loc){alert("Elige o escribe la localidad.");return;}
- if(!agencia){alert("Escribe el nombre de tu AGENCIA DE VIAJES (es obligatorio).");return;}
+ if(!esFinal && !agencia){alert("Escribe el nombre de tu AGENCIA DE VIAJES, o marca 'No, soy cliente final'.");return;}
  if(!nom||!tel){alert("Pon tu nombre y tu WhatsApp (con indicativo).");return;}
- if(!document.getElementById("r_contr").checked){alert("Debes aceptar el contrato para reservar.");return;}
+ if(!document.getElementById("r_contr").checked){alert("Debes aceptar el contrato para continuar.");return;}
  const btn=document.getElementById("r_send");btn.disabled=true;btn.textContent="Enviando...";
  const tsel=[...document.querySelectorAll("#r_tours input:checked")];
  const tours=tsel.map(x=>CUR.tours[+x.value].n);
@@ -232,7 +301,8 @@ async function enviarReserva(){const c=CUR;
  const pasajeros=paxrows.length?paxrows:[{nombre:nom,pasaporte:(document.getElementById("r_doc").value||"").trim(),archivo_b64:"",archivo_nombre:""}];
  const sol={tipo:"solicitud",es_concierto:true,
    id:"SOL-"+Date.now()+"-"+Math.floor(Math.random()*10000),
-   cliente:agencia, agencia:agencia, email:(document.getElementById("r_mail").value||"").trim(),
+   cliente:agencia, agencia:agencia, es_cliente_final:esFinal,
+   email:(document.getElementById("r_mail").value||"").trim(),
    contacto:{nombre:nom,telefono:tel,email:(document.getElementById("r_mail").value||"").trim()},
    destinos:[c.ciudad], fechas_viaje:c.fecha_txt,
    concierto:c.titulo, ciudad:c.ciudad, recinto:c.recinto, localidad:loc, hotel:hotel, acomodacion:acN,
@@ -361,7 +431,7 @@ pintar();
 /* auto-actualizacion: si se publico una version nueva, recarga sola. Revisa al abrir,
    cada 2 minutos y al volver a la pestana, para que TODO el que tenga el link se
    actualice sin hacer nada. */
-const CBUILD="1792096390";
+const CBUILD="1792165619";
 async function _chkBuild(){try{
  const r=await fetch("conciertos_version.json?t="+Date.now(),{cache:"no-store"});
  const j=await r.json();
