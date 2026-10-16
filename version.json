@@ -1,6 +1,6 @@
 {
-  "version": "25.29",
+  "version": "25.30",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Avisos de reservas web de conciertos: cuando entra una reserva (o una de LISTA DE ESPERA) desde la vitrina, el modulo de conciertos y el Cuadro de ordenes lo NOTIFICAN con un aviso (y revisan solos cada 2-3 min). La reserva queda en el cuadro lista para asignar boletas y enviar a Reservas (pendiente de pago o confirmada).",
-  "sha256": "03d59fa94ed9291121ce1a936fa86f6ec5dbe8be67826635cf3e833cc7cca641"
+  "notas": "Cuadro de ordenes de concierto: (1) el N° de orden sigue el consecutivo del modulo de Reservas (la orden y su reserva comparten numero); (2) al 'Enviar a Reservas' se elige QUE ASESORA queda a cargo; (3) nueva columna AGENCIA en el cuadro; (4) cuando en Reservas se registra el pago (>=70%), la orden del cuadro se marca sola como Pagada + boleta comprada.",
+  "sha256": "d89ad922d9a3924fe87e48547ef3f986acdc349e2a2c9e9bd218cb2619ac1b07"
 }
