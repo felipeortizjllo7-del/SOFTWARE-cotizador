@@ -94,10 +94,10 @@ header .who{font-size:13px;color:#cfe}
    <option value="">Todos los estados</option>
    <option>Confirmada</option><option>Confirmada con pago</option><option>Aplazada</option><option>Anulada</option>
   </select>
-  <select id="fpago" onchange="render()" style="min-width:170px">
+  <select id="fpago" onchange="render()" style="min-width:210px">
    <option value="">Pago: todos</option>
-   <option value="pend">Pendientes de pago</option>
-   <option value="pag">Pagadas</option>
+   <option value="pend">Pendientes (sin verificar)</option>
+   <option value="pag">Pagadas (verif. contabilidad)</option>
   </select>
   <button class="btn-out" style="border-color:var(--navy);color:var(--navy)" onclick="cargar()">↻ Actualizar</button>
   <span class="count" id="count"></span>
@@ -108,7 +108,7 @@ header .who{font-size:13px;color:#cfe}
 <script>
 // Auto-actualizacion de ESTE modulo (reservas): si se publica una version nueva,
 // la pagina se recarga sola (una vez) para que Angela y demas vean lo ultimo.
-const RES_VERSION="R4";
+const RES_VERSION="R5";
 const RES_VER_URL="https://raw.githubusercontent.com/felipeortizjllo7-del/SOFTWARE-cotizador/main/reservas_version.json";
 async function chequearReservasWeb(){try{
   const r=await fetch(RES_VER_URL+"?t="+Date.now(),{cache:"no-store"});if(!r.ok)return;
@@ -410,8 +410,9 @@ function render(){
    if(fy && String(f.y)!==fy) return false;
    if(fm && String(f.m)!==fm) return false;
   }
-  if(fp==="pend" && !pendiente(r)) return false;
-  if(fp==="pag"  && !(montoNum(r)>0 && saldoNum(r)<=0.01)) return false;
+  // El estado de PAGO lo define CONTABILIDAD (check "Revisado por contabilidad").
+  if(fp==="pend" && r.revisado_contab===true) return false;   // pendientes = aun SIN verificar
+  if(fp==="pag"  && r.revisado_contab!==true) return false;   // pagadas = VERIFICADAS por contabilidad
   if(q){
    const blob=(r.numero+" "+r.cliente+" "+agenciaDe(r)+" "+(r.email||"")+" "+(r.destinos||[]).join(" ")+" "+aseNom(r)+" "+montoBlob(r)).toLowerCase();
    // Buscar por VALOR sin importar puntos/comas/decimales: se comparan solo digitos
@@ -440,6 +441,9 @@ function render(){
     <span class="num">N. ${esc(r.numero||"")}</span>
     <span class="cli" style="${agc?'':'color:var(--amber)'}">${agc?esc(agc):'⚠ Agencia sin identificar'}</span>
     <span class="badge" style="background:${col}">${esc(est)}</span>
+    ${r.revisado_contab
+       ? `<span class="badge" style="background:var(--green)" title="${esc((r.revisado_contab_por||'').trim())}">✔ Pago verificado${(r.revisado_contab_por||'').trim()?(' · '+esc((r.revisado_contab_por||'').trim())):''}</span>`
+       : `<span class="badge" style="background:var(--amber)">⏳ Pago sin verificar</span>`}
     <span class="sp"></span>
     <select class="estsel" onchange="cambiarEstado('${esc(r.uid)}',this.value)">${opts}</select>
    </div>
