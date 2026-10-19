@@ -1,6 +1,6 @@
 {
-  "version": "25.32",
+  "version": "25.33",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "IMPORTANTE: arregla que en Reservas el ESTADO (Confirmada/Confirmada con pago/Aplazada/Anulada) y la ASESORA se cambiaban solos al sincronizar entre equipos. Ahora el merge es CAMPO POR CAMPO con marca de tiempo por campo: un cambio intencional ya NO lo pisa otro equipo que guardo la reserva sin tocar ese campo. Ademas: la venta total del mes ya NO cuenta las reservas Anuladas (modulo y link de contabilidad).",
-  "sha256": "a2f160f0dd66cdaa5732074fbb6d7c74a5f8231d4efab7cbf5f0af17b67f1102"
+  "notas": "Liquidacion: las ordenes del mes que NO tenian fecha de viaje quedaban invisibles; ahora caen a su mes de creacion y SI aparecen. Vouchers de proveedor: al enviar/generar, si un proveedor tiene VARIOS servicios (transporte/guia/actividad) sale UN SOLO voucher consolidado con todos, en vez de uno por servicio ('Enviar todos' tambien agrupa por proveedor). Hoteles siguen individuales.",
+  "sha256": "d0c93bbb990f914858545ccabbcc77305970bd75f563d1762ccc0c6b43a0c746"
 }
