@@ -1,6 +1,6 @@
 {
-  "version": "25.31",
+  "version": "25.32",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Aviso por correo cuando entra una reserva o lista de espera desde la web del concierto (ademas del aviso dentro del app). BLINDADO: va en 2do plano y con proteccion total, si el correo falla la reserva igual se crea y nada se rompe. Requiere tener configurado el correo de la empresa (remitente + contrasena SMTP) en Datos de mi empresa.",
-  "sha256": "b5d425a53c2f1e6ddfcad9145bf60850fbb1ee68b1b10e78efe02b62e6fcb171"
+  "notas": "IMPORTANTE: arregla que en Reservas el ESTADO (Confirmada/Confirmada con pago/Aplazada/Anulada) y la ASESORA se cambiaban solos al sincronizar entre equipos. Ahora el merge es CAMPO POR CAMPO con marca de tiempo por campo: un cambio intencional ya NO lo pisa otro equipo que guardo la reserva sin tocar ese campo. Ademas: la venta total del mes ya NO cuenta las reservas Anuladas (modulo y link de contabilidad).",
+  "sha256": "a2f160f0dd66cdaa5732074fbb6d7c74a5f8231d4efab7cbf5f0af17b67f1102"
 }

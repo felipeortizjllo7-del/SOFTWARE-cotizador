@@ -108,7 +108,7 @@ header .who{font-size:13px;color:#cfe}
 <script>
 // Auto-actualizacion de ESTE modulo (reservas): si se publica una version nueva,
 // la pagina se recarga sola (una vez) para que Angela y demas vean lo ultimo.
-const RES_VERSION="R5";
+const RES_VERSION="R6";
 const RES_VER_URL="https://raw.githubusercontent.com/felipeortizjllo7-del/SOFTWARE-cotizador/main/reservas_version.json";
 async function chequearReservasWeb(){try{
   const r=await fetch(RES_VER_URL+"?t="+Date.now(),{cache:"no-store"});if(!r.ok)return;
@@ -424,10 +424,11 @@ function render(){
   return true;
  });
  const cont=document.getElementById("lista");
- // Resumen: cantidad y, si hay filtro de fecha/pago/agencia, los totales (monto/pagado/saldo)
- let tM=0,tP=0,tS=0; items.forEach(r=>{tM+=montoNum(r);tP+=pagadoNum(r);tS+=saldoNum(r);});
- let resumen=items.length+" reserva(s)";
- if(fp||fy||fm||fg){ resumen+=" · Monto "+usd(tM)+" · Pagado "+usd(tP)+" · Saldo "+usd(tS); }
+ // Resumen: cantidad y totales. La VENTA (monto/pagado/saldo) NO cuenta las ANULADAS.
+ let tM=0,tP=0,tS=0,nAnu=0;
+ items.forEach(r=>{ if((r.estado||"")==="Anulada"){nAnu++;return;} tM+=montoNum(r);tP+=pagadoNum(r);tS+=saldoNum(r);});
+ let resumen=items.length+" reserva(s)"+(nAnu?(" · "+nAnu+" anulada(s) no suman"):"");
+ if(fp||fy||fm||fg){ resumen+=" · Venta "+usd(tM)+" · Pagado "+usd(tP)+" · Saldo "+usd(tS); }
  document.getElementById("count").textContent=resumen;
  if(!items.length){ cont.innerHTML='<div class="mut">No hay reservas que coincidan con el filtro.</div>'; return; }
  cont.innerHTML=items.map(r=>{
