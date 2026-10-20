@@ -1,6 +1,6 @@
 {
-  "version": "25.34",
+  "version": "25.35",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Liquidacion: nuevo campo 'Ingreso concierto USD (no comisiona)' en Editar gastos. Se RESTA del precio de venta en USD para liquidar y bonificar SOLO sobre hotel + traslado + terrestre (el ingreso de boleta/evento no comisiona). El resultado muestra la 'Venta USD liquidable' (venta - ingreso concierto).",
-  "sha256": "5b810e3fc2b4f13f19116aeb7d59b4c8a7cb7f95c589da595be5fe093a4ea016"
+  "notas": "Cotizador: nueva opcion 'Guia en ingles' con % de recargo que se aplica a TODO el paquete (hoteles, traslados, actividades y ninos). Se activa con el check + el porcentaje; recalcula el total y el PDF, y queda guardado en la cotizacion. El PDF indica que incluye guia en ingles (sin mostrar el %).",
+  "sha256": "c66c8b4a5e55164091677ad1f5a4ede9ec0b2429344d3d945a0f341184c991cd"
 }
