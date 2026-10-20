@@ -1,6 +1,6 @@
 {
-  "version": "25.33",
+  "version": "25.34",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Liquidacion: las ordenes del mes que NO tenian fecha de viaje quedaban invisibles; ahora caen a su mes de creacion y SI aparecen. Vouchers de proveedor: al enviar/generar, si un proveedor tiene VARIOS servicios (transporte/guia/actividad) sale UN SOLO voucher consolidado con todos, en vez de uno por servicio ('Enviar todos' tambien agrupa por proveedor). Hoteles siguen individuales.",
-  "sha256": "d0c93bbb990f914858545ccabbcc77305970bd75f563d1762ccc0c6b43a0c746"
+  "notas": "Liquidacion: nuevo campo 'Ingreso concierto USD (no comisiona)' en Editar gastos. Se RESTA del precio de venta en USD para liquidar y bonificar SOLO sobre hotel + traslado + terrestre (el ingreso de boleta/evento no comisiona). El resultado muestra la 'Venta USD liquidable' (venta - ingreso concierto).",
+  "sha256": "5b810e3fc2b4f13f19116aeb7d59b4c8a7cb7f95c589da595be5fe093a4ea016"
 }
