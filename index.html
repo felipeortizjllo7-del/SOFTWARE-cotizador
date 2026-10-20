@@ -121,10 +121,32 @@ display:flex;align-items:center;gap:16px;margin-top:6px}
  <a class="btn btn-navy" href="https://drive.google.com/drive/folders/1jz0GJ1oLQ8T6Ul_w47AXg9ScBH5JwEmc?usp=drive_link" target="_blank" rel="noopener">&#127961; Eventos de ciudad</a>
  <a class="btn btn-navy" href="https://drive.google.com/drive/folders/1fIOmcJhUCLIYZaDV7ID7Sn9sAWF7u0jA?usp=drive_link" target="_blank" rel="noopener">&#128197; Salidas fijas</a>
  <a class="btn btn-navy" href="https://drive.google.com/drive/folders/13Czu7ihNUNQT0NLFSW_0hFx8k1S91o8d?usp=drive_link" target="_blank" rel="noopener">&#127991; Promociones</a>
- <a class="btn btn-navy" href="#" onclick="alert('Catálogo de Souvenir: muy pronto disponible.');return false;">&#127873; Souvenir</a>
+ <a class="btn btn-navy" href="#" onclick="abrirSouvenir();return false;">&#127873; Souvenir</a>
  <a class="btn btn-navy" href="https://drive.google.com/drive/folders/1orbGF3k8EtV0gyJk0w7Pb7Mmi-5Bkdmk?usp=drive_link" target="_blank" rel="noopener">&#10133; Otros</a>
 </div>
 <div id="updbar" class="hidden" style="background:var(--green);color:#fff;padding:9px 20px;font-weight:700;text-align:center"></div>
+
+<!-- Souvenirs: tienda Bohio Playa con el codigo INNOBA (conserva la comision) -->
+<div id="souvOv" style="display:none;position:fixed;inset:0;background:rgba(3,15,35,.7);z-index:120;align-items:center;justify-content:center;padding:16px"
+     onclick="if(event.target===this)cerrarSouvenir()">
+ <div style="background:#fff;max-width:420px;width:100%;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.45);text-align:center">
+  <div style="background:linear-gradient(120deg,#012a63,#1466C7);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center">
+   <b style="font-size:17px">&#127873; Souvenirs INNOBA &middot; Bohío Playa</b>
+   <button onclick="cerrarSouvenir()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer;line-height:1">&times;</button>
+  </div>
+  <div style="padding:18px 20px 22px">
+   <p style="margin:0 0 12px;color:#334;font-size:14px;line-height:1.5">Prendas y accesorios de playa para tus clientes. Con el código <b>INNOBA</b> se conserva la comisión.</p>
+   <img src="qr_souvenir.png" alt="QR tienda Bohío Playa - INNOBA" style="width:240px;max-width:80%;border:1px solid #e3e9f2;border-radius:12px;padding:8px;background:#fff">
+   <p style="margin:12px 0 10px;color:#56607a;font-size:13px">Escanea el QR o haz clic para ver las prendas:</p>
+   <a href="https://bohioplaya.com/discount/INNOBA" target="_blank" rel="noopener"
+      style="display:inline-block;background:var(--gold,#E6A817);color:#3a2b05;font-weight:800;text-decoration:none;border-radius:10px;padding:12px 22px;font-size:15px">🛍️ Ir a la tienda (con comisión INNOBA)</a>
+  </div>
+ </div>
+</div>
+<script>
+function abrirSouvenir(){var o=document.getElementById('souvOv');if(o)o.style.display='flex';}
+function cerrarSouvenir(){var o=document.getElementById('souvOv');if(o)o.style.display='none';}
+</script>
 
 <div class="wrap">
  <div class="card">
