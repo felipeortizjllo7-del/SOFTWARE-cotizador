@@ -1,6 +1,6 @@
 {
-  "version": "25.35",
+  "version": "25.36",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Cotizador: nueva opcion 'Guia en ingles' con % de recargo que se aplica a TODO el paquete (hoteles, traslados, actividades y ninos). Se activa con el check + el porcentaje; recalcula el total y el PDF, y queda guardado en la cotizacion. El PDF indica que incluye guia en ingles (sin mostrar el %).",
-  "sha256": "c66c8b4a5e55164091677ad1f5a4ede9ec0b2429344d3d945a0f341184c991cd"
+  "notas": "PDF de MICE/Eventos: (1) 'EL EVENTO INCLUYE' ahora dice una sola linea 'Estadia de N noche(s) en hotel seleccionado' en vez de una por hotel. (2) 'RESUMEN GENERAL' ahora muestra el precio por persona en Sencilla/Doble/Triple para CADA hotel (tabla), en vez de un solo precio del mas economico. (Multidestino sumado conserva el resumen agregado.)",
+  "sha256": "a339379b3c1977e79947d06e49197b73d451a7cf36a6f359794682f56a5d10d7"
 }
