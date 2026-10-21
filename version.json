@@ -1,6 +1,6 @@
 {
-  "version": "25.40",
+  "version": "25.41",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Reporte de gestion del director: la meta de ventas NO-concierto se mide por el EQUIPO comercial (Valentina+Estefania+Yuliana) y el minimo es Punto de equilibrio + 5.000 USD. Conversion minima 7%.",
-  "sha256": "155821f4352bbcc61267f1fae0a51163c37d29891538e3ea635f5a8506ba47dc"
+  "notas": "Punto de equilibrio automatico: el reporte de gestion lee el PE del Excel PUNTO DE EQUILIBRIO.xlsx (se actualiza con el dolar cada dia) y el minimo de ventas no-concierto del equipo = PE + 5.000 USD.",
+  "sha256": "5ffd9da7c6e4d8dbcb62228d2a2e4259cdd67ce81297a4abd8d9a14084446781"
 }
