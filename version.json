@@ -1,6 +1,6 @@
 {
-  "version": "25.38",
+  "version": "25.39",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Minimos de gestion del director: ventas NO-concierto del mes min USD 70.000 y conversion del mes min 10%.",
-  "sha256": "351afdad79f17a02f5e17da99dfe337c0d960d90c5afc295457fb3b53d92da0b"
+  "notas": "Minimo de conversion del mes del director ajustado a 7%.",
+  "sha256": "c9c38f8b494d3f842254bc864d60322ec3253af682ae72393c95d9409cb8c1ec"
 }
