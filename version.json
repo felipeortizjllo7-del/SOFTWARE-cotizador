@@ -1,6 +1,6 @@
 {
-  "version": "25.37",
+  "version": "25.38",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Reporte de gestion comercial del director (semana+mes): minimos de cotizaciones, seguimientos, ventas no-concierto y conversion que condicionan la comision. Boton en Modulo Comercial y envio automatico los viernes al dueno y al director. Guia en ingles aplicable a todo el paquete. MICE: resumen por hotel (sencilla/doble/triple) y una sola linea de estadia. Liquidacion: descuento del ingreso de concierto que no comisiona; voucher consolidado por proveedor. Cotizador HTML: boton Ir a la tienda.",
-  "sha256": "4ec6945f1a15af261919683e1e07d5a8cb366902e9752a3d4bf21de31479a84e"
+  "notas": "Minimos de gestion del director: ventas NO-concierto del mes min USD 70.000 y conversion del mes min 10%.",
+  "sha256": "351afdad79f17a02f5e17da99dfe337c0d960d90c5afc295457fb3b53d92da0b"
 }
