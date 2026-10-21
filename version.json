@@ -1,6 +1,6 @@
 {
-  "version": "25.39",
+  "version": "25.40",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Minimo de conversion del mes del director ajustado a 7%.",
-  "sha256": "c9c38f8b494d3f842254bc864d60322ec3253af682ae72393c95d9409cb8c1ec"
+  "notas": "Reporte de gestion del director: la meta de ventas NO-concierto se mide por el EQUIPO comercial (Valentina+Estefania+Yuliana) y el minimo es Punto de equilibrio + 5.000 USD. Conversion minima 7%.",
+  "sha256": "155821f4352bbcc61267f1fae0a51163c37d29891538e3ea635f5a8506ba47dc"
 }
