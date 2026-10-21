@@ -1,6 +1,6 @@
 {
-  "version": "25.36",
+  "version": "25.37",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "PDF de MICE/Eventos: (1) 'EL EVENTO INCLUYE' ahora dice una sola linea 'Estadia de N noche(s) en hotel seleccionado' en vez de una por hotel. (2) 'RESUMEN GENERAL' ahora muestra el precio por persona en Sencilla/Doble/Triple para CADA hotel (tabla), en vez de un solo precio del mas economico. (Multidestino sumado conserva el resumen agregado.)",
-  "sha256": "a339379b3c1977e79947d06e49197b73d451a7cf36a6f359794682f56a5d10d7"
+  "notas": "Reporte de gestion comercial del director (semana+mes): minimos de cotizaciones, seguimientos, ventas no-concierto y conversion que condicionan la comision. Boton en Modulo Comercial y envio automatico los viernes al dueno y al director. Guia en ingles aplicable a todo el paquete. MICE: resumen por hotel (sencilla/doble/triple) y una sola linea de estadia. Liquidacion: descuento del ingreso de concierto que no comisiona; voucher consolidado por proveedor. Cotizador HTML: boton Ir a la tienda.",
+  "sha256": "4ec6945f1a15af261919683e1e07d5a8cb366902e9752a3d4bf21de31479a84e"
 }
