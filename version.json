@@ -1,6 +1,6 @@
 {
-  "version": "25.44",
+  "version": "25.45",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Webhook actualizado a la URL con soporte de conciertos y relay del reporte (misma base de datos, mismas reservas). Se activa la sincronizacion de conciertos entre equipos y el envio del reporte de gestion por correo.",
-  "sha256": "68f8b4531ecc1b0ebce961cbd348bf81822ba5ef9ecee4d52a113e88bb5aa574"
+  "notas": "Lista de espera (interesados): la descarga tenia timeout de 20s muy corto y el interesado no bajaba de la nube (hoja de cotizaciones grande). Ahora usa timeout amplio + reintentos, asi los interesados aparecen y disparan la alerta.",
+  "sha256": "bbfaafdb86ddd29a466ec42937d29afd53b61f4e72b90f854aceea819cd8306e"
 }
