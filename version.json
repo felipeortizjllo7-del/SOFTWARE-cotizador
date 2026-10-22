@@ -1,6 +1,6 @@
 {
-  "version": "25.42",
+  "version": "25.43",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Reservas: al eliminar, el aviso muestra monto/estado/asesor y aclara que solo borra ESA reserva (las del mismo numero no se tocan) y que es recuperable desde Papelera. Soporte de pago subido desde otro equipo ahora se abre por el enlace de Drive si el archivo local no esta en esta computadora.",
-  "sha256": "ad6db92d106a894bd1ce89b9b021db5b12afb13f6328ce1955fef0ef81082a76"
+  "notas": "Conciertos: alerta GLOBAL cuando entra una reserva o interesado por la web (aunque el modulo este cerrado). Sincronizacion de conciertos entre equipos (lo que ve uno lo ven todos) con candado de seguridad: se activa solo cuando el webhook soporte conciertos, sin tocar cotizaciones.",
+  "sha256": "872ec0b1d2a81b665675c498f60e8d347d36fd17ca89aea88cf90803792d45e4"
 }
