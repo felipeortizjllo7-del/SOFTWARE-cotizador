@@ -1,6 +1,6 @@
 {
-  "version": "25.41",
+  "version": "25.42",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Punto de equilibrio automatico: el reporte de gestion lee el PE del Excel PUNTO DE EQUILIBRIO.xlsx (se actualiza con el dolar cada dia) y el minimo de ventas no-concierto del equipo = PE + 5.000 USD.",
-  "sha256": "5ffd9da7c6e4d8dbcb62228d2a2e4259cdd67ce81297a4abd8d9a14084446781"
+  "notas": "Reservas: al eliminar, el aviso muestra monto/estado/asesor y aclara que solo borra ESA reserva (las del mismo numero no se tocan) y que es recuperable desde Papelera. Soporte de pago subido desde otro equipo ahora se abre por el enlace de Drive si el archivo local no esta en esta computadora.",
+  "sha256": "ad6db92d106a894bd1ce89b9b021db5b12afb13f6328ce1955fef0ef81082a76"
 }
