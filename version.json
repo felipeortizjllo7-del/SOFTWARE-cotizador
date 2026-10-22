@@ -1,6 +1,6 @@
 {
-  "version": "25.43",
+  "version": "25.44",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Conciertos: alerta GLOBAL cuando entra una reserva o interesado por la web (aunque el modulo este cerrado). Sincronizacion de conciertos entre equipos (lo que ve uno lo ven todos) con candado de seguridad: se activa solo cuando el webhook soporte conciertos, sin tocar cotizaciones.",
-  "sha256": "872ec0b1d2a81b665675c498f60e8d347d36fd17ca89aea88cf90803792d45e4"
+  "notas": "Webhook actualizado a la URL con soporte de conciertos y relay del reporte (misma base de datos, mismas reservas). Se activa la sincronizacion de conciertos entre equipos y el envio del reporte de gestion por correo.",
+  "sha256": "68f8b4531ecc1b0ebce961cbd348bf81822ba5ef9ecee4d52a113e88bb5aa574"
 }
