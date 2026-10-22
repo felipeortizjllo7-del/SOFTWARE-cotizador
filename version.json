@@ -1,6 +1,6 @@
 {
-  "version": "25.45",
+  "version": "25.46",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Lista de espera (interesados): la descarga tenia timeout de 20s muy corto y el interesado no bajaba de la nube (hoja de cotizaciones grande). Ahora usa timeout amplio + reintentos, asi los interesados aparecen y disparan la alerta.",
-  "sha256": "bbfaafdb86ddd29a466ec42937d29afd53b61f4e72b90f854aceea819cd8306e"
+  "notas": "Precios de concierto: corregidos los de Karol G (el punto de miles se leia como decimal, 1182 quedaba en 1.18) y la vitrina republicada. Blindaje: el modulo marca con aviso cualquier concierto con precios sospechosamente bajos para revisarlos antes de publicar.",
+  "sha256": "32cf9e6bc0e7d00c6c15bdd46f8b96aaf46e856a0c43ac59e4f1e27a4737f192"
 }
