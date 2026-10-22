@@ -100,6 +100,7 @@ header .who{font-size:13px;color:#cfe}
    <option value="pag">Pagadas (verif. contabilidad)</option>
   </select>
   <button class="btn-out" style="border-color:var(--navy);color:var(--navy)" onclick="cargar()">↻ Actualizar</button>
+  <button class="btn-out" style="border-color:#0E8A5F;color:#0E8A5F" onclick="exportarExcel()" title="Descarga en Excel solo lo que esté filtrado ahora">⬇ Exportar Excel</button>
   <span class="count" id="count"></span>
  </div>
  <div class="wrap" id="lista"></div>
@@ -391,7 +392,7 @@ function montoBlob(r){
                   m.toLocaleString("en-US"),m.toLocaleString("en-US",{minimumFractionDigits:2})]);
  return [...s].join(" ");
 }
-function render(){
+function filtradas(){
  const q=document.getElementById("q").value.toLowerCase().trim();
  const fa=document.getElementById("fase").value;
  const fe=document.getElementById("fest").value;
@@ -423,6 +424,10 @@ function render(){
   }
   return true;
  });
+ return items;
+}
+function render(){
+ const items=filtradas();
  const cont=document.getElementById("lista");
  // Resumen: cantidad y totales. La VENTA (monto/pagado/saldo) NO cuenta las ANULADAS.
  let tM=0,tP=0,tS=0,nAnu=0;
@@ -461,6 +466,50 @@ function render(){
    </div>
   </div>`;
  }).join("");
+}
+function exportarExcel(){
+ const items=filtradas();
+ if(!items.length){ alert("No hay reservas que coincidan con el filtro para exportar."); return; }
+ const cols=[
+  ["N.°", r=>r.numero||""],
+  ["Agencia", r=>agenciaDe(r)||""],
+  ["Contacto", r=>personaDe(r)||""],
+  ["Correo", r=>r.email||""],
+  ["Asesora", r=>dispAse(r)],
+  ["Estado", r=>r.estado||""],
+  ["Pago verificado", r=>r.revisado_contab?"SI":"NO"],
+  ["Verificado por", r=>r.revisado_contab_por||""],
+  ["Fecha verificación", r=>r.revisado_contab_fecha||""],
+  ["Destinos", r=>(r.destinos||[]).join(", ")],
+  ["Fechas de viaje", r=>r.fechas_viaje||""],
+  ["Pasajeros", r=>r.pax_txt||""],
+  ["Monto USD", r=>montoNum(r)],
+  ["Pagado USD", r=>pagadoNum(r)],
+  ["Saldo USD", r=>saldoNum(r)],
+  ["Fecha de pago", r=>r.fecha_pago||""],
+  ["Novedades", r=>r.novedades||""]
+ ];
+ const numSet=new Set(["Monto USD","Pagado USD","Saldo USD"]);
+ let html='<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"></head><body>';
+ html+='<table border="1"><tr>'+cols.map(c=>`<th style="background:#1F3864;color:#ffffff;padding:4px">${esc(c[0])}</th>`).join("")+'</tr>';
+ items.forEach(r=>{
+  html+='<tr>'+cols.map(c=>{
+   const v=c[1](r);
+   if(numSet.has(c[0])) return `<td style="text-align:right">${(parseFloat(v)||0).toFixed(2)}</td>`;
+   return `<td>${esc(v)}</td>`;
+  }).join("")+'</tr>';
+ });
+ // Fila TOTAL (la venta/pagado/saldo NO cuenta Anuladas, igual que el resumen de pantalla)
+ let tM=0,tP=0,tS=0; items.forEach(r=>{ if((r.estado||"")==="Anulada")return; tM+=montoNum(r);tP+=pagadoNum(r);tS+=saldoNum(r); });
+ html+=`<tr><td colspan="12" style="text-align:right"><b>TOTAL (no incluye Anuladas)</b></td><td style="text-align:right"><b>${tM.toFixed(2)}</b></td><td style="text-align:right"><b>${tP.toFixed(2)}</b></td><td style="text-align:right"><b>${tS.toFixed(2)}</b></td><td></td><td></td></tr>`;
+ html+='</table></body></html>';
+ const hoy=new Date().toISOString().slice(0,10).replace(/-/g,"");
+ const blob=new Blob(['﻿'+html],{type:'application/vnd.ms-excel;charset=utf-8'});
+ const a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download="Reservas_INNOBA_"+hoy+".xls";
+ document.body.appendChild(a); a.click();
+ setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},1500);
 }
 async function cambiarEstado(uid,estado){
  try{
