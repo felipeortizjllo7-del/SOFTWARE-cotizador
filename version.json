@@ -1,6 +1,6 @@
 {
-  "version": "25.46",
+  "version": "25.47",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Precios de concierto: corregidos los de Karol G (el punto de miles se leia como decimal, 1182 quedaba en 1.18) y la vitrina republicada. Blindaje: el modulo marca con aviso cualquier concierto con precios sospechosamente bajos para revisarlos antes de publicar.",
-  "sha256": "32cf9e6bc0e7d00c6c15bdd46f8b96aaf46e856a0c43ac59e4f1e27a4737f192"
+  "notas": "Reservas de concierto desde la web: ahora pasan DIRECTO al modulo de Reservas (marcadas PENDIENTE DE PAGO, con nota de que llegaron por la pagina) ademas de quedar en el cuadro de ordenes y disparar la alerta. Quedan enlazadas para no duplicar. La LISTA DE ESPERA sigue siendo solo interes (no crea reserva).",
+  "sha256": "fbf9240fec83e1cef618931e2cbc5b247f3e089846aaa9606078a5d976151107"
 }
