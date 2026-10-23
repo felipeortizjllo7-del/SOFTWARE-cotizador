@@ -120,7 +120,7 @@ async function chequearReservasWeb(){try{
     if(!ya){ try{sessionStorage.setItem(flag,"1");}catch(e){} location.reload(true); }
   }
 }catch(e){}}
-const WEBHOOK_URL="https://script.google.com/macros/s/AKfycbzzl9r500lei3AdM2LnIgtw6_n9wmvx1mDlnNPL-xccCX6Bsovb4PbLJBEX9bElYJIpBg/exec";
+const WEBHOOK_URL="https://script.google.com/macros/s/AKfycbzFTlPIutRS8hB01HePwAefOAlsi91XlPAqqSNwXxirSk5XHCsZp2Ri93VuIj9ic91ugg/exec";
 let TOKEN=sessionStorage.getItem("inb_res_token")||"";
 let NOMBRE=sessionStorage.getItem("inb_res_nombre")||"";
 let DATA=[];
@@ -137,7 +137,7 @@ async function api(payload, intentos){
  for(let i=0;i<intentos;i++){
   try{
    let signal, to;
-   if(typeof AbortController!=="undefined"){ const c=new AbortController(); signal=c.signal; to=setTimeout(()=>c.abort(),28000); }
+   if(typeof AbortController!=="undefined"){ const c=new AbortController(); signal=c.signal; to=setTimeout(()=>c.abort(),55000); }
    const r=await fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload),signal});
    if(to) clearTimeout(to);
    if(!r.ok){
