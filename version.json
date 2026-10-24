@@ -1,6 +1,6 @@
 {
-  "version": "25.51",
+  "version": "25.52",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Logo de conciertos actualizado al nuevo diseno tipo ticket 'INNOBA LIVE - Todo incluido': en el modulo, en los PDF (portada ancha + estampado en los existentes) y en la vitrina web.",
-  "sha256": "9fbb8dc12c05c5837029f7a1e9fb163ccb632be91001d87874fd76a4d30a1438"
+  "notas": "Logos de conciertos: se CONSERVA el logo INNOBA DMC original como principal y el ticket INNOBA LIVE queda como secundario (al lado), en el modulo de Conciertos y en la vitrina web. Los PDF llevan el encabezado INNOBA + el ticket.",
+  "sha256": "a7505b1253df4477a32bab278c5be655329efda5e389eb49cc1072e1fe498c0f"
 }
