@@ -1,6 +1,6 @@
 {
-  "version": "25.49",
+  "version": "25.50",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Liquidacion: la TRM del mes se trae SOLA de dolar-colombia.com al abrir y al cambiar de mes (pegada a esa pagina), para que TODOS los equipos usen la MISMA TRM oficial sin escribirla a mano. Si no hay internet, deja la TRM anterior.",
-  "sha256": "3e1addcb267c66c060f8db28cf349edcb59483266b0037e850134591780f58fd"
+  "notas": "Logo INNOBA LIVE como marca de conciertos: en el modulo de Conciertos, en la portada de los PDF de paquete de concierto y en la vitrina web.",
+  "sha256": "184ed958e6523d6010b8eb05b7fff788a19e68170fd19e79dcbcc1fc4ac4325d"
 }
