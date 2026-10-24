@@ -1,6 +1,6 @@
 {
-  "version": "25.47",
+  "version": "25.48",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Reservas de concierto desde la web: ahora pasan DIRECTO al modulo de Reservas (marcadas PENDIENTE DE PAGO, con nota de que llegaron por la pagina) ademas de quedar en el cuadro de ordenes y disparar la alerta. Quedan enlazadas para no duplicar. La LISTA DE ESPERA sigue siendo solo interes (no crea reserva).",
-  "sha256": "fbf9240fec83e1cef618931e2cbc5b247f3e089846aaa9606078a5d976151107"
+  "notas": "Liquidacion de rentabilidad: por defecto agrupa por MES DE VIAJE (tour), no por fecha de creacion, para que cada orden quede en el mes en que se viaja y todos los equipos vean lo mismo. Se puede cambiar a 'Creacion (venta)' en el selector si se necesita.",
+  "sha256": "2bfaf7375a52c26488be78f3a9d73d22acc6a309790236b76e8ff9a1f1ce1926"
 }
