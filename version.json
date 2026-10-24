@@ -1,6 +1,6 @@
 {
-  "version": "25.50",
+  "version": "25.51",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Logo INNOBA LIVE como marca de conciertos: en el modulo de Conciertos, en la portada de los PDF de paquete de concierto y en la vitrina web.",
-  "sha256": "184ed958e6523d6010b8eb05b7fff788a19e68170fd19e79dcbcc1fc4ac4325d"
+  "notas": "Logo de conciertos actualizado al nuevo diseno tipo ticket 'INNOBA LIVE - Todo incluido': en el modulo, en los PDF (portada ancha + estampado en los existentes) y en la vitrina web.",
+  "sha256": "9fbb8dc12c05c5837029f7a1e9fb163ccb632be91001d87874fd76a4d30a1438"
 }
