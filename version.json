@@ -1,6 +1,6 @@
 {
-  "version": "25.48",
+  "version": "25.49",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Liquidacion de rentabilidad: por defecto agrupa por MES DE VIAJE (tour), no por fecha de creacion, para que cada orden quede en el mes en que se viaja y todos los equipos vean lo mismo. Se puede cambiar a 'Creacion (venta)' en el selector si se necesita.",
-  "sha256": "2bfaf7375a52c26488be78f3a9d73d22acc6a309790236b76e8ff9a1f1ce1926"
+  "notas": "Liquidacion: la TRM del mes se trae SOLA de dolar-colombia.com al abrir y al cambiar de mes (pegada a esa pagina), para que TODOS los equipos usen la MISMA TRM oficial sin escribirla a mano. Si no hay internet, deja la TRM anterior.",
+  "sha256": "3e1addcb267c66c060f8db28cf349edcb59483266b0037e850134591780f58fd"
 }
