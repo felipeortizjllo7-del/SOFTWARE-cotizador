@@ -1,6 +1,6 @@
 {
-  "version": "25.54",
+  "version": "25.55",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Liquidacion por mes de VIAJE: ahora se leen las fechas escritas en texto en español (ej. '17 de octubre 2026'), para que cada orden caiga en el mes correcto del tour y no en el de creacion.",
-  "sha256": "2df292487e69fc8464ebb594b422ea5b042ec2b207146c7574d9dfb0c81d4d52"
+  "notas": "Liquidacion por mes de VIAJE: las ordenes SIN fecha de viaje ya no caen en el mes de creacion; van al grupo 'Sin fecha'. Asi cada mes muestra solo los viajes realmente ejecutados en el; las sin fecha quedan visibles en 'Sin fecha' y 'Todas' para ponerles la fecha del tour.",
+  "sha256": "2f9b0b0a8d828b5cb794d6007c6617c89a71f60abf63d12ad0cf9f731aebd33a"
 }
