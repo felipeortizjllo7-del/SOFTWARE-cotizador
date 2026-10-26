@@ -1,6 +1,6 @@
 {
-  "version": "25.53",
+  "version": "25.54",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Liquidacion: el bono ahora se evalua sobre el TOTAL de ventas del mes (premisa PE + 5.000 USD). Las ordenes bajo su margen minimo no se bonifican pero suman para alcanzar la premisa. Pantalla y Excel ahora coinciden.",
-  "sha256": "d730bf5579ba66d2a4fb4b854cfd27160b1c6e5638641e92ae9f80e48f26d364"
+  "notas": "Liquidacion por mes de VIAJE: ahora se leen las fechas escritas en texto en español (ej. '17 de octubre 2026'), para que cada orden caiga en el mes correcto del tour y no en el de creacion.",
+  "sha256": "2df292487e69fc8464ebb594b422ea5b042ec2b207146c7574d9dfb0c81d4d52"
 }
