@@ -1,6 +1,6 @@
 {
-  "version": "25.55",
+  "version": "25.56",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Liquidacion por mes de VIAJE: las ordenes SIN fecha de viaje ya no caen en el mes de creacion; van al grupo 'Sin fecha'. Asi cada mes muestra solo los viajes realmente ejecutados en el; las sin fecha quedan visibles en 'Sin fecha' y 'Todas' para ponerles la fecha del tour.",
-  "sha256": "2f9b0b0a8d828b5cb794d6007c6617c89a71f60abf63d12ad0cf9f731aebd33a"
+  "notas": "Liquidacion: las ordenes SIN costos operativos cargados quedan 'pendientes de liquidar' (en rojo): NO pagan bono ni muestran margen/utilidad inflados, con aviso del total pendiente. Al cargarles los costos entran normal.",
+  "sha256": "c3cf6621d332dec9eba53021316ed17806ac014c9029442322fe97b9309fbaae"
 }
