@@ -1,6 +1,6 @@
 {
-  "version": "25.58",
+  "version": "25.59",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Liquidacion: nuevo 'mes de liquidacion' por orden (liq.mes_liq) para contar una orden en otro mes sin cambiar la fecha real del viaje. Aplicado a 3190 y 2568 (van a octubre).",
-  "sha256": "3bdde75dd288e2e41caded27e7829fb0b216e7f0e285ce49e9b99663a5987268"
+  "notas": "Nuevo logo INNOBA LIVE (diseno de ticket) en todo lo de concierto: modulo, PDFs de paquete (nuevos y ya publicados, re-estampados), y vitrina HTML. Siempre junto al logo de INNOBA DMC.",
+  "sha256": "0349f1495dd12faf031d9eefbfa36158bc9caeae0ff9ef88d8a13716976cf444"
 }
