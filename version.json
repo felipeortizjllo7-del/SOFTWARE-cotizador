@@ -1,6 +1,6 @@
 {
-  "version": "25.60",
+  "version": "25.61",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Correccion URGENTE de tarifas 2027: Doble/Triple/Cuadruple de hoteles (Cartagena, Bogota, Bucaramanga, algunos Medellin) salian en ~0 USD por un error de importacion (celdas con formula-USD). Restaurados a COP correcto. Formula intacta: COP/0.88 (hotel) o /0.75 (terrestre) / (TRM dolar-colombia -100 en 2026, -200 en 2027).",
-  "sha256": "04538f83203180b0a8551247678517667ede828caa2938b8d563ba13c02c5b52"
+  "notas": "Fix completo tarifas 2027: hoteles restaurados a COP correcto (incluye SOFITEL y demas que salian en ~0 USD). Terrestres actualizados. Formula intacta.",
+  "sha256": "4c27875c89dc1e7b4be247515b80b5dab2a1f01b09dd8e43bb9bc6118ebb1a91"
 }
