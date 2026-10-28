@@ -1,6 +1,6 @@
 {
-  "version": "25.61",
+  "version": "25.62",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Fix completo tarifas 2027: hoteles restaurados a COP correcto (incluye SOFITEL y demas que salian en ~0 USD). Terrestres actualizados. Formula intacta.",
-  "sha256": "4c27875c89dc1e7b4be247515b80b5dab2a1f01b09dd8e43bb9bc6118ebb1a91"
+  "notas": "Fix publicar vitrina de conciertos: se quito 'conciertos_watermark.json' (gitignoreado) del git add; antes ese error hacia que el app dijera 'Publicado' pero la web NO se actualizara. Ahora publica de verdad.",
+  "sha256": "b6fab88834b8b0ad01a4d565cbb37fe5aa85b089e7a0ce52c79ea008b671a72a"
 }
