@@ -1,6 +1,6 @@
 {
-  "version": "25.59",
+  "version": "25.60",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Nuevo logo INNOBA LIVE (diseno de ticket) en todo lo de concierto: modulo, PDFs de paquete (nuevos y ya publicados, re-estampados), y vitrina HTML. Siempre junto al logo de INNOBA DMC.",
-  "sha256": "0349f1495dd12faf031d9eefbfa36158bc9caeae0ff9ef88d8a13716976cf444"
+  "notas": "Correccion URGENTE de tarifas 2027: Doble/Triple/Cuadruple de hoteles (Cartagena, Bogota, Bucaramanga, algunos Medellin) salian en ~0 USD por un error de importacion (celdas con formula-USD). Restaurados a COP correcto. Formula intacta: COP/0.88 (hotel) o /0.75 (terrestre) / (TRM dolar-colombia -100 en 2026, -200 en 2027).",
+  "sha256": "04538f83203180b0a8551247678517667ede828caa2938b8d563ba13c02c5b52"
 }
