@@ -1,6 +1,6 @@
 {
-  "version": "25.57",
+  "version": "25.58",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Tarifas 2027 actualizadas (hoteles y terrestres, 9 destinos) con los precios nuevos del Excel; margenes 0.88/0.75; dolar -100 para viajes 2026 y -200 desde 2027. Tours de Comuna 13 de primeros en Medellin.",
-  "sha256": "a14837e458f28b20b4fdfafd27e6cfcbbc39cc93d34445da708a781b9cbc140b"
+  "notas": "Liquidacion: nuevo 'mes de liquidacion' por orden (liq.mes_liq) para contar una orden en otro mes sin cambiar la fecha real del viaje. Aplicado a 3190 y 2568 (van a octubre).",
+  "sha256": "3bdde75dd288e2e41caded27e7829fb0b216e7f0e285ce49e9b99663a5987268"
 }
