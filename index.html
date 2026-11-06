@@ -126,20 +126,33 @@ display:flex;align-items:center;gap:16px;margin-top:6px}
 </div>
 <div id="updbar" class="hidden" style="background:var(--green);color:#fff;padding:9px 20px;font-weight:700;text-align:center"></div>
 
-<!-- Souvenirs: tienda Bohio Playa con el codigo INNOBA (conserva la comision) -->
+<!-- Souvenirs / Tiendas con el codigo INNOBA (conserva la comision) -->
 <div id="souvOv" style="display:none;position:fixed;inset:0;background:rgba(3,15,35,.7);z-index:120;align-items:center;justify-content:center;padding:16px"
      onclick="if(event.target===this)cerrarSouvenir()">
- <div style="background:#fff;max-width:420px;width:100%;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.45);text-align:center">
+ <div style="background:#fff;max-width:720px;width:100%;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.45);text-align:center">
   <div style="background:linear-gradient(120deg,#012a63,#1466C7);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center">
-   <b style="font-size:17px">&#127873; Souvenirs INNOBA &middot; Bohío Playa</b>
+   <b style="font-size:17px">&#127873; Tiendas &amp; Souvenirs INNOBA</b>
    <button onclick="cerrarSouvenir()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer;line-height:1">&times;</button>
   </div>
-  <div style="padding:18px 20px 22px">
-   <p style="margin:0 0 12px;color:#334;font-size:14px;line-height:1.5">Prendas y accesorios de playa para tus clientes.</p>
-   <img src="qr_souvenir.png" alt="QR tienda Bohío Playa" style="width:240px;max-width:80%;border:1px solid #e3e9f2;border-radius:12px;padding:8px;background:#fff">
-   <p style="margin:12px 0 10px;color:#56607a;font-size:13px">Escanea el QR o haz clic para ver las prendas:</p>
-   <a href="https://bohioplaya.com/discount/INNOBA" target="_blank" rel="noopener"
-      style="display:inline-block;background:var(--gold,#E6A817);color:#3a2b05;font-weight:800;text-decoration:none;border-radius:10px;padding:12px 22px;font-size:15px">🛍️ Ir a la tienda</a>
+  <div style="padding:18px 20px 22px;display:flex;gap:16px;flex-wrap:wrap;justify-content:center">
+   <!-- Tienda 1: Bohío Playa -->
+   <div style="flex:1 1 280px;max-width:320px;border:1px solid #e9eef6;border-radius:14px;padding:14px 16px 18px;background:#fbfcff">
+    <b style="display:block;font-size:15px;color:#012a63;margin-bottom:4px">Bohío Playa</b>
+    <p style="margin:0 0 12px;color:#334;font-size:13px;line-height:1.5">Prendas y accesorios de playa para tus clientes.</p>
+    <img src="qr_souvenir.png" alt="QR tienda Bohío Playa" style="width:200px;max-width:90%;border:1px solid #e3e9f2;border-radius:12px;padding:8px;background:#fff">
+    <p style="margin:12px 0 10px;color:#56607a;font-size:12px">Escanea el QR o haz clic:</p>
+    <a href="https://bohioplaya.com/discount/INNOBA" target="_blank" rel="noopener"
+       style="display:inline-block;background:var(--gold,#E6A817);color:#3a2b05;font-weight:800;text-decoration:none;border-radius:10px;padding:11px 20px;font-size:14px">🛍️ Ir a la tienda</a>
+   </div>
+   <!-- Tienda 2: Visit Medellín -->
+   <div style="flex:1 1 280px;max-width:320px;border:1px solid #e9eef6;border-radius:14px;padding:14px 16px 18px;background:#fbfcff">
+    <b style="display:block;font-size:15px;color:#012a63;margin-bottom:4px">Visit Medellín &middot; Tienda</b>
+    <p style="margin:0 0 12px;color:#334;font-size:13px;line-height:1.5">Experiencias, tours y productos para disfrutar Medellín.</p>
+    <img src="qr_visitmedellin.png" alt="QR tienda Visit Medellín" style="width:200px;max-width:90%;border:1px solid #e3e9f2;border-radius:12px;padding:8px;background:#fff">
+    <p style="margin:12px 0 10px;color:#56607a;font-size:12px">Escanea el QR o haz clic:</p>
+    <a href="https://visitmedellin.co/tienda/?utm_source=guime&amp;utm_medium=referral&amp;utm_campaign=guime_tienda" target="_blank" rel="noopener"
+       style="display:inline-block;background:var(--gold,#E6A817);color:#3a2b05;font-weight:800;text-decoration:none;border-radius:10px;padding:11px 20px;font-size:14px">🛍️ Ir a la tienda</a>
+   </div>
   </div>
  </div>
 </div>
