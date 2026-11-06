@@ -1,6 +1,6 @@
 {
-  "version": "25.64",
+  "version": "25.65",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Septiembre 2026: el bono se paga al llegar al punto de equilibrio (excepcion puntual de este mes; los demas meses siguen con PE+5.000). Web: tienda Visit Medellin junto a Bohio en Souvenirs.",
-  "sha256": "68685900c643d19a19bfc4f8a28c194742c3e41a29bcb99bf6e41b2ec1884ec2"
+  "notas": "Liquidaciones: septiembre vuelve a la regla normal de bono (punto de equilibrio + 5.000 USD), igual que todos los meses. Se quita la excepcion puntual.",
+  "sha256": "01afe37042b7cd3c600b55918e86db86f4b1f10ba6da572dd60a002c0196b001"
 }
