@@ -1,6 +1,6 @@
 {
-  "version": "25.65",
+  "version": "25.66",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Liquidaciones: septiembre vuelve a la regla normal de bono (punto de equilibrio + 5.000 USD), igual que todos los meses. Se quita la excepcion puntual.",
-  "sha256": "01afe37042b7cd3c600b55918e86db86f4b1f10ba6da572dd60a002c0196b001"
+  "notas": "Tarifario 2027 actualizado completo (hoteles y terrestres, todas las ciudades) desde el Excel final. Hoteles margen 0,88; terrestres 0,75.",
+  "sha256": "a2aaad639202ae6f351d9408a129811a5f91556fba4832c9867d206a4497430b"
 }
