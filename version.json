@@ -1,6 +1,6 @@
 {
-  "version": "25.63",
+  "version": "25.64",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Punto de Equilibrio COMPARTIDO entre equipos: quien tiene el Excel lo sube a la nube y los demas lo bajan al abrir la liquidacion -> todos liquidan con el mismo umbral. Junto con la sincronizacion completa de reservas (webhook), reservas y liquidaciones quedan iguales para todos.",
-  "sha256": "986945d05bdc36950e74955b8b821bf43171d9fe4fb22511bd40ad0701e566cc"
+  "notas": "Septiembre 2026: el bono se paga al llegar al punto de equilibrio (excepcion puntual de este mes; los demas meses siguen con PE+5.000). Web: tienda Visit Medellin junto a Bohio en Souvenirs.",
+  "sha256": "68685900c643d19a19bfc4f8a28c194742c3e41a29bcb99bf6e41b2ec1884ec2"
 }
