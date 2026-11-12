@@ -1,6 +1,6 @@
 {
-  "version": "25.66",
+  "version": "25.67",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Tarifario 2027 actualizado completo (hoteles y terrestres, todas las ciudades) desde el Excel final. Hoteles margen 0,88; terrestres 0,75.",
-  "sha256": "a2aaad639202ae6f351d9408a129811a5f91556fba4832c9867d206a4497430b"
+  "notas": "Liquidaciones: los soportes de cada gasto (y los soportes de pago) ahora aceptan archivos de Excel (.xlsx/.xls/.xlsm) y CSV, ademas de PDF e imagenes.",
+  "sha256": "05db25014def48e80e4639f5b7cdc140f37dc92d25b32c3c4c988f12c8db6fdf"
 }
