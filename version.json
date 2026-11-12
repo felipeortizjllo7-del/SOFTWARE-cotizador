@@ -1,6 +1,6 @@
 {
-  "version": "25.67",
+  "version": "25.68",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Liquidaciones: los soportes de cada gasto (y los soportes de pago) ahora aceptan archivos de Excel (.xlsx/.xls/.xlsm) y CSV, ademas de PDF e imagenes.",
-  "sha256": "05db25014def48e80e4639f5b7cdc140f37dc92d25b32c3c4c988f12c8db6fdf"
+  "notas": "Sincronizacion: los soportes de pago ahora se UNEN entre equipos (ya no se pierde ninguno al sincronizar). Los soportes de la liquidacion (gastos) se suben a la nube (Drive) y se abren desde cualquier equipo. Mejora la consistencia de datos entre computadores.",
+  "sha256": "22d4576aa5a0247bf6702c1429b9f92e1aa92cf1a792f5aea94dce5ee05f0422"
 }
