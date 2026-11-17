@@ -1,6 +1,6 @@
 {
-  "version": "25.68",
+  "version": "25.69",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Sincronizacion: los soportes de pago ahora se UNEN entre equipos (ya no se pierde ninguno al sincronizar). Los soportes de la liquidacion (gastos) se suben a la nube (Drive) y se abren desde cualquier equipo. Mejora la consistencia de datos entre computadores.",
-  "sha256": "22d4576aa5a0247bf6702c1429b9f92e1aa92cf1a792f5aea94dce5ee05f0422"
+  "notas": "Liquidaciones: el tipo de venta (margen) ya no depende solo del itinerario (que la nube borra al sincronizar) sino tambien de los GASTOS cargados (hotel/traslados). Asi una orden hotel+traslado deja de verse como 'solo terrestre' (22%) y usa su 12% correcto.",
+  "sha256": "9c2cc738152aeb245e49b8cf42b50a4ef33e2f5e0399bb3b4f1158f65935225f"
 }
