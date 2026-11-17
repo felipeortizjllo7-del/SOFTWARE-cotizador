@@ -1,6 +1,6 @@
 {
-  "version": "25.69",
+  "version": "25.70",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Liquidaciones: el tipo de venta (margen) ya no depende solo del itinerario (que la nube borra al sincronizar) sino tambien de los GASTOS cargados (hotel/traslados). Asi una orden hotel+traslado deja de verse como 'solo terrestre' (22%) y usa su 12% correcto.",
-  "sha256": "9c2cc738152aeb245e49b8cf42b50a4ef33e2f5e0399bb3b4f1158f65935225f"
+  "notas": "Liquidaciones: las ordenes de perdidas/salidas fijas/cortesias autorizadas por gerencia (Felipe/Carlos) se marcan como 'Gerencia' y NO afectan el bono de las asesoras (siguen contando en el total de ventas de la empresa). Se marcaron 38 ordenes del listado enviado.",
+  "sha256": "8f55ce0dcd9bcf33b3567862f5ca9204c33bfd107945fd6cde495c2dbe7301d9"
 }
