@@ -1,6 +1,6 @@
 {
-  "version": "25.70",
+  "version": "25.71",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Liquidaciones: las ordenes de perdidas/salidas fijas/cortesias autorizadas por gerencia (Felipe/Carlos) se marcan como 'Gerencia' y NO afectan el bono de las asesoras (siguen contando en el total de ventas de la empresa). Se marcaron 38 ordenes del listado enviado.",
-  "sha256": "8f55ce0dcd9bcf33b3567862f5ca9204c33bfd107945fd6cde495c2dbe7301d9"
+  "notas": "Tarifas: el cotizador ahora SIEMPRE usa el tarifario del paquete (fresco con cada version) en vez de una copia vieja en la carpeta de instalacion. Corrige que a algunos equipos les salieran pocos tours (ej. Bogota).",
+  "sha256": "c8baaa24e8d3e87b0091cb551383b6785700db39f31c380a316e0f857b280e6c"
 }
