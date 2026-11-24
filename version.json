@@ -1,6 +1,6 @@
 {
-  "version": "25.71",
+  "version": "25.72",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Tarifas: el cotizador ahora SIEMPRE usa el tarifario del paquete (fresco con cada version) en vez de una copia vieja en la carpeta de instalacion. Corrige que a algunos equipos les salieran pocos tours (ej. Bogota).",
-  "sha256": "c8baaa24e8d3e87b0091cb551383b6785700db39f31c380a316e0f857b280e6c"
+  "notas": "Bono por tramos: 2,25% cuando las ventas rentables del mes superan 2x el punto de equilibrio + 5.000 USD; 1,75% en caso contrario. La pantalla de liquidacion, el export a Excel y los encabezados muestran la tasa aplicada. El gate de pago (total de ventas >= PE + 5.000) no cambia.",
+  "sha256": "8a4c51c626a7cad61445d7e958d9d0d3831901ed1d48d6c63f79d4bb67f10840"
 }
