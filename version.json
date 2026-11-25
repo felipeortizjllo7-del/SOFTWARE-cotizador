@@ -1,6 +1,6 @@
 {
-  "version": "25.72",
+  "version": "25.73",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Bono por tramos: 2,25% cuando las ventas rentables del mes superan 2x el punto de equilibrio + 5.000 USD; 1,75% en caso contrario. La pantalla de liquidacion, el export a Excel y los encabezados muestran la tasa aplicada. El gate de pago (total de ventas >= PE + 5.000) no cambia.",
-  "sha256": "8a4c51c626a7cad61445d7e958d9d0d3831901ed1d48d6c63f79d4bb67f10840"
+  "notas": "Cotizacion Express ahora trae la TRM del dia (datos.gov.co) automaticamente al abrir, sin pulsar nada (antes arrancaba en 4000 y no aplicaba la tasa). Liquidacion sigue fijando la TRM del dia del mes actual al abrir. TRM de noviembre actualizada al valor oficial del dia.",
+  "sha256": "036c56431eaa58b02194d4604afea9149746652bb531d26f761357838d001484"
 }
