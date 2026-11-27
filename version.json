@@ -1,6 +1,6 @@
 {
-  "version": "25.74",
+  "version": "25.75",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Conciertos: los conciertos ya pasados dejan de reaparecer. La depuracion local los borraba, pero la importacion desde la nube los volvia a agregar al abrir el modulo; ahora la importacion NO reañade conciertos con fecha ya pasada. Asi se mantienen fuera de la vitrina en los 3 equipos.",
-  "sha256": "b2acc1d9426ae47dba007e392cceb8e58c54086563a8c9a5816bf4150328fc6a"
+  "notas": "Tarifas 2027 actualizadas: 17 hoteles con nuevo precio + 4 hoteles nuevos (Sonata 44 en Medellin, Casa Canabal y Hotel Nena en Cartagena) + 7 terrestres actualizados + 1 nuevo (Visita Nena Beach Club en Cartagena). Nuevo destino JERICO (Hotel El Despertar, temporadas Semana/Findesemana). Todo en COP; la formula del dolar (TRM del dia menos descuento) y los margenes 0.88/0.75 quedan intactos. Duplicados del Excel conservan el valor vigente.",
+  "sha256": "7aaea12acc948c7d8a08b53b52b3528951da4cb5e672f0d4bd22dfb4d9960f20"
 }
