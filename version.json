@@ -1,6 +1,6 @@
 {
-  "version": "25.73",
+  "version": "25.74",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Cotizacion Express ahora trae la TRM del dia (datos.gov.co) automaticamente al abrir, sin pulsar nada (antes arrancaba en 4000 y no aplicaba la tasa). Liquidacion sigue fijando la TRM del dia del mes actual al abrir. TRM de noviembre actualizada al valor oficial del dia.",
-  "sha256": "036c56431eaa58b02194d4604afea9149746652bb531d26f761357838d001484"
+  "notas": "Conciertos: los conciertos ya pasados dejan de reaparecer. La depuracion local los borraba, pero la importacion desde la nube los volvia a agregar al abrir el modulo; ahora la importacion NO reañade conciertos con fecha ya pasada. Asi se mantienen fuera de la vitrina en los 3 equipos.",
+  "sha256": "b2acc1d9426ae47dba007e392cceb8e58c54086563a8c9a5816bf4150328fc6a"
 }
