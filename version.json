@@ -1,6 +1,6 @@
 {
-  "version": "25.76",
+  "version": "25.77",
   "installer": "https://github.com/felipeortizjllo7-del/SOFTWARE-cotizador/releases/download/latest/CotizadorInnoba-Setup.exe",
-  "notas": "Cotizador web: el boton 'Eventos de ciudad' de Catalogos INNOBA ahora es 'Paquete 2027' y abre la nueva carpeta de Drive.",
-  "sha256": "3287db099de68ee8e93625a2d88bcd3f528e679b16dcc54c51ba722561d283c1"
+  "notas": "Liquidacion: el clasificador de tipo de venta ahora cuenta tambien los tours cargados como gasto (guia / actividades / compartido). Asi una orden hotel+traslado+tour clasifica como Paquete completo (18%) y no como Hotel+traslado (12%), corrigiendo la rentabilidad que no correspondia al tipo de venta. Ademas, 6 salidas fijas cobradas por gerencia quedaron excluidas del bono de las asesoras (sincronizado por la nube).",
+  "sha256": "52e043166f24ff502721e939f792f53b45529df1fba9151f26934edc0bc18cb8"
 }
